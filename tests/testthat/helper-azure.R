@@ -181,12 +181,55 @@ expect_no_token <- function(x, token, label = NULL) {
   text <- paste(utils::capture.output(print(x)), collapse = "\n")
   if (inherits(x, "condition")) text <- paste(text, conditionMessage(x))
   for (p in token_pieces(token)) {
-    testthat::expect_false(length(grepRaw(p, bytes, fixed = TRUE)) > 0L,
-                           label = paste(label %||% "the serialization", "holds the token piece", substr(p, 1, 12)))
+    found <- length(grepRaw(p, bytes, fixed = TRUE)) > 0L
+    where <- if (found) paste0(" (at ", token_path(x, p), ")") else ""
+    testthat::expect_false(found,
+                           label = paste0(label %||% "the serialization", " holds the token piece ", substr(p, 1, 12), where))
     testthat::expect_false(grepl(p, text, fixed = TRUE),
                            label = paste(label %||% "the printed form", "holds the token piece", substr(p, 1, 12)))
   }
   invisible(x)
+}
+
+# Where in `x` the string `piece` is, for a failure message: a path of
+# names, environments shown by their bindings, attributes as @name.
+token_path <- function(x, piece) {
+  seen <- new.env()
+  walk <- function(v, path, depth) {
+    if (depth > 40L) return(NULL)
+    if (is.character(v)) {
+      return(if (any(grepl(piece, v, fixed = TRUE))) path)
+    }
+    if (is.environment(v)) {
+      if (isNamespace(v) || identical(v, globalenv()) || identical(v, emptyenv()) || identical(v, baseenv())) return(NULL)
+      key <- format(v)
+      if (!is.null(seen[[key]])) return(NULL)
+      seen[[key]] <- TRUE
+      for (nm in ls(v, all.names = TRUE)) {
+        b <- if (bindingIsActive(nm, v)) NULL else get(nm, envir = v, inherits = FALSE)
+        hit <- walk(b, paste0(path, "$<env>", nm), depth + 1L)
+        if (!is.null(hit)) return(hit)
+      }
+      return(walk(parent.env(v), paste0(path, "$<parent>"), depth + 1L))
+    }
+    if (is.function(v)) {
+      hit <- walk(environment(v), paste0(path, "<closure env>"), depth + 1L)
+      if (!is.null(hit)) return(hit)
+    }
+    if (is.list(v) || is.pairlist(v)) {
+      nms <- names(v) %||% rep("", length(v))
+      for (i in seq_along(v)) {
+        hit <- walk(v[[i]], paste0(path, "$", if (nzchar(nms[i])) nms[i] else i), depth + 1L)
+        if (!is.null(hit)) return(hit)
+      }
+    }
+    for (a in setdiff(names(attributes(v)), c("names", "class", "row.names"))) {
+      hit <- walk(attr(v, a, exact = TRUE), paste0(path, "@", a), depth + 1L)
+      if (!is.null(hit)) return(hit)
+    }
+    NULL
+  }
+  walk(x, "x", 0L) %||% "not found by walking"
 }
 
 # ---- the request fake ------------------------------------------------------------
