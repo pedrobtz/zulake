@@ -34,7 +34,8 @@ test_that("lists and maps become what zujson parses from JSON arrays and objects
     list(c(1, 2), zujson::json_parse("[1,2]")),
     list(map(character(), character()), zujson::json_parse("{}")),
     list(map(c("k", "j"), c("v", NA)), zujson::json_parse("{\"k\":\"v\",\"j\":null}")),
-    list(map("a=b", "%2F"), zujson::json_parse("{\"a=b\":\"%2F\"}"))
+    list(map("a=b", "%2F"), zujson::json_parse("{\"a=b\":\"%2F\"}")),
+    list(map(c("pa\u00eds", "k"), c("S\u00e3o Paulo", "\u65e5\u672c")), zujson::json_parse("{\"pa\u00eds\":\"S\u00e3o Paulo\",\"k\":\"\u65e5\u672c\"}"))
   )
   for (case in cases) {
     expect_identical(zulake:::nested_value(case[[1L]]), case[[2L]])
@@ -112,8 +113,36 @@ test_that("a 64-bit integer a double cannot hold is read again as integer64, or 
   expect_identical(calls, c("double", "integer64"))
   expect_identical(zulake:::atomic_values(out$x), list(paste0(zulake:::num_mark, "9007199254740993")))
 
+  # A value integer64 cannot hold either: the warning is an error.
+  local_mocked_bindings(read_parquet = function(file, columns, int64 = "double") {
+    warning("Some INT64 or UINT64 values in column 'txn.version' were coerced to NA")
+    data.frame(x = NA_real_)
+  }, .package = "qio")
+  expect_error(zulake:::read_log_parquet("f.parquet", "txn.version"), "coerced to NA")
+
   local_mocked_bindings(has_bit64 = function() FALSE)
   expect_error(zulake:::read_log_parquet("f.parquet", "txn.version"), "bit64")
+})
+
+test_that("shapes no action has are refused, so the checkpoint is unreadable", {
+  expect_error(zulake:::parquet_actions(data.frame(add = 1)), "not a struct")
+  expect_error(zulake:::nested_value(list(list(1))), "does not read")
+  expect_error(zulake:::atomic_values(as.Date("2024-01-01")), "date or time")
+})
+
+test_that("a checkpoint is read from a store without local paths, and an auth failure is not passed over", {
+  path <- fixture_table("zl-checkpoint")
+  local <- zulake:::storage_local(path)
+  remote <- local
+  remote$local_path <- NULL
+  remote$kind <- "remote"
+  expect_same_state(zulake:::snapshot_build(remote, path), lake_open(path), "no local paths")
+  denied <- remote
+  denied$get <- function(p) {
+    if (grepl("[.]checkpoint[.]", p)) zulake:::zulake_abort("auth", "refused", status = 403L)
+    local$get(p)
+  }
+  expect_no_snapshot(zulake:::snapshot_build(denied, path), "zulake_error_auth")
 })
 
 test_that("an unknown reader feature in a checkpoint is refused by name before any data file is read", {

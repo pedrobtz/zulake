@@ -364,6 +364,10 @@ test_that("a multi-part checkpoint with a part missing is not used", {
   unlink(file.path(path, "_delta_log", sprintf("%020d.json", 0:3)))
   expect_no_snapshot(lake_open(path), "zulake_error_checkpoint_unreadable")
   expect_no_snapshot(lake_open(path, version = 4), "zulake_error_checkpoint_unreadable")
+  # No commit at all, and the one checkpoint not whole.
+  unlink(file.path(path, "_delta_log", sprintf("%020d.json", 4:5)))
+  expect_no_snapshot(lake_open(path), "zulake_error_checkpoint_unreadable")
+  expect_identical(tryCatch(lake_open(path), error = identity)$checkpoint, 4)
 })
 
 test_that("a log with a commit missing and no checkpoint is a corrupt log", {
