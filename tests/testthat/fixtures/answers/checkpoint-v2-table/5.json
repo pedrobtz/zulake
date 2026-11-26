@@ -1,0 +1,493 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "clusterId": "0809-144302-2lacpwpk-v2n",
+    "engineInfo": "Databricks-Runtime/17.0.x-photon-scala2.13",
+    "isBlindAppend": true,
+    "isolationLevel": "WriteSerializable",
+    "operation": "SET TBLPROPERTIES",
+    "operationMetrics": {},
+    "operationParameters": {
+     "properties": "{\"delta.checkpointInterval\":\"2\"}"
+    },
+    "readVersion": 4,
+    "timestamp": 1754751112347,
+    "txnId": "c927b3e3-425d-497e-a476-f4fa89ad47f8",
+    "userId": "2238620221098138",
+    "userName": "rtyler@scribd.com"
+   }
+  },
+  {
+   "metaData": {
+    "configuration": {
+     "delta.checkpoint.writeStatsAsStruct": "true",
+     "delta.checkpointInterval": "2",
+     "delta.checkpointPolicy": "v2"
+    },
+    "createdTime": 1754750593201,
+    "format": {
+     "options": {},
+     "provider": "parquet"
+    },
+    "id": "1060c65c-e4aa-4d98-80d7-3eb9bd52ee29",
+    "partitionColumns": [],
+    "schemaString": "{\"type\":\"struct\",\"fields\":[{\"name\":\"id\",\"type\":\"long\",\"nullable\":true,\"metadata\":{\"delta.identity.highWaterMark\":22,\"delta.identity.step\":1,\"delta.identity.allowExplicitInsert\":false,\"delta.identity.start\":1}},{\"name\":\"name\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"created_at\",\"type\":\"timestamp\",\"nullable\":true,\"metadata\":{}}]}"
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [
+    {
+     "created_at": "2025-08-09T14:44:25.329000Z",
+     "id": "11",
+     "name": "Mallory"
+    },
+    {
+     "created_at": "2025-08-09T14:44:39.984000Z",
+     "id": "22",
+     "name": "Mallory"
+    },
+    {
+     "created_at": "2025-08-09T14:44:37.980000Z",
+     "id": "21",
+     "name": "Judy"
+    },
+    {
+     "created_at": "2025-08-09T14:44:18.184000Z",
+     "id": "10",
+     "name": "Judy"
+    }
+   ],
+   "min": [
+    {
+     "created_at": "2025-08-09T14:44:25.329000Z",
+     "id": "11",
+     "name": "Mallory"
+    },
+    {
+     "created_at": "2025-08-09T14:44:39.984000Z",
+     "id": "22",
+     "name": "Mallory"
+    },
+    {
+     "created_at": "2025-08-09T14:44:37.980000Z",
+     "id": "12",
+     "name": "Alice"
+    },
+    {
+     "created_at": "2025-08-09T14:44:18.184000Z",
+     "id": "1",
+     "name": "Alice"
+    }
+   ],
+   "modification_time": [
+    "1754750666000",
+    "1754750681000",
+    "1754750679000",
+    "1754750662000"
+   ],
+   "null_count": [
+    {
+     "created_at": "0",
+     "id": "0",
+     "name": "0"
+    },
+    {
+     "created_at": "0",
+     "id": "0",
+     "name": "0"
+    },
+    {
+     "created_at": "0",
+     "id": "0",
+     "name": "0"
+    },
+    {
+     "created_at": "0",
+     "id": "0",
+     "name": "0"
+    }
+   ],
+   "num_records": [
+    "1",
+    "1",
+    "10",
+    "10"
+   ],
+   "path": [
+    "part-00000-33e5a956-7506-43d8-bc29-e913eaeb2b73.c000.snappy.parquet",
+    "part-00000-dd0343ab-5277-4dc4-a8eb-4335e15a34d2.c000.snappy.parquet",
+    "part-00000-e9391801-c9e9-4314-95a9-b09261a5fb96.c000.snappy.parquet",
+    "part-00000-fb0df8bb-10ec-48a7-8c4a-f0d38c6b26ae.c000.snappy.parquet"
+   ],
+   "size_bytes": [
+    "1045",
+    "1044",
+    "1185",
+    "1186"
+   ]
+  },
+  "num_rows": 4,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<id: int64, name: int64, created_at: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<id: int64, name: string, created_at: timestamp[us, tz=UTC]>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<id: int64, name: string, created_at: timestamp[us, tz=UTC]>"
+   }
+  ]
+ },
+ "count": 22,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "clusterId": "0809-144302-2lacpwpk-v2n",
+   "engineInfo": "Databricks-Runtime/17.0.x-photon-scala2.13",
+   "isBlindAppend": true,
+   "isolationLevel": "WriteSerializable",
+   "operation": "SET TBLPROPERTIES",
+   "operationMetrics": {},
+   "operationParameters": {
+    "properties": "{\"delta.checkpointInterval\":\"2\"}"
+   },
+   "readVersion": 4,
+   "timestamp": 1754751112347,
+   "txnId": "c927b3e3-425d-497e-a476-f4fa89ad47f8",
+   "userId": "2238620221098138",
+   "userName": "rtyler@scribd.com",
+   "version": 5
+  },
+  {
+   "clusterId": "0809-144302-2lacpwpk-v2n",
+   "engineInfo": "Databricks-Runtime/17.0.x-photon-scala2.13",
+   "isBlindAppend": true,
+   "isolationLevel": "WriteSerializable",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "numFiles": "1",
+    "numOutputBytes": "1044",
+    "numOutputRows": "1"
+   },
+   "operationParameters": {
+    "mode": "Append",
+    "partitionBy": "[]",
+    "statsOnLoad": true
+   },
+   "readVersion": 3,
+   "tags": {
+    "delta.identity.schemaUpdate": "true",
+    "noRowsCopied": "true",
+    "restoresDeletedRows": "false"
+   },
+   "timestamp": 1754750680256,
+   "txnId": "79f31ccf-0c1a-4f61-924a-8134af4866de",
+   "userId": "2238620221098138",
+   "userName": "rtyler@scribd.com",
+   "version": 4
+  },
+  {
+   "clusterId": "0809-144302-2lacpwpk-v2n",
+   "engineInfo": "Databricks-Runtime/17.0.x-photon-scala2.13",
+   "isBlindAppend": true,
+   "isolationLevel": "WriteSerializable",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "numFiles": "1",
+    "numOutputBytes": "1185",
+    "numOutputRows": "10"
+   },
+   "operationParameters": {
+    "mode": "Append",
+    "partitionBy": "[]",
+    "statsOnLoad": true
+   },
+   "readVersion": 2,
+   "tags": {
+    "delta.identity.schemaUpdate": "true",
+    "noRowsCopied": "true",
+    "restoresDeletedRows": "false"
+   },
+   "timestamp": 1754750678256,
+   "txnId": "149f4622-6046-46fa-b9da-53485301ed32",
+   "userId": "2238620221098138",
+   "userName": "rtyler@scribd.com",
+   "version": 3
+  },
+  {
+   "clusterId": "0809-144302-2lacpwpk-v2n",
+   "engineInfo": "Databricks-Runtime/17.0.x-photon-scala2.13",
+   "isBlindAppend": true,
+   "isolationLevel": "WriteSerializable",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "numFiles": "1",
+    "numOutputBytes": "1045",
+    "numOutputRows": "1"
+   },
+   "operationParameters": {
+    "mode": "Append",
+    "partitionBy": "[]",
+    "statsOnLoad": true
+   },
+   "readVersion": 1,
+   "tags": {
+    "delta.identity.schemaUpdate": "true",
+    "noRowsCopied": "true",
+    "restoresDeletedRows": "false"
+   },
+   "timestamp": 1754750665684,
+   "txnId": "657f5cf0-bd74-4c5e-8d87-c194aeb0ab49",
+   "userId": "2238620221098138",
+   "userName": "rtyler@scribd.com",
+   "version": 2
+  },
+  {
+   "clusterId": "0809-144302-2lacpwpk-v2n",
+   "engineInfo": "Databricks-Runtime/17.0.x-photon-scala2.13",
+   "isBlindAppend": true,
+   "isolationLevel": "WriteSerializable",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "numFiles": "1",
+    "numOutputBytes": "1186",
+    "numOutputRows": "10"
+   },
+   "operationParameters": {
+    "mode": "Append",
+    "partitionBy": "[]",
+    "statsOnLoad": true
+   },
+   "readVersion": 0,
+   "tags": {
+    "delta.identity.schemaUpdate": "true",
+    "noRowsCopied": "true",
+    "restoresDeletedRows": "false"
+   },
+   "timestamp": 1754750661863,
+   "txnId": "26b915a8-54a8-48fd-9658-3a3418ea99c5",
+   "userId": "2238620221098138",
+   "userName": "rtyler@scribd.com",
+   "version": 1
+  },
+  {
+   "clusterId": "0809-144302-2lacpwpk-v2n",
+   "engineInfo": "Databricks-Runtime/17.0.x-photon-scala2.13",
+   "isBlindAppend": true,
+   "isolationLevel": "WriteSerializable",
+   "operation": "CREATE TABLE",
+   "operationMetrics": {},
+   "operationParameters": {
+    "clusterBy": "[]",
+    "description": null,
+    "isManaged": "true",
+    "partitionBy": "[]",
+    "properties": "{\"delta.checkpoint.writeStatsAsStruct\":\"true\",\"delta.checkpointPolicy\":\"v2\"}",
+    "statsOnLoad": false
+   },
+   "tags": {
+    "restoresDeletedRows": "false"
+   },
+   "timestamp": 1754750593562,
+   "txnId": "39155116-641d-48a9-9c55-c1eeb0f2c796",
+   "userId": "2238620221098138",
+   "userName": "rtyler@scribd.com",
+   "version": 0
+  }
+ ],
+ "loaded_version": 5,
+ "metadata": {
+  "configuration": {
+   "delta.checkpoint.writeStatsAsStruct": "true",
+   "delta.checkpointInterval": "2",
+   "delta.checkpointPolicy": "v2"
+  },
+  "created_time": 1754750593201,
+  "description": null,
+  "id": "1060c65c-e4aa-4d98-80d7-3eb9bd52ee29",
+  "name": null,
+  "partition_columns": []
+ },
+ "partitions": [],
+ "protocol": {
+  "min_reader_version": 3,
+  "min_writer_version": 7,
+  "reader_features": [
+   "v2Checkpoint"
+  ],
+  "writer_features": [
+   "appendOnly",
+   "identityColumns",
+   "invariants",
+   "v2Checkpoint"
+  ]
+ },
+ "read": {
+  "columns": {
+   "created_at": [
+    "2025-08-09T14:44:18.184471Z",
+    "2025-08-09T14:44:18.184471Z",
+    "2025-08-09T14:44:25.329289Z",
+    "2025-08-09T14:44:37.980724Z",
+    "2025-08-09T14:44:37.980724Z",
+    "2025-08-09T14:44:37.980724Z",
+    "2025-08-09T14:44:37.980724Z",
+    "2025-08-09T14:44:37.980724Z",
+    "2025-08-09T14:44:37.980724Z",
+    "2025-08-09T14:44:37.980724Z",
+    "2025-08-09T14:44:37.980724Z",
+    "2025-08-09T14:44:18.184471Z",
+    "2025-08-09T14:44:37.980724Z",
+    "2025-08-09T14:44:37.980724Z",
+    "2025-08-09T14:44:39.984861Z",
+    "2025-08-09T14:44:18.184471Z",
+    "2025-08-09T14:44:18.184471Z",
+    "2025-08-09T14:44:18.184471Z",
+    "2025-08-09T14:44:18.184471Z",
+    "2025-08-09T14:44:18.184471Z",
+    "2025-08-09T14:44:18.184471Z",
+    "2025-08-09T14:44:18.184471Z"
+   ],
+   "id": [
+    "1",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14",
+    "15",
+    "16",
+    "17",
+    "18",
+    "19",
+    "2",
+    "20",
+    "21",
+    "22",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9"
+   ],
+   "name": [
+    "Alice",
+    "Judy",
+    "Mallory",
+    "Alice",
+    "Bob",
+    "Charlie",
+    "David",
+    "Eve",
+    "Frank",
+    "Grace",
+    "Heidi",
+    "Bob",
+    "Ivan",
+    "Judy",
+    "Mallory",
+    "Charlie",
+    "David",
+    "Eve",
+    "Frank",
+    "Grace",
+    "Heidi",
+    "Ivan"
+   ]
+  },
+  "num_rows": 22,
+  "schema": [
+   {
+    "name": "id",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "name",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "name": "created_at",
+    "nullable": true,
+    "type": "timestamp[us, tz=UTC]"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {
+     "delta.identity.allowExplicitInsert": false,
+     "delta.identity.highWaterMark": 22,
+     "delta.identity.start": 1,
+     "delta.identity.step": 1
+    },
+    "name": "id",
+    "nullable": true,
+    "type": "long"
+   },
+   {
+    "metadata": {},
+    "name": "name",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "metadata": {},
+    "name": "created_at",
+    "nullable": true,
+    "type": "timestamp"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "checkpoint-v2-table",
+ "timestamp_lookup": [
+  {
+   "at": "2025-08-09T14:51:52.346Z",
+   "version": 4
+  },
+  {
+   "at": "2025-08-09T14:51:52.347Z",
+   "version": 5
+  }
+ ],
+ "transactions": {},
+ "version": 5
+}

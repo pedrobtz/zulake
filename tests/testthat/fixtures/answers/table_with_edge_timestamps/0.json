@@ -1,0 +1,275 @@
+{
+ "actions": [
+  {
+   "protocol": {
+    "minReaderVersion": 1,
+    "minWriterVersion": 2
+   }
+  },
+  {
+   "metaData": {
+    "configuration": {},
+    "createdTime": 1649083091859,
+    "format": {
+     "options": {},
+     "provider": "parquet"
+    },
+    "id": "79114423-cab8-4cf9-ad3c-c769a7c3d23b",
+    "partitionColumns": [],
+    "schemaString": "{\"type\":\"struct\",\"fields\":[{\"name\":\"BIG_DATE\",\"type\":\"timestamp\",\"nullable\":true,\"metadata\":{}},{\"name\":\"NORMAL_DATE\",\"type\":\"timestamp\",\"nullable\":true,\"metadata\":{}},{\"name\":\"SOME_VALUE\",\"type\":\"integer\",\"nullable\":true,\"metadata\":{}}]}"
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1649083092000,
+    "partitionValues": {},
+    "path": "part-00000-a9dd181d-61aa-491d-b3c9-3eea548de6cb-c000.snappy.parquet",
+    "size": 1201,
+    "stats": "{\"numRecords\":1,\"minValues\":{\"BIG_DATE\":\"9999-12-31T00:00:00.000Z\",\"NORMAL_DATE\":\"2022-01-01T00:00:00.000Z\",\"SOME_VALUE\":1},\"maxValues\":{\"BIG_DATE\":\"9999-12-31T00:00:00.000Z\",\"NORMAL_DATE\":\"2022-01-01T00:00:00.000Z\",\"SOME_VALUE\":1},\"nullCount\":{\"BIG_DATE\":0,\"NORMAL_DATE\":0,\"SOME_VALUE\":0}}",
+    "tags": {
+     "INSERTION_TIME": "1649083092000000",
+     "OPTIMIZE_TARGET_SIZE": "268435456"
+    }
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1649083092000,
+    "partitionValues": {},
+    "path": "part-00001-f804d355-db40-4e13-a624-ddd50ce7f5c4-c000.snappy.parquet",
+    "size": 1201,
+    "stats": "{\"numRecords\":1,\"minValues\":{\"BIG_DATE\":\"9999-12-30T00:00:00.000Z\",\"NORMAL_DATE\":\"2022-02-01T00:00:00.000Z\",\"SOME_VALUE\":2},\"maxValues\":{\"BIG_DATE\":\"9999-12-30T00:00:00.000Z\",\"NORMAL_DATE\":\"2022-02-01T00:00:00.000Z\",\"SOME_VALUE\":2},\"nullCount\":{\"BIG_DATE\":0,\"NORMAL_DATE\":0,\"SOME_VALUE\":0}}",
+    "tags": {
+     "INSERTION_TIME": "1649083092000001",
+     "OPTIMIZE_TARGET_SIZE": "268435456"
+    }
+   }
+  },
+  {
+   "commitInfo": {
+    "isBlindAppend": true,
+    "isolationLevel": "WriteSerializable",
+    "operation": "CREATE TABLE AS SELECT",
+    "operationMetrics": {
+     "numFiles": "2",
+     "numOutputBytes": "2402",
+     "numOutputRows": "2"
+    },
+    "operationParameters": {
+     "description": null,
+     "isManaged": "true",
+     "partitionBy": "[]",
+     "properties": "{}"
+    },
+    "timestamp": 1649083093054
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [
+    {
+     "BIG_DATE": "9999-12-31T00:00:00.000000Z",
+     "NORMAL_DATE": "2022-01-01T00:00:00.000000Z",
+     "SOME_VALUE": 1
+    },
+    {
+     "BIG_DATE": "9999-12-30T00:00:00.000000Z",
+     "NORMAL_DATE": "2022-02-01T00:00:00.000000Z",
+     "SOME_VALUE": 2
+    }
+   ],
+   "min": [
+    {
+     "BIG_DATE": "9999-12-31T00:00:00.000000Z",
+     "NORMAL_DATE": "2022-01-01T00:00:00.000000Z",
+     "SOME_VALUE": 1
+    },
+    {
+     "BIG_DATE": "9999-12-30T00:00:00.000000Z",
+     "NORMAL_DATE": "2022-02-01T00:00:00.000000Z",
+     "SOME_VALUE": 2
+    }
+   ],
+   "modification_time": [
+    "1649083092000",
+    "1649083092000"
+   ],
+   "null_count": [
+    {
+     "BIG_DATE": "0",
+     "NORMAL_DATE": "0",
+     "SOME_VALUE": "0"
+    },
+    {
+     "BIG_DATE": "0",
+     "NORMAL_DATE": "0",
+     "SOME_VALUE": "0"
+    }
+   ],
+   "num_records": [
+    "1",
+    "1"
+   ],
+   "path": [
+    "part-00000-a9dd181d-61aa-491d-b3c9-3eea548de6cb-c000.snappy.parquet",
+    "part-00001-f804d355-db40-4e13-a624-ddd50ce7f5c4-c000.snappy.parquet"
+   ],
+   "size_bytes": [
+    "1201",
+    "1201"
+   ]
+  },
+  "num_rows": 2,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<BIG_DATE: int64, NORMAL_DATE: int64, SOME_VALUE: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<BIG_DATE: timestamp[us, tz=UTC], NORMAL_DATE: timestamp[us, tz=UTC], SOME_VALUE: int32>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<BIG_DATE: timestamp[us, tz=UTC], NORMAL_DATE: timestamp[us, tz=UTC], SOME_VALUE: int32>"
+   }
+  ]
+ },
+ "count": 2,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "isBlindAppend": true,
+   "isolationLevel": "WriteSerializable",
+   "operation": "CREATE TABLE AS SELECT",
+   "operationMetrics": {
+    "numFiles": "2",
+    "numOutputBytes": "2402",
+    "numOutputRows": "2"
+   },
+   "operationParameters": {
+    "description": null,
+    "isManaged": "true",
+    "partitionBy": "[]",
+    "properties": "{}"
+   },
+   "timestamp": 1649083093054,
+   "version": 0
+  }
+ ],
+ "loaded_version": 0,
+ "metadata": {
+  "configuration": {},
+  "created_time": 1649083091859,
+  "description": null,
+  "id": "79114423-cab8-4cf9-ad3c-c769a7c3d23b",
+  "name": null,
+  "partition_columns": []
+ },
+ "partitions": [],
+ "protocol": {
+  "min_reader_version": 1,
+  "min_writer_version": 2,
+  "reader_features": null,
+  "writer_features": null
+ },
+ "read": {
+  "columns": {
+   "BIG_DATE": [
+    "9999-12-30T00:00:00.000000Z",
+    "9999-12-31T00:00:00.000000Z"
+   ],
+   "NORMAL_DATE": [
+    "2022-02-01T00:00:00.000000Z",
+    "2022-01-01T00:00:00.000000Z"
+   ],
+   "SOME_VALUE": [
+    2,
+    1
+   ]
+  },
+  "num_rows": 2,
+  "schema": [
+   {
+    "name": "BIG_DATE",
+    "nullable": true,
+    "type": "timestamp[us, tz=UTC]"
+   },
+   {
+    "name": "NORMAL_DATE",
+    "nullable": true,
+    "type": "timestamp[us, tz=UTC]"
+   },
+   {
+    "name": "SOME_VALUE",
+    "nullable": true,
+    "type": "int32"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {},
+    "name": "BIG_DATE",
+    "nullable": true,
+    "type": "timestamp"
+   },
+   {
+    "metadata": {},
+    "name": "NORMAL_DATE",
+    "nullable": true,
+    "type": "timestamp"
+   },
+   {
+    "metadata": {},
+    "name": "SOME_VALUE",
+    "nullable": true,
+    "type": "integer"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "table_with_edge_timestamps",
+ "timestamp_lookup": [
+  {
+   "at": "2022-04-04T14:38:13.053Z",
+   "version": 0
+  },
+  {
+   "at": "2022-04-04T14:38:13.054Z",
+   "version": 0
+  }
+ ],
+ "transactions": {},
+ "version": 0
+}

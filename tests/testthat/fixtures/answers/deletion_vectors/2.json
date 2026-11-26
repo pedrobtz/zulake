@@ -1,0 +1,320 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "engineInfo": "Apache-Spark/3.5.1 Delta-Lake/3.1.0",
+    "isBlindAppend": false,
+    "isolationLevel": "Serializable",
+    "operation": "DELETE",
+    "operationMetrics": {
+     "executionTimeMs": "1589",
+     "numAddedBytes": "0",
+     "numAddedChangeFiles": "0",
+     "numAddedFiles": "0",
+     "numCopiedRows": "0",
+     "numDeletedRows": "4",
+     "numDeletionVectorsAdded": "1",
+     "numDeletionVectorsRemoved": "0",
+     "numDeletionVectorsUpdated": "0",
+     "numRemovedBytes": "0",
+     "numRemovedFiles": "0",
+     "rewriteTimeMs": "0",
+     "scanTimeMs": "0"
+    },
+    "operationParameters": {
+     "predicate": "[\"(letter#39791 = a)\"]"
+    },
+    "readVersion": 1,
+    "timestamp": 1712091509344,
+    "txnId": "b66363d3-047c-4489-b781-4a3cec113dbe"
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "deletionVector": {
+     "cardinality": 4,
+     "offset": 1,
+     "pathOrInlineDv": "ITfmIXOK!>U^L:if1E+a",
+     "sizeInBytes": 40,
+     "storageType": "u"
+    },
+    "modificationTime": 1712091506617,
+    "partitionValues": {},
+    "path": "part-00000-2a439866-587c-43d5-91fb-dd8e1b3c8ef4-c000.snappy.parquet",
+    "size": 1006,
+    "stats": "{\"numRecords\":5,\"minValues\":{\"letter\":\"a\",\"int\":25,\"date\":\"1978-12-01\"},\"maxValues\":{\"letter\":\"b\",\"int\":692,\"date\":\"2017-09-01\"},\"nullCount\":{\"letter\":0,\"int\":0,\"date\":0},\"tightBounds\":false}"
+   }
+  },
+  {
+   "remove": {
+    "dataChange": true,
+    "deletionTimestamp": 1712091508844,
+    "extendedFileMetadata": true,
+    "partitionValues": {},
+    "path": "part-00000-2a439866-587c-43d5-91fb-dd8e1b3c8ef4-c000.snappy.parquet",
+    "size": 1006,
+    "stats": "{\"numRecords\":5}"
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "deletion_vector": [
+    {
+     "cardinality": "4",
+     "offset": 1,
+     "pathOrInlineDv": "ITfmIXOK!>U^L:if1E+a",
+     "sizeInBytes": 40,
+     "storageType": "u"
+    }
+   ],
+   "max": [
+    {
+     "date": "2017-09-01",
+     "int": "692",
+     "letter": "b"
+    }
+   ],
+   "min": [
+    {
+     "date": "1978-12-01",
+     "int": "25",
+     "letter": "a"
+    }
+   ],
+   "modification_time": [
+    "1712091506617"
+   ],
+   "null_count": [
+    {
+     "date": "0",
+     "int": "0",
+     "letter": "0"
+    }
+   ],
+   "num_records": [
+    "5"
+   ],
+   "path": [
+    "part-00000-2a439866-587c-43d5-91fb-dd8e1b3c8ef4-c000.snappy.parquet"
+   ],
+   "size_bytes": [
+    "1006"
+   ]
+  },
+  "num_rows": 1,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<letter: int64, int: int64, date: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<letter: string, int: int64, date: date32[day]>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<letter: string, int: int64, date: date32[day]>"
+   },
+   {
+    "name": "deletion_vector",
+    "nullable": true,
+    "type": "struct<storageType: string not null, pathOrInlineDv: string not null, offset: int32, sizeInBytes: int32 not null, cardinality: int64 not null>"
+   }
+  ]
+ },
+ "count": 1,
+ "deletion_vectors": [
+  {
+   "deleted_rows": [
+    0,
+    2,
+    3,
+    4
+   ],
+   "path": "part-00000-2a439866-587c-43d5-91fb-dd8e1b3c8ef4-c000.snappy.parquet",
+   "selection_vector_length": 5
+  }
+ ],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "engineInfo": "Apache-Spark/3.5.1 Delta-Lake/3.1.0",
+   "isBlindAppend": false,
+   "isolationLevel": "Serializable",
+   "operation": "DELETE",
+   "operationMetrics": {
+    "executionTimeMs": "1589",
+    "numAddedBytes": "0",
+    "numAddedChangeFiles": "0",
+    "numAddedFiles": "0",
+    "numCopiedRows": "0",
+    "numDeletedRows": "4",
+    "numDeletionVectorsAdded": "1",
+    "numDeletionVectorsRemoved": "0",
+    "numDeletionVectorsUpdated": "0",
+    "numRemovedBytes": "0",
+    "numRemovedFiles": "0",
+    "rewriteTimeMs": "0",
+    "scanTimeMs": "0"
+   },
+   "operationParameters": {
+    "predicate": "[\"(letter#39791 = a)\"]"
+   },
+   "readVersion": 1,
+   "timestamp": 1712091509344,
+   "txnId": "b66363d3-047c-4489-b781-4a3cec113dbe",
+   "version": 2
+  },
+  {
+   "engineInfo": "Apache-Spark/3.5.1 Delta-Lake/3.1.0",
+   "isBlindAppend": true,
+   "isolationLevel": "Serializable",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "numFiles": "1",
+    "numOutputBytes": "1006",
+    "numOutputRows": "5"
+   },
+   "operationParameters": {
+    "mode": "Append",
+    "partitionBy": "[]"
+   },
+   "readVersion": 0,
+   "timestamp": 1712091506624,
+   "txnId": "0ba34854-ea2e-4487-8f8e-119b93ab8efd",
+   "version": 1
+  },
+  {
+   "engineInfo": "Apache-Spark/3.5.1 Delta-Lake/3.1.0",
+   "isBlindAppend": true,
+   "isolationLevel": "Serializable",
+   "operation": "CREATE TABLE",
+   "operationMetrics": {},
+   "operationParameters": {
+    "description": null,
+    "isManaged": "false",
+    "partitionBy": "[]",
+    "properties": "{\"delta.enableDeletionVectors\":\"true\"}"
+   },
+   "timestamp": 1712091505258,
+   "txnId": "28857c95-85a1-49a5-a5e9-96d331168864",
+   "version": 0
+  }
+ ],
+ "loaded_version": 2,
+ "metadata": {
+  "configuration": {
+   "delta.enableDeletionVectors": "true"
+  },
+  "created_time": 1712091505246,
+  "description": null,
+  "id": "ca1ef39e-c033-47ba-aff5-77d727facbc3",
+  "name": null,
+  "partition_columns": []
+ },
+ "partitions": [],
+ "protocol": {
+  "min_reader_version": 3,
+  "min_writer_version": 7,
+  "reader_features": [
+   "deletionVectors"
+  ],
+  "writer_features": [
+   "deletionVectors"
+  ]
+ },
+ "read": {
+  "columns": {
+   "date": [
+    "1978-12-01"
+   ],
+   "int": [
+    "228"
+   ],
+   "letter": [
+    "b"
+   ]
+  },
+  "num_rows": 1,
+  "schema": [
+   {
+    "name": "letter",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "name": "int",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "date",
+    "nullable": true,
+    "type": "date32[day]"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {},
+    "name": "letter",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "metadata": {},
+    "name": "int",
+    "nullable": true,
+    "type": "long"
+   },
+   {
+    "metadata": {},
+    "name": "date",
+    "nullable": true,
+    "type": "date"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "deletion_vectors",
+ "timestamp_lookup": [
+  {
+   "at": "2024-04-02T20:58:29.343Z",
+   "version": 1
+  },
+  {
+   "at": "2024-04-02T20:58:29.344Z",
+   "version": 2
+  }
+ ],
+ "transactions": {},
+ "version": 2
+}

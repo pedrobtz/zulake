@@ -1,0 +1,248 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "isBlindAppend": false,
+    "operation": "WRITE",
+    "operationMetrics": {
+     "numFiles": "2",
+     "numOutputBytes": "920",
+     "numOutputRows": "2"
+    },
+    "operationParameters": {
+     "mode": "Overwrite",
+     "partitionBy": "[\"k\"]"
+    },
+    "timestamp": 1627990388127
+   }
+  },
+  {
+   "protocol": {
+    "minReaderVersion": 1,
+    "minWriterVersion": 2
+   }
+  },
+  {
+   "metaData": {
+    "configuration": {},
+    "createdTime": 1627990373830,
+    "format": {
+     "options": {},
+     "provider": "parquet"
+    },
+    "id": "4c831cf5-cd89-40af-9828-c1de38c23b2a",
+    "partitionColumns": [
+     "k"
+    ],
+    "schemaString": "{\"type\":\"struct\",\"fields\":[{\"name\":\"k\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"v\",\"type\":\"long\",\"nullable\":true,\"metadata\":{}}]}"
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1627990384000,
+    "partitionValues": {
+     "k": "A"
+    },
+    "path": "k=A/part-00000-b1f1dbbb-70bc-4970-893f-9bb772bf246e.c000.snappy.parquet",
+    "size": 460
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1627990384000,
+    "partitionValues": {
+     "k": null
+    },
+    "path": "k=__HIVE_DEFAULT_PARTITION__/part-00001-8474ac85-360b-4f58-b3ea-23990c71b932.c000.snappy.parquet",
+    "size": 460
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [
+    null,
+    null
+   ],
+   "min": [
+    null,
+    null
+   ],
+   "modification_time": [
+    "1627990384000",
+    "1627990384000"
+   ],
+   "null_count": [
+    null,
+    null
+   ],
+   "num_records": [
+    null,
+    null
+   ],
+   "partition": [
+    {
+     "k": "A"
+    },
+    {
+     "k": null
+    }
+   ],
+   "path": [
+    "k=A/part-00000-b1f1dbbb-70bc-4970-893f-9bb772bf246e.c000.snappy.parquet",
+    "k=__HIVE_DEFAULT_PARTITION__/part-00001-8474ac85-360b-4f58-b3ea-23990c71b932.c000.snappy.parquet"
+   ],
+   "size_bytes": [
+    "460",
+    "460"
+   ]
+  },
+  "num_rows": 2,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<v: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<v: int64>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<v: int64>"
+   },
+   {
+    "name": "partition",
+    "nullable": true,
+    "type": "struct<k: string>"
+   }
+  ]
+ },
+ "count": 0,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "isBlindAppend": false,
+   "operation": "WRITE",
+   "operationMetrics": {
+    "numFiles": "2",
+    "numOutputBytes": "920",
+    "numOutputRows": "2"
+   },
+   "operationParameters": {
+    "mode": "Overwrite",
+    "partitionBy": "[\"k\"]"
+   },
+   "timestamp": 1627990388127,
+   "version": 0
+  }
+ ],
+ "loaded_version": 0,
+ "metadata": {
+  "configuration": {},
+  "created_time": 1627990373830,
+  "description": null,
+  "id": "4c831cf5-cd89-40af-9828-c1de38c23b2a",
+  "name": null,
+  "partition_columns": [
+   "k"
+  ]
+ },
+ "partitions": [
+  {
+   "k": "A"
+  },
+  {
+   "k": null
+  }
+ ],
+ "protocol": {
+  "min_reader_version": 1,
+  "min_writer_version": 2,
+  "reader_features": null,
+  "writer_features": null
+ },
+ "read": {
+  "columns": {
+   "k": [
+    "A",
+    null
+   ],
+   "v": [
+    "1",
+    "2"
+   ]
+  },
+  "num_rows": 2,
+  "schema": [
+   {
+    "name": "k",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "name": "v",
+    "nullable": true,
+    "type": "int64"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {},
+    "name": "k",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "metadata": {},
+    "name": "v",
+    "nullable": true,
+    "type": "long"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "delta-0.8.0-null-partition",
+ "timestamp_lookup": [
+  {
+   "at": "2021-08-03T11:33:08.126Z",
+   "version": 0
+  },
+  {
+   "at": "2021-08-03T11:33:08.127Z",
+   "version": 0
+  }
+ ],
+ "transactions": {},
+ "version": 0
+}

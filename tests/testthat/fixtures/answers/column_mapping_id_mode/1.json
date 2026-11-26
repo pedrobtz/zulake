@@ -1,0 +1,258 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "engineInfo": "Apache-Spark/3.5.1 Delta-Lake/3.1.0",
+    "isBlindAppend": true,
+    "isolationLevel": "Serializable",
+    "operation": "WRITE",
+    "operationMetrics": {
+     "numFiles": "1",
+     "numOutputBytes": "1708",
+     "numOutputRows": "5"
+    },
+    "operationParameters": {
+     "mode": "Append",
+     "partitionBy": "[]"
+    },
+    "readVersion": 0,
+    "timestamp": 1712091525940,
+    "txnId": "084bcc30-d544-479c-b0a4-f5601636a2f2"
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1712091525933,
+    "partitionValues": {},
+    "path": "part-00000-f94de347-a288-43fe-9ea3-257ef31d0382-c000.snappy.parquet",
+    "size": 1708,
+    "stats": "{\"numRecords\":5,\"minValues\":{\"col-4ef4d1f5-5d3c-4aad-b4db-405ac3f186e6\":\"a\",\"col-12668372-ff50-41ae-9571-41f0cb9ad88f\":25,\"col-a340198d-9caf-4b16-bbf1-d1bece16131c\":\"1978-12-01\"},\"maxValues\":{\"col-4ef4d1f5-5d3c-4aad-b4db-405ac3f186e6\":\"b\",\"col-12668372-ff50-41ae-9571-41f0cb9ad88f\":692,\"col-a340198d-9caf-4b16-bbf1-d1bece16131c\":\"2017-09-01\"},\"nullCount\":{\"col-4ef4d1f5-5d3c-4aad-b4db-405ac3f186e6\":0,\"col-12668372-ff50-41ae-9571-41f0cb9ad88f\":0,\"col-a340198d-9caf-4b16-bbf1-d1bece16131c\":0}}"
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [
+    {
+     "col-12668372-ff50-41ae-9571-41f0cb9ad88f": "692",
+     "col-4ef4d1f5-5d3c-4aad-b4db-405ac3f186e6": "b",
+     "col-a340198d-9caf-4b16-bbf1-d1bece16131c": "2017-09-01"
+    }
+   ],
+   "min": [
+    {
+     "col-12668372-ff50-41ae-9571-41f0cb9ad88f": "25",
+     "col-4ef4d1f5-5d3c-4aad-b4db-405ac3f186e6": "a",
+     "col-a340198d-9caf-4b16-bbf1-d1bece16131c": "1978-12-01"
+    }
+   ],
+   "modification_time": [
+    "1712091525933"
+   ],
+   "null_count": [
+    {
+     "col-12668372-ff50-41ae-9571-41f0cb9ad88f": "0",
+     "col-4ef4d1f5-5d3c-4aad-b4db-405ac3f186e6": "0",
+     "col-a340198d-9caf-4b16-bbf1-d1bece16131c": "0"
+    }
+   ],
+   "num_records": [
+    "5"
+   ],
+   "path": [
+    "part-00000-f94de347-a288-43fe-9ea3-257ef31d0382-c000.snappy.parquet"
+   ],
+   "size_bytes": [
+    "1708"
+   ]
+  },
+  "num_rows": 1,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<col-4ef4d1f5-5d3c-4aad-b4db-405ac3f186e6: int64, col-12668372-ff50-41ae-9571-41f0cb9ad88f: int64, col-a340198d-9caf-4b16-bbf1-d1bece16131c: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<col-4ef4d1f5-5d3c-4aad-b4db-405ac3f186e6: string, col-12668372-ff50-41ae-9571-41f0cb9ad88f: int64, col-a340198d-9caf-4b16-bbf1-d1bece16131c: date32[day]>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<col-4ef4d1f5-5d3c-4aad-b4db-405ac3f186e6: string, col-12668372-ff50-41ae-9571-41f0cb9ad88f: int64, col-a340198d-9caf-4b16-bbf1-d1bece16131c: date32[day]>"
+   }
+  ]
+ },
+ "count": 5,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "engineInfo": "Apache-Spark/3.5.1 Delta-Lake/3.1.0",
+   "isBlindAppend": true,
+   "isolationLevel": "Serializable",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "numFiles": "1",
+    "numOutputBytes": "1708",
+    "numOutputRows": "5"
+   },
+   "operationParameters": {
+    "mode": "Append",
+    "partitionBy": "[]"
+   },
+   "readVersion": 0,
+   "timestamp": 1712091525940,
+   "txnId": "084bcc30-d544-479c-b0a4-f5601636a2f2",
+   "version": 1
+  },
+  {
+   "engineInfo": "Apache-Spark/3.5.1 Delta-Lake/3.1.0",
+   "isBlindAppend": true,
+   "isolationLevel": "Serializable",
+   "operation": "CREATE TABLE",
+   "operationMetrics": {},
+   "operationParameters": {
+    "description": null,
+    "isManaged": "false",
+    "partitionBy": "[]",
+    "properties": "{\"delta.columnMapping.mode\":\"name\",\"delta.columnMapping.maxColumnId\":\"3\"}"
+   },
+   "timestamp": 1712091524504,
+   "txnId": "db2bdbb9-1a11-4fe6-a1f3-c8de39ede7f7",
+   "version": 0
+  }
+ ],
+ "loaded_version": 1,
+ "metadata": {
+  "configuration": {
+   "delta.columnMapping.maxColumnId": "3",
+   "delta.columnMapping.mode": "id"
+  },
+  "created_time": 1712091524489,
+  "description": null,
+  "id": "fe9f024f-2168-4185-a66c-84c8aec7fe04",
+  "name": null,
+  "partition_columns": []
+ },
+ "partitions": [],
+ "protocol": {
+  "min_reader_version": 2,
+  "min_writer_version": 5,
+  "reader_features": null,
+  "writer_features": null
+ },
+ "read": {
+  "columns": {
+   "date": [
+    "2017-05-01",
+    "1997-01-01",
+    "2017-09-01",
+    "1983-04-01",
+    "1978-12-01"
+   ],
+   "int": [
+    "25",
+    "604",
+    "692",
+    "95",
+    "228"
+   ],
+   "letter": [
+    "a",
+    "a",
+    "a",
+    "a",
+    "b"
+   ]
+  },
+  "num_rows": 5,
+  "schema": [
+   {
+    "name": "letter",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "name": "int",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "date",
+    "nullable": true,
+    "type": "date32[day]"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {
+     "delta.columnMapping.id": 1,
+     "delta.columnMapping.physicalName": "col-4ef4d1f5-5d3c-4aad-b4db-405ac3f186e6"
+    },
+    "name": "letter",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "metadata": {
+     "delta.columnMapping.id": 2,
+     "delta.columnMapping.physicalName": "col-12668372-ff50-41ae-9571-41f0cb9ad88f"
+    },
+    "name": "int",
+    "nullable": true,
+    "type": "long"
+   },
+   {
+    "metadata": {
+     "delta.columnMapping.id": 3,
+     "delta.columnMapping.physicalName": "col-a340198d-9caf-4b16-bbf1-d1bece16131c"
+    },
+    "name": "date",
+    "nullable": true,
+    "type": "date"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "column_mapping_id_mode",
+ "timestamp_lookup": [
+  {
+   "at": "2024-04-02T20:58:45.939Z",
+   "version": 0
+  },
+  {
+   "at": "2024-04-02T20:58:45.940Z",
+   "version": 1
+  }
+ ],
+ "transactions": {},
+ "version": 1
+}

@@ -1,0 +1,2 @@
+{"commitInfo":{"timestamp":1795690965432,"operation":"WRITE","operationParameters":{"mode":"Append"},"engineInfo":"delta-rs:py-1.7.0","txnId":"a987a671-8614-4f32-bc22-4d4b8b64ee66","clientVersion":"delta-rs.py-1.7.0","operationMetrics":{"execution_time_ms":1,"num_added_files":1,"num_added_rows":1,"num_partitions":0,"num_removed_files":0,"num_retries":0}}}
+{"add":{"path":"part-00000-08a25d6d-31b9-4a28-aeb4-7dc9520ede42-c000.snappy.parqu

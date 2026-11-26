@@ -1,0 +1,287 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "clientVersion": "delta-rs.py-1.7.0",
+    "engineInfo": "delta-rs:py-1.7.0",
+    "operation": "WRITE",
+    "operationMetrics": {
+     "execution_time_ms": 1,
+     "num_added_files": 1,
+     "num_added_rows": 1,
+     "num_partitions": 0,
+     "num_removed_files": 0,
+     "num_retries": 0
+    },
+    "operationParameters": {
+     "mode": "Append"
+    },
+    "timestamp": 1795690965900,
+    "txnId": "86a4a645-58b2-4550-bbb6-c5076e47d0e5"
+   }
+  },
+  {
+   "add": {
+    "baseRowId": null,
+    "clusteringProvider": null,
+    "dataChange": true,
+    "defaultRowCommitVersion": null,
+    "modificationTime": 1795690965900,
+    "partitionValues": {},
+    "path": "part-00000-df160923-be61-4bf5-93c7-7c7200be4756-c000.snappy.parquet",
+    "size": 486,
+    "stats": "{\"numRecords\":1,\"minValues\":{\"id\":3},\"maxValues\":{\"id\":3},\"nullCount\":{\"id\":0}}",
+    "tags": null
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [
+    {
+     "id": "0"
+    },
+    {
+     "id": "1"
+    },
+    {
+     "id": "2"
+    },
+    {
+     "id": "3"
+    }
+   ],
+   "min": [
+    {
+     "id": "0"
+    },
+    {
+     "id": "1"
+    },
+    {
+     "id": "2"
+    },
+    {
+     "id": "3"
+    }
+   ],
+   "modification_time": [
+    "1795690965886",
+    "1795690965891",
+    "1795690965895",
+    "1795690965900"
+   ],
+   "null_count": [
+    {
+     "id": "0"
+    },
+    {
+     "id": "0"
+    },
+    {
+     "id": "0"
+    },
+    {
+     "id": "0"
+    }
+   ],
+   "num_records": [
+    "1",
+    "1",
+    "1",
+    "1"
+   ],
+   "path": [
+    "part-00000-3d098a69-5e6f-4af8-9c3d-af55fe99cafa-c000.snappy.parquet",
+    "part-00000-6ca478d9-59de-42ab-a1e7-c9becf5632d0-c000.snappy.parquet",
+    "part-00000-7bab57da-1c7e-4fb6-8575-4664452332eb-c000.snappy.parquet",
+    "part-00000-df160923-be61-4bf5-93c7-7c7200be4756-c000.snappy.parquet"
+   ],
+   "size_bytes": [
+    "486",
+    "486",
+    "486",
+    "486"
+   ]
+  },
+  "num_rows": 4,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<id: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<id: int64>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<id: int64>"
+   }
+  ]
+ },
+ "count": 4,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "clientVersion": "delta-rs.py-1.7.0",
+   "engineInfo": "delta-rs:py-1.7.0",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "execution_time_ms": 1,
+    "num_added_files": 1,
+    "num_added_rows": 1,
+    "num_partitions": 0,
+    "num_removed_files": 0,
+    "num_retries": 0
+   },
+   "operationParameters": {
+    "mode": "Append"
+   },
+   "timestamp": 1795690965900,
+   "txnId": "86a4a645-58b2-4550-bbb6-c5076e47d0e5",
+   "version": 3
+  },
+  {
+   "clientVersion": "delta-rs.py-1.7.0",
+   "engineInfo": "delta-rs:py-1.7.0",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "execution_time_ms": 0,
+    "num_added_files": 1,
+    "num_added_rows": 1,
+    "num_partitions": 0,
+    "num_removed_files": 0,
+    "num_retries": 0
+   },
+   "operationParameters": {
+    "mode": "Append"
+   },
+   "timestamp": 1795690965895,
+   "txnId": "8169ec80-3357-4d4d-9628-bd6983ca6fdb",
+   "version": 2
+  },
+  {
+   "clientVersion": "delta-rs.py-1.7.0",
+   "engineInfo": "delta-rs:py-1.7.0",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "execution_time_ms": 1,
+    "num_added_files": 1,
+    "num_added_rows": 1,
+    "num_partitions": 0,
+    "num_removed_files": 0,
+    "num_retries": 0
+   },
+   "operationParameters": {
+    "mode": "Append"
+   },
+   "timestamp": 1795690965891,
+   "txnId": "81ea1471-a868-4dd4-b4c2-6b8b43e3f59e",
+   "version": 1
+  },
+  {
+   "clientVersion": "delta-rs.py-1.7.0",
+   "engineInfo": "delta-rs:py-1.7.0",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "execution_time_ms": 1,
+    "num_added_files": 1,
+    "num_added_rows": 1,
+    "num_partitions": 0,
+    "num_removed_files": 0,
+    "num_retries": 0
+   },
+   "operationParameters": {
+    "mode": "ErrorIfExists"
+   },
+   "timestamp": 1795690965886,
+   "txnId": "5654ee6f-de2f-4273-80ae-58d442e297cf",
+   "version": 0
+  }
+ ],
+ "loaded_version": 3,
+ "metadata": {
+  "configuration": {},
+  "created_time": 1795690965885,
+  "description": null,
+  "id": "01014c25-c92c-48fb-8acf-25ad9502b21d",
+  "name": null,
+  "partition_columns": []
+ },
+ "partitions": [],
+ "protocol": {
+  "min_reader_version": 1,
+  "min_writer_version": 2,
+  "reader_features": null,
+  "writer_features": null
+ },
+ "read": {
+  "columns": {
+   "id": [
+    "0",
+    "1",
+    "2",
+    "3"
+   ]
+  },
+  "num_rows": 4,
+  "schema": [
+   {
+    "name": "id",
+    "nullable": true,
+    "type": "int64"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {},
+    "name": "id",
+    "nullable": true,
+    "type": "long"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "zl-log-compaction",
+ "timestamp_lookup": [
+  {
+   "at": "2026-11-26T11:02:45.899Z",
+   "version": 2
+  },
+  {
+   "at": "2026-11-26T11:02:45.900Z",
+   "version": 3
+  }
+ ],
+ "transactions": {},
+ "version": 3
+}

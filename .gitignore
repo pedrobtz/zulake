@@ -52,3 +52,6 @@ po/*~
 
 # testthat writes failing tests here after a failed run
 tests/testthat/_problems/
+
+# The oracle harness environment (tools/oracle/uv.lock pins it)
+tools/oracle/.venv/

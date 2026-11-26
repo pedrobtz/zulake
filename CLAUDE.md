@@ -51,6 +51,14 @@ R CMD INSTALL . && Rscript tools/ci-run-tests.R
 ZULAKE_TEST_SEED=<seed> Rscript tools/ci-run-tests.R   # replay an order
 ```
 
+Fixtures and oracle (uv 0.7.11; the order matters, PROVENANCE.md has it):
+
+```sh
+Rscript tools/fixtures/hostile.R                                   # hostile logs
+(cd tools/oracle && uv run --frozen python ../fixtures/pack.py)    # repack the tar
+(cd tools/oracle && uv run --frozen python answers.py)             # deltalake answers
+```
+
 ## Architecture
 
 To be written as stages land; see `.agents/design.md`. There is no native
@@ -81,10 +89,20 @@ layer: no `src/`, by design (D1).
 seed, under R CMD check and covr alike; `tools/ci-run-tests.R` runs the same
 file from the source tree. The shuffle reorders every top-level expression of
 a test file, so shared functions go in `helper-*.R`, never at file scope.
-No conformance suite or fixtures yet. The design (§8)
-plans DAT and `delta-rs` fixtures, `deltalake` 1.7.0 as the oracle in a
-development-only workflow, and a live Azure suite gated on
-`ZULAKE_AZURE_URI`.
+Fixtures (Stage 1, design §8): 25 Delta tables (14 copied from `delta-rs`,
+Apache-2.0; 2 changed from them; 9 `zl-*` written with `deltalake` 1.7.0)
+and 8 hostile logs, listed in `tests/testthat/fixtures/PROVENANCE.md`. They
+ship packed in `tests/testthat/fixtures/delta-fixtures.tar`, because Delta
+paths pass the 100 bytes a package tarball allows; the unpacked
+`tables/` and `hostile/` trees are in git only (`.Rbuildignore`), and are
+what you edit. `deltalake` 1.7.0's answers for every table and version are
+in `tests/testthat/fixtures/answers/` (fields and encoding in
+`tools/oracle/README.md`). Tests reach them through `helper-oracle.R`:
+`fixture_table(name)`, `local_fixture_copy(name)`, `oracle_field(table,
+version, field)`, `oracle_refusal()` and `expect_oracle(actual, table,
+version, field)`. Never edit an answer by hand, and never edit a tree
+without repacking (see Commands). A live Azure suite gated on
+`ZULAKE_AZURE_URI` comes in Stage 6.
 
 ## Continuous integration
 
@@ -97,4 +115,8 @@ commit, creates the GitHub release and opens the `.9000` bump. So
 r-actions `assurance.yml@v1` with `ungated-jobs: fail` on
 `.agents/assurance.md`. The R-CMD-check caller adds Windows R-devel to the
 full profile's runners and runs no container on a quick run (no `src/`; the
-full profile runs them). No package-specific workflows yet.
+full profile runs them). `oracle.yaml` is the package's own workflow: it regenerates the
+`deltalake` answers, the hostile logs and the fixture tar, and fails on any
+diff. It runs on dispatch and on pull requests touching `tools/oracle/`,
+`tools/fixtures/` or the fixtures (a `paths` filter, which `assurance.yml`
+counts as gated).

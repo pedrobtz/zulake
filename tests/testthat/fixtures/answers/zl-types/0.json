@@ -1,0 +1,652 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "clientVersion": "delta-rs.py-1.7.0",
+    "engineInfo": "delta-rs:py-1.7.0",
+    "operation": "WRITE",
+    "operationMetrics": {
+     "execution_time_ms": 2,
+     "num_added_files": 1,
+     "num_added_rows": 6,
+     "num_partitions": 0,
+     "num_removed_files": 0,
+     "num_retries": 0
+    },
+    "operationParameters": {
+     "mode": "ErrorIfExists"
+    },
+    "timestamp": 1795690965439,
+    "txnId": "d53c2b27-b769-4b2f-aa53-1e0f17dce976"
+   }
+  },
+  {
+   "protocol": {
+    "minReaderVersion": 3,
+    "minWriterVersion": 7,
+    "readerFeatures": [
+     "timestampNtz"
+    ],
+    "writerFeatures": [
+     "timestampNtz"
+    ]
+   }
+  },
+  {
+   "metaData": {
+    "configuration": {},
+    "createdTime": 1795690965437,
+    "description": null,
+    "format": {
+     "options": {},
+     "provider": "parquet"
+    },
+    "id": "354dfa07-84f6-4720-b87d-1da4c9c7c97f",
+    "name": "types",
+    "partitionColumns": [],
+    "schemaString": "{\"type\":\"struct\",\"fields\":[{\"name\":\"i8\",\"type\":\"byte\",\"nullable\":true,\"metadata\":{}},{\"name\":\"i16\",\"type\":\"short\",\"nullable\":true,\"metadata\":{}},{\"name\":\"i32\",\"type\":\"integer\",\"nullable\":true,\"metadata\":{}},{\"name\":\"i64\",\"type\":\"long\",\"nullable\":true,\"metadata\":{}},{\"name\":\"f32\",\"type\":\"float\",\"nullable\":true,\"metadata\":{}},{\"name\":\"f64\",\"type\":\"double\",\"nullable\":true,\"metadata\":{}},{\"name\":\"dec\",\"type\":\"decimal(10,2)\",\"nullable\":true,\"metadata\":{}},{\"name\":\"dec38\",\"type\":\"decimal(38,18)\",\"nullable\":true,\"metadata\":{}},{\"name\":\"s\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"b\",\"type\":\"binary\",\"nullable\":true,\"metadata\":{}},{\"name\":\"flag\",\"type\":\"boolean\",\"nullable\":true,\"metadata\":{}},{\"name\":\"d\",\"type\":\"date\",\"nullable\":true,\"metadata\":{}},{\"name\":\"ts\",\"type\":\"timestamp\",\"nullable\":true,\"metadata\":{}},{\"name\":\"ntz\",\"type\":\"timestamp_ntz\",\"nullable\":true,\"metadata\":{}},{\"name\":\"st\",\"type\":{\"type\":\"struct\",\"fields\":[{\"name\":\"a\",\"type\":\"long\",\"nullable\":true,\"metadata\":{}},{\"name\":\"b\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}]},\"nullable\":true,\"metadata\":{}},{\"name\":\"li\",\"type\":{\"type\":\"array\",\"elementType\":\"long\",\"containsNull\":true},\"nullable\":true,\"metadata\":{}},{\"name\":\"mp\",\"type\":{\"type\":\"map\",\"keyType\":\"string\",\"valueType\":\"integer\",\"valueContainsNull\":true},\"nullable\":true,\"metadata\":{}}]}"
+   }
+  },
+  {
+   "add": {
+    "baseRowId": null,
+    "clusteringProvider": null,
+    "dataChange": true,
+    "defaultRowCommitVersion": null,
+    "modificationTime": 1795690965439,
+    "partitionValues": {},
+    "path": "part-00000-012111c5-a433-4d5c-b6d5-81102e4ba013-c000.snappy.parquet",
+    "size": 6188,
+    "stats": "{\"numRecords\":6,\"minValues\":{\"f64\":null,\"d\":\"0001-01-01\",\"ts\":\"1900-01-01T00:00:00Z\",\"ntz\":\"1969-12-31 23:59:59.999\",\"i64\":-9223372036854775808,\"i8\":-128,\"i16\":-32768,\"flag\":false,\"st\":{\"a\":1,\"b\":\"\"},\"s\":\"\",\"f32\":null,\"dec\":-99999999.99,\"i32\":-2147483648},\"maxValues\":{\"i64\":9223372036854775807,\"i8\":127,\"i32\":2147483647,\"dec\":99999999.99,\"i16\":32767,\"s\":\"日本語\",\"flag\":true,\"f32\":null,\"dec38\":1.234567890123457e+19,\"ts\":\"2262-04-11T00:00:00Z\",\"ntz\":\"2100-01-01 00:00:00.000\",\"d\":\"9999-12-31\",\"f64\":null,\"st\":{\"a\":5,\"b\":\"z\"}},\"nullCount\":{\"i16\":1,\"f32\":1,\"i8\":1,\"dec\":1,\"d\":1,\"s\":1,\"ts\":1,\"f64\":1,\"flag\":1,\"ntz\":1,\"st\":{\"a\":2,\"b\":2},\"i64\":1,\"i32\":1,\"dec38\":1}}",
+    "tags": null
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [
+    {
+     "d": "9999-12-31",
+     "dec": "99999999.99",
+     "dec38": null,
+     "f32": null,
+     "f64": null,
+     "flag": true,
+     "i16": 32767,
+     "i32": 2147483647,
+     "i64": "9223372036854775807",
+     "i8": 127,
+     "ntz": "2100-01-01T00:00:00.000000",
+     "s": "日本語",
+     "st": {
+      "a": "5",
+      "b": "z"
+     },
+     "ts": "2262-04-11T00:00:00.000000Z"
+    }
+   ],
+   "min": [
+    {
+     "d": "0001-01-01",
+     "dec": "-99999999.99",
+     "dec38": null,
+     "f32": null,
+     "f64": null,
+     "flag": false,
+     "i16": -32768,
+     "i32": -2147483648,
+     "i64": "-9223372036854775808",
+     "i8": -128,
+     "ntz": "1969-12-31T23:59:59.999000",
+     "s": "",
+     "st": {
+      "a": "1",
+      "b": ""
+     },
+     "ts": "1900-01-01T00:00:00.000000Z"
+    }
+   ],
+   "modification_time": [
+    "1795690965439"
+   ],
+   "null_count": [
+    {
+     "b": null,
+     "d": "1",
+     "dec": "1",
+     "dec38": "1",
+     "f32": "1",
+     "f64": "1",
+     "flag": "1",
+     "i16": "1",
+     "i32": "1",
+     "i64": "1",
+     "i8": "1",
+     "li": null,
+     "mp": null,
+     "ntz": "1",
+     "s": "1",
+     "st": {
+      "a": "2",
+      "b": "2"
+     },
+     "ts": "1"
+    }
+   ],
+   "num_records": [
+    "6"
+   ],
+   "path": [
+    "part-00000-012111c5-a433-4d5c-b6d5-81102e4ba013-c000.snappy.parquet"
+   ],
+   "size_bytes": [
+    "6188"
+   ]
+  },
+  "num_rows": 1,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<i8: int64, i16: int64, i32: int64, i64: int64, f32: int64, f64: int64, dec: int64, dec38: int64, s: int64, b: int64, flag: int64, d: int64, ts: int64, ntz: int64, st: struct<a: int64, b: int64>, li: int64, mp: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<i8: int8, i16: int16, i32: int32, i64: int64, f32: float, f64: double, dec: decimal128(10, 2), dec38: decimal128(38, 18), s: string, flag: bool, d: date32[day], ts: timestamp[us, tz=UTC], ntz: timestamp[us], st: struct<a: int64, b: string>>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<i8: int8, i16: int16, i32: int32, i64: int64, f32: float, f64: double, dec: decimal128(10, 2), dec38: decimal128(38, 18), s: string, flag: bool, d: date32[day], ts: timestamp[us, tz=UTC], ntz: timestamp[us], st: struct<a: int64, b: string>>"
+   }
+  ]
+ },
+ "count": 6,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "clientVersion": "delta-rs.py-1.7.0",
+   "engineInfo": "delta-rs:py-1.7.0",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "execution_time_ms": 2,
+    "num_added_files": 1,
+    "num_added_rows": 6,
+    "num_partitions": 0,
+    "num_removed_files": 0,
+    "num_retries": 0
+   },
+   "operationParameters": {
+    "mode": "ErrorIfExists"
+   },
+   "timestamp": 1795690965439,
+   "txnId": "d53c2b27-b769-4b2f-aa53-1e0f17dce976",
+   "version": 0
+  }
+ ],
+ "loaded_version": 0,
+ "metadata": {
+  "configuration": {},
+  "created_time": 1795690965437,
+  "description": null,
+  "id": "354dfa07-84f6-4720-b87d-1da4c9c7c97f",
+  "name": "types",
+  "partition_columns": []
+ },
+ "partitions": [],
+ "protocol": {
+  "min_reader_version": 3,
+  "min_writer_version": 7,
+  "reader_features": [
+   "timestampNtz"
+  ],
+  "writer_features": [
+   "timestampNtz"
+  ]
+ },
+ "read": {
+  "columns": {
+   "b": [
+    "7f",
+    "0001ff",
+    "616263",
+    "deadbeef",
+    "",
+    null
+   ],
+   "d": [
+    "9999-12-31",
+    "1970-01-01",
+    "2000-02-29",
+    "0001-01-01",
+    "1969-12-31",
+    null
+   ],
+   "dec": [
+    "-99999999.99",
+    "12345678.90",
+    "0.00",
+    "99999999.99",
+    "-0.01",
+    null
+   ],
+   "dec38": [
+    "-99999999999999999999.999999999999999999",
+    "12345678901234567890.123456789012345678",
+    "-1.000000000000000001",
+    "0.000000000000000001",
+    "0.000000000000000000",
+    null
+   ],
+   "f32": [
+    3.25,
+    1.5,
+    "Infinity",
+    "-Infinity",
+    -0.0,
+    null
+   ],
+   "f64": [
+    1e+308,
+    0.1,
+    "Infinity",
+    "-Infinity",
+    -0.0,
+    null
+   ],
+   "flag": [
+    true,
+    true,
+    true,
+    false,
+    false,
+    null
+   ],
+   "i16": [
+    -1,
+    -32768,
+    0,
+    1,
+    32767,
+    null
+   ],
+   "i32": [
+    -1,
+    -2147483648,
+    0,
+    1,
+    2147483647,
+    null
+   ],
+   "i64": [
+    "9223372036854775807",
+    "9007199254740991",
+    "9007199254740993",
+    "-9223372036854775808",
+    "9007199254740992",
+    null
+   ],
+   "i8": [
+    -1,
+    -128,
+    0,
+    1,
+    127,
+    null
+   ],
+   "li": [
+    [
+     "9007199254740993"
+    ],
+    [
+     "1",
+     "2"
+    ],
+    null,
+    [
+     null
+    ],
+    [],
+    [
+     "0"
+    ]
+   ],
+   "mp": [
+    [
+     [
+      "z",
+      0
+     ]
+    ],
+    [
+     [
+      "k",
+      1
+     ]
+    ],
+    null,
+    [
+     [
+      "a",
+      null
+     ],
+     [
+      "b",
+      2
+     ]
+    ],
+    [],
+    [
+     [
+      "y",
+      -1
+     ]
+    ]
+   ],
+   "ntz": [
+    "2100-01-01T00:00:00.000001",
+    "1970-01-01T00:00:00.000000",
+    "1969-12-31T23:59:59.999999",
+    "2000-01-01T00:00:00.000000",
+    "2024-02-29T12:30:45.123456",
+    null
+   ],
+   "s": [
+    "tab\there \"quoted\"",
+    "plain",
+    "日本語",
+    "",
+    "café",
+    null
+   ],
+   "st": [
+    {
+     "a": "4",
+     "b": ""
+    },
+    {
+     "a": "1",
+     "b": "x"
+    },
+    null,
+    {
+     "a": "3",
+     "b": "z"
+    },
+    {
+     "a": null,
+     "b": null
+    },
+    {
+     "a": "5",
+     "b": "w"
+    }
+   ],
+   "ts": [
+    "2262-04-11T00:00:00.000000Z",
+    "1970-01-01T00:00:00.000000Z",
+    "2024-02-29T12:30:45.123456Z",
+    "1900-01-01T00:00:00.000000Z",
+    "1969-12-31T23:59:59.999999Z",
+    null
+   ]
+  },
+  "num_rows": 6,
+  "schema": [
+   {
+    "name": "i8",
+    "nullable": true,
+    "type": "int8"
+   },
+   {
+    "name": "i16",
+    "nullable": true,
+    "type": "int16"
+   },
+   {
+    "name": "i32",
+    "nullable": true,
+    "type": "int32"
+   },
+   {
+    "name": "i64",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "f32",
+    "nullable": true,
+    "type": "float"
+   },
+   {
+    "name": "f64",
+    "nullable": true,
+    "type": "double"
+   },
+   {
+    "name": "dec",
+    "nullable": true,
+    "type": "decimal128(10, 2)"
+   },
+   {
+    "name": "dec38",
+    "nullable": true,
+    "type": "decimal128(38, 18)"
+   },
+   {
+    "name": "s",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "name": "b",
+    "nullable": true,
+    "type": "binary"
+   },
+   {
+    "name": "flag",
+    "nullable": true,
+    "type": "bool"
+   },
+   {
+    "name": "d",
+    "nullable": true,
+    "type": "date32[day]"
+   },
+   {
+    "name": "ts",
+    "nullable": true,
+    "type": "timestamp[us, tz=UTC]"
+   },
+   {
+    "name": "ntz",
+    "nullable": true,
+    "type": "timestamp[us]"
+   },
+   {
+    "name": "st",
+    "nullable": true,
+    "type": "struct<a: int64, b: string>"
+   },
+   {
+    "name": "li",
+    "nullable": true,
+    "type": "list<element: int64>"
+   },
+   {
+    "name": "mp",
+    "nullable": true,
+    "type": "map<string, int32>"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {},
+    "name": "i8",
+    "nullable": true,
+    "type": "byte"
+   },
+   {
+    "metadata": {},
+    "name": "i16",
+    "nullable": true,
+    "type": "short"
+   },
+   {
+    "metadata": {},
+    "name": "i32",
+    "nullable": true,
+    "type": "integer"
+   },
+   {
+    "metadata": {},
+    "name": "i64",
+    "nullable": true,
+    "type": "long"
+   },
+   {
+    "metadata": {},
+    "name": "f32",
+    "nullable": true,
+    "type": "float"
+   },
+   {
+    "metadata": {},
+    "name": "f64",
+    "nullable": true,
+    "type": "double"
+   },
+   {
+    "metadata": {},
+    "name": "dec",
+    "nullable": true,
+    "type": "decimal(10,2)"
+   },
+   {
+    "metadata": {},
+    "name": "dec38",
+    "nullable": true,
+    "type": "decimal(38,18)"
+   },
+   {
+    "metadata": {},
+    "name": "s",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "metadata": {},
+    "name": "b",
+    "nullable": true,
+    "type": "binary"
+   },
+   {
+    "metadata": {},
+    "name": "flag",
+    "nullable": true,
+    "type": "boolean"
+   },
+   {
+    "metadata": {},
+    "name": "d",
+    "nullable": true,
+    "type": "date"
+   },
+   {
+    "metadata": {},
+    "name": "ts",
+    "nullable": true,
+    "type": "timestamp"
+   },
+   {
+    "metadata": {},
+    "name": "ntz",
+    "nullable": true,
+    "type": "timestamp_ntz"
+   },
+   {
+    "metadata": {},
+    "name": "st",
+    "nullable": true,
+    "type": {
+     "fields": [
+      {
+       "metadata": {},
+       "name": "a",
+       "nullable": true,
+       "type": "long"
+      },
+      {
+       "metadata": {},
+       "name": "b",
+       "nullable": true,
+       "type": "string"
+      }
+     ],
+     "type": "struct"
+    }
+   },
+   {
+    "metadata": {},
+    "name": "li",
+    "nullable": true,
+    "type": {
+     "containsNull": true,
+     "elementType": "long",
+     "type": "array"
+    }
+   },
+   {
+    "metadata": {},
+    "name": "mp",
+    "nullable": true,
+    "type": {
+     "keyType": "string",
+     "type": "map",
+     "valueContainsNull": true,
+     "valueType": "integer"
+    }
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "zl-types",
+ "timestamp_lookup": [
+  {
+   "at": "2026-11-26T11:02:45.438Z",
+   "version": 0
+  },
+  {
+   "at": "2026-11-26T11:02:45.439Z",
+   "version": 0
+  }
+ ],
+ "transactions": {},
+ "version": 0
+}

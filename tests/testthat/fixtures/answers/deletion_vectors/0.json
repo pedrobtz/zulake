@@ -1,0 +1,209 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "engineInfo": "Apache-Spark/3.5.1 Delta-Lake/3.1.0",
+    "isBlindAppend": true,
+    "isolationLevel": "Serializable",
+    "operation": "CREATE TABLE",
+    "operationMetrics": {},
+    "operationParameters": {
+     "description": null,
+     "isManaged": "false",
+     "partitionBy": "[]",
+     "properties": "{\"delta.enableDeletionVectors\":\"true\"}"
+    },
+    "timestamp": 1712091505258,
+    "txnId": "28857c95-85a1-49a5-a5e9-96d331168864"
+   }
+  },
+  {
+   "metaData": {
+    "configuration": {
+     "delta.enableDeletionVectors": "true"
+    },
+    "createdTime": 1712091505246,
+    "format": {
+     "options": {},
+     "provider": "parquet"
+    },
+    "id": "ca1ef39e-c033-47ba-aff5-77d727facbc3",
+    "partitionColumns": [],
+    "schemaString": "{\"type\":\"struct\",\"fields\":[{\"name\":\"letter\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"int\",\"type\":\"long\",\"nullable\":true,\"metadata\":{}},{\"name\":\"date\",\"type\":\"date\",\"nullable\":true,\"metadata\":{}}]}"
+   }
+  },
+  {
+   "protocol": {
+    "minReaderVersion": 3,
+    "minWriterVersion": 7,
+    "readerFeatures": [
+     "deletionVectors"
+    ],
+    "writerFeatures": [
+     "deletionVectors"
+    ]
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "deletion_vector": [],
+   "max": [],
+   "min": [],
+   "modification_time": [],
+   "null_count": [],
+   "num_records": [],
+   "path": [],
+   "size_bytes": []
+  },
+  "num_rows": 0,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<letter: int64, int: int64, date: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<letter: string, int: int64, date: date32[day]>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<letter: string, int: int64, date: date32[day]>"
+   },
+   {
+    "name": "deletion_vector",
+    "nullable": true,
+    "type": "struct<storageType: string not null, pathOrInlineDv: string not null, offset: int32, sizeInBytes: int32 not null, cardinality: int64 not null>"
+   }
+  ]
+ },
+ "count": 0,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "engineInfo": "Apache-Spark/3.5.1 Delta-Lake/3.1.0",
+   "isBlindAppend": true,
+   "isolationLevel": "Serializable",
+   "operation": "CREATE TABLE",
+   "operationMetrics": {},
+   "operationParameters": {
+    "description": null,
+    "isManaged": "false",
+    "partitionBy": "[]",
+    "properties": "{\"delta.enableDeletionVectors\":\"true\"}"
+   },
+   "timestamp": 1712091505258,
+   "txnId": "28857c95-85a1-49a5-a5e9-96d331168864",
+   "version": 0
+  }
+ ],
+ "loaded_version": 0,
+ "metadata": {
+  "configuration": {
+   "delta.enableDeletionVectors": "true"
+  },
+  "created_time": 1712091505246,
+  "description": null,
+  "id": "ca1ef39e-c033-47ba-aff5-77d727facbc3",
+  "name": null,
+  "partition_columns": []
+ },
+ "partitions": [],
+ "protocol": {
+  "min_reader_version": 3,
+  "min_writer_version": 7,
+  "reader_features": [
+   "deletionVectors"
+  ],
+  "writer_features": [
+   "deletionVectors"
+  ]
+ },
+ "read": {
+  "columns": {
+   "date": [],
+   "int": [],
+   "letter": []
+  },
+  "num_rows": 0,
+  "schema": [
+   {
+    "name": "letter",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "name": "int",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "date",
+    "nullable": true,
+    "type": "date32[day]"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {},
+    "name": "letter",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "metadata": {},
+    "name": "int",
+    "nullable": true,
+    "type": "long"
+   },
+   {
+    "metadata": {},
+    "name": "date",
+    "nullable": true,
+    "type": "date"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "deletion_vectors",
+ "timestamp_lookup": [
+  {
+   "at": "2024-04-02T20:58:25.257Z",
+   "version": 0
+  },
+  {
+   "at": "2024-04-02T20:58:25.258Z",
+   "version": 0
+  }
+ ],
+ "transactions": {},
+ "version": 0
+}
