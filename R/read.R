@@ -398,13 +398,19 @@ fetch_file <- function(tbl, i) {
   path <- a[["path"]]
   storage <- tbl$storage
   if (is_absolute_path(path)) {
-    local <- absolute_local_path(path)
-    if (!file.exists(local) || dir.exists(local)) {
-      zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path)
+    remote <- storage_for_absolute(storage, path)
+    if (is.null(remote)) {
+      local <- absolute_local_path(path)
+      if (!file.exists(local) || dir.exists(local)) {
+        zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path)
+      }
+      return(local)
     }
-    return(local)
+    storage <- remote$storage
+    rel <- remote$rel
+  } else {
+    rel <- percent_decode(path)
   }
-  rel <- percent_decode(path)
   if (is.function(storage$local_path)) {
     return(storage$local_path(rel))
   }

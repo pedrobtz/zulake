@@ -11,13 +11,41 @@
 #' not support is refused with an error naming that feature, before any data
 #' file is read, because ignoring a feature returns wrong rows.
 #'
-#' In this version zulake reads tables on local disk, replaying the log from
-#' its first commit. A table whose log no longer reaches commit 0 needs a
-#' checkpoint, which zulake cannot read yet, and is refused with a
-#' `zulake_error_checkpoint_unreadable` error.
+#' zulake reads tables on local disk and on Azure (Blob Storage and Data
+#' Lake Storage Gen2), replaying the log from its first commit. A table whose
+#' log no longer reaches commit 0 needs a checkpoint, which zulake cannot
+#' read yet, and is refused with a `zulake_error_checkpoint_unreadable`
+#' error.
 #'
-#' @param uri Location of the table: the path of its directory, the one that
-#'   holds `_delta_log/`.
+#' @section Azure:
+#' A table on Azure is given by one of three URI forms, which all reach the
+#' same blobs through the Blob service API:
+#'
+#' * `abfss://<container>@<account>.dfs.core.windows.net/<path>`
+#' * `https://<account>.dfs.core.windows.net/<container>/<path>`
+#' * `https://<account>.blob.core.windows.net/<container>/<path>`
+#'
+#' Other schemes (`s3://`, `gs://`, `abfs://`, `http://`, ...) are refused
+#' with a `zulake_error_uri` error, and so is a URI with a query string,
+#' such as a SAS: zulake authenticates with a bearer token only.
+#'
+#' `credentials` is a function you write, which zulake calls with no
+#' arguments to get a Microsoft Entra ID access token for Azure Storage
+#' (audience `https://storage.azure.com`), as a string. zulake does not
+#' obtain tokens itself: return one from the Azure CLI, a managed identity
+#' or a package such as AzureAuth. It is called before the first request,
+#' and once more when Azure answers `401` (an expired token); a second
+#' `401`, or a `403`, is a `zulake_error_auth` error. The token is sent only
+#' in the `Authorization` header: it is not kept in the snapshot, printed,
+#' or put in any error. Without `credentials`, requests are anonymous, which
+#' only a public container answers.
+#'
+#' The snapshot does not keep `credentials` either; later calls on it, such
+#' as [lake_read()], use it through the R session. A snapshot saved with
+#' [saveRDS()] and read in another session has none: open the table again.
+#'
+#' @param uri Location of the table, the directory that holds `_delta_log/`:
+#'   a local path, or an Azure URI in one of the forms of the Azure section.
 #' @param version Version to open, a whole number. `NULL`, the default, is
 #'   the latest version.
 #' @param timestamp Open the latest version committed at or before this
@@ -25,15 +53,19 @@
 #'   when the table records them, and the commit file's modification time
 #'   otherwise. A time before the first commit opens the first version. Give
 #'   `version` or `timestamp`, not both.
-#' @param credentials A function of no arguments returning a bearer token,
-#'   for tables on Azure. Not used for local paths.
+#' @param credentials A function of no arguments returning a bearer token
+#'   for Azure Storage, as a string (see the Azure section), or `NULL` for
+#'   anonymous requests. Not used for local paths.
 #' @returns `lake_open()` and `lake_load()` return a snapshot, an object of
 #'   class `zulake_table`. `lake_version()` returns the version a snapshot
 #'   holds, a whole number as a double.
 #'
 #'   Every error is a condition of class `zulake_error`, with a subclass
 #'   that says why: `zulake_error_not_table` (no Delta log at `uri`),
-#'   `zulake_error_version` (no such version), `zulake_error_corrupt_log`
+#'   `zulake_error_version` (no such version), `zulake_error_uri` (a URI
+#'   zulake cannot open), `zulake_error_storage` (a file that cannot be
+#'   read; from Azure with the HTTP `status` and Azure's error `code`),
+#'   `zulake_error_auth` (credentials refused), `zulake_error_corrupt_log`
 #'   (a log that breaks the protocol, such as a commit that is not JSON or a
 #'   partition value of the wrong type), `zulake_error_checkpoint_unreadable`
 #'   and `zulake_error_unsupported_feature`, whose `feature` field names the
@@ -64,6 +96,19 @@
 #' tbl0 <- lake_load(tbl, version = 0)
 #'
 #' unlink(path, recursive = TRUE)
+#'
+#' # On Azure: a token for Azure Storage from the Azure CLI. Not run, because
+#' # it needs an Azure account and a signed-in CLI.
+#' \dontrun{
+#' token <- function() {
+#'   system2("az", c(
+#'     "account", "get-access-token", "--resource", "https://storage.azure.com",
+#'     "--query", "accessToken", "--output", "tsv"
+#'   ), stdout = TRUE)
+#' }
+#' tbl <- lake_open("abfss://lake@myaccount.dfs.core.windows.net/sales", credentials = token)
+#' lake_files(tbl)
+#' }
 lake_open <- function(uri, version = NULL, timestamp = NULL, credentials = NULL) {
   storage <- storage_for(uri, credentials)
   snapshot_build(storage, uri, check_version(version), check_timestamp(timestamp))

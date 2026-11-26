@@ -19,8 +19,9 @@
 #                               downloaded through get() to the session
 #                               cache (read.R)
 #
-# plus `kind` ("local") and `root`. The interface stays internal, so a later
-# backend (Azure in Stage 6, a future zustore) changes no public function.
+# plus `kind` ("local" or "azure") and `root`. The Azure backend (azure.R)
+# also has `location`. The interface stays internal, so a later backend (a
+# future zustore) changes no public function.
 
 storage_for <- function(uri, credentials = NULL) {
   check_string(uri, "uri")
@@ -28,11 +29,19 @@ storage_for <- function(uri, credentials = NULL) {
     zulake_abort("argument", "`credentials` must be NULL or a function of no arguments.")
   }
   if (grepl("^[A-Za-z][A-Za-z0-9+.-]*://", uri)) {
+    if (is_azure_uri(uri)) {
+      return(storage_azure(parse_azure_uri(uri), credential_handle(credentials)))
+    }
     scheme <- sub("://.*$", "", uri)
     zulake_abort(
       "uri",
       sprintf(
-        "zulake cannot open %s URIs yet: only local paths are supported.",
+        paste(
+          "zulake cannot open %s URIs: only local paths and Azure URIs",
+          "(abfss://<container>@<account>.dfs.core.windows.net/<path>,",
+          "https://<account>.dfs.core.windows.net/<container>/<path> and",
+          "https://<account>.blob.core.windows.net/<container>/<path>) are supported."
+        ),
         format_string(scheme)
       ),
       scheme = scheme

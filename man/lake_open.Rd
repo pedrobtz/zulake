@@ -13,8 +13,8 @@ lake_load(tbl, version = NULL, timestamp = NULL)
 lake_version(tbl)
 }
 \arguments{
-\item{uri}{Location of the table: the path of its directory, the one that
-holds \verb{_delta_log/}.}
+\item{uri}{Location of the table, the directory that holds \verb{_delta_log/}:
+a local path, or an Azure URI in one of the forms of the Azure section.}
 
 \item{version}{Version to open, a whole number. \code{NULL}, the default, is
 the latest version.}
@@ -25,8 +25,9 @@ when the table records them, and the commit file's modification time
 otherwise. A time before the first commit opens the first version. Give
 \code{version} or \code{timestamp}, not both.}
 
-\item{credentials}{A function of no arguments returning a bearer token,
-for tables on Azure. Not used for local paths.}
+\item{credentials}{A function of no arguments returning a bearer token
+for Azure Storage, as a string (see the Azure section), or \code{NULL} for
+anonymous requests. Not used for local paths.}
 
 \item{tbl}{A snapshot, from \code{lake_open()} or \code{lake_load()}.}
 }
@@ -37,7 +38,10 @@ holds, a whole number as a double.
 
 Every error is a condition of class \code{zulake_error}, with a subclass
 that says why: \code{zulake_error_not_table} (no Delta log at \code{uri}),
-\code{zulake_error_version} (no such version), \code{zulake_error_corrupt_log}
+\code{zulake_error_version} (no such version), \code{zulake_error_uri} (a URI
+zulake cannot open), \code{zulake_error_storage} (a file that cannot be
+read; from Azure with the HTTP \code{status} and Azure's error \code{code}),
+\code{zulake_error_auth} (credentials refused), \code{zulake_error_corrupt_log}
 (a log that breaks the protocol, such as a commit that is not JSON or a
 partition value of the wrong type), \code{zulake_error_checkpoint_unreadable}
 and \code{zulake_error_unsupported_feature}, whose \code{feature} field names the
@@ -56,11 +60,42 @@ before it is returned: a table that needs a reader feature zulake does
 not support is refused with an error naming that feature, before any data
 file is read, because ignoring a feature returns wrong rows.
 
-In this version zulake reads tables on local disk, replaying the log from
-its first commit. A table whose log no longer reaches commit 0 needs a
-checkpoint, which zulake cannot read yet, and is refused with a
-\code{zulake_error_checkpoint_unreadable} error.
+zulake reads tables on local disk and on Azure (Blob Storage and Data
+Lake Storage Gen2), replaying the log from its first commit. A table whose
+log no longer reaches commit 0 needs a checkpoint, which zulake cannot
+read yet, and is refused with a \code{zulake_error_checkpoint_unreadable}
+error.
 }
+\section{Azure}{
+
+A table on Azure is given by one of three URI forms, which all reach the
+same blobs through the Blob service API:
+\itemize{
+\item \verb{abfss://<container>@<account>.dfs.core.windows.net/<path>}
+\item \verb{https://<account>.dfs.core.windows.net/<container>/<path>}
+\item \verb{https://<account>.blob.core.windows.net/<container>/<path>}
+}
+
+Other schemes (\verb{s3://}, \verb{gs://}, \verb{abfs://}, \verb{http://}, ...) are refused
+with a \code{zulake_error_uri} error, and so is a URI with a query string,
+such as a SAS: zulake authenticates with a bearer token only.
+
+\code{credentials} is a function you write, which zulake calls with no
+arguments to get a Microsoft Entra ID access token for Azure Storage
+(audience \verb{https://storage.azure.com}), as a string. zulake does not
+obtain tokens itself: return one from the Azure CLI, a managed identity
+or a package such as AzureAuth. It is called before the first request,
+and once more when Azure answers \code{401} (an expired token); a second
+\code{401}, or a \code{403}, is a \code{zulake_error_auth} error. The token is sent only
+in the \code{Authorization} header: it is not kept in the snapshot, printed,
+or put in any error. Without \code{credentials}, requests are anonymous, which
+only a public container answers.
+
+The snapshot does not keep \code{credentials} either; later calls on it, such
+as \code{\link[=lake_read]{lake_read()}}, use it through the R session. A snapshot saved with
+\code{\link[=saveRDS]{saveRDS()}} and read in another session has none: open the table again.
+}
+
 \examples{
 # A one-file table written by hand, so the example needs nothing else.
 path <- tempfile("table")
@@ -85,6 +120,19 @@ lake_version(tbl)
 tbl0 <- lake_load(tbl, version = 0)
 
 unlink(path, recursive = TRUE)
+
+# On Azure: a token for Azure Storage from the Azure CLI. Not run, because
+# it needs an Azure account and a signed-in CLI.
+\dontrun{
+token <- function() {
+  system2("az", c(
+    "account", "get-access-token", "--resource", "https://storage.azure.com",
+    "--query", "accessToken", "--output", "tsv"
+  ), stdout = TRUE)
+}
+tbl <- lake_open("abfss://lake@myaccount.dfs.core.windows.net/sales", credentials = token)
+lake_files(tbl)
+}
 }
 \seealso{
 \code{\link[=lake_is_table]{lake_is_table()}} to check a location first.

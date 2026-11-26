@@ -7,11 +7,12 @@
 lake_is_table(uri, credentials = NULL)
 }
 \arguments{
-\item{uri}{Location of the table: the path of its directory, the one that
-holds \verb{_delta_log/}.}
+\item{uri}{Location of the table, the directory that holds \verb{_delta_log/}:
+a local path, or an Azure URI in one of the forms of the Azure section.}
 
-\item{credentials}{A function of no arguments returning a bearer token,
-for tables on Azure. Not used for local paths.}
+\item{credentials}{A function of no arguments returning a bearer token
+for Azure Storage, as a string (see the Azure section), or \code{NULL} for
+anonymous requests. Not used for local paths.}
 }
 \value{
 \code{TRUE} or \code{FALSE}.

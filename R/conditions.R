@@ -5,7 +5,12 @@
 #
 #   zulake_error_argument              an argument of the wrong type or value
 #   zulake_error_uri                   a URI zulake cannot open (scheme)
-#   zulake_error_storage               a file the storage backend cannot read
+#   zulake_error_storage               a file the storage backend cannot read;
+#                                      from Azure also `status` and `code`
+#   zulake_error_auth                  Azure refused the credentials (HTTP
+#                                      401 twice, or 403), or credentials()
+#                                      failed; `status`, `code`. Never the
+#                                      token (D4)
 #   zulake_error_not_table             no Delta log at the location
 #   zulake_error_version               a version or timestamp the log lacks
 #   zulake_error_corrupt_log           a log that breaks the protocol
