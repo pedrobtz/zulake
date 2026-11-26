@@ -573,5 +573,5 @@ test_that("a binary column is filtered on rows; is.na() of it is TRUE for a null
   expect_identical(read(quote(is.na(b))), r_subset(full, bquote(.(null))))
   expect_identical(read(quote(!is.na(b))), r_subset(full, bquote(.(!null))))
   expect_identical(nrow(r_subset(full, quote(is.na(b)))), 0L)
-  expect_identical(nrow(lake_files(tbl, filter = is.na(b))), 1L)
+  expect_identical(nrow(suppressWarnings(lake_files(tbl, filter = is.na(b)))), 1L)
 })
