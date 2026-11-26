@@ -1,0 +1,260 @@
+#' Open a table
+#'
+#' `lake_open()` builds a snapshot of a Delta Lake table: one version of it,
+#' replayed from the table's own log as the Delta protocol prescribes. A
+#' snapshot never changes; `lake_load()` builds another one of the same
+#' table, at another version or at the version the log now ends at.
+#'
+#' The snapshot holds the version's protocol, metadata, live files,
+#' tombstones, application transactions and metadata domains. It is checked
+#' before it is returned: a table that needs a reader feature zulake does
+#' not support is refused with an error naming that feature, before any data
+#' file is read, because ignoring a feature returns wrong rows.
+#'
+#' In this version zulake reads tables on local disk, replaying the log from
+#' its first commit. A table whose log no longer reaches commit 0 needs a
+#' checkpoint, which zulake cannot read yet, and is refused with a
+#' `zulake_error_checkpoint_unreadable` error.
+#'
+#' @param uri Location of the table: the path of its directory, the one that
+#'   holds `_delta_log/`.
+#' @param version Version to open, a whole number. `NULL`, the default, is
+#'   the latest version.
+#' @param timestamp Open the latest version committed at or before this
+#'   time, a `POSIXct`. The commit time is the commit's in-commit timestamp
+#'   when the table records them, and the commit file's modification time
+#'   otherwise. A time before the first commit opens the first version. Give
+#'   `version` or `timestamp`, not both.
+#' @param credentials A function of no arguments returning a bearer token,
+#'   for tables on Azure. Not used for local paths.
+#' @returns `lake_open()` and `lake_load()` return a snapshot, an object of
+#'   class `zulake_table`. `lake_version()` returns the version a snapshot
+#'   holds, a whole number as a double.
+#'
+#'   Every error is a condition of class `zulake_error`, with a subclass
+#'   that says why: `zulake_error_not_table` (no Delta log at `uri`),
+#'   `zulake_error_version` (no such version), `zulake_error_corrupt_log`
+#'   (a log that breaks the protocol, such as a commit that is not JSON or a
+#'   partition value of the wrong type), `zulake_error_checkpoint_unreadable`
+#'   and `zulake_error_unsupported_feature`, whose `feature` field names the
+#'   feature.
+#' @seealso [lake_is_table()] to check a location first.
+#' @export
+#' @examples
+#' # A one-file table written by hand, so the example needs nothing else.
+#' path <- tempfile("table")
+#' dir.create(file.path(path, "_delta_log"), recursive = TRUE)
+#' writeLines(c(
+#'   '{"protocol":{"minReaderVersion":1,"minWriterVersion":2}}',
+#'   paste0(
+#'     '{"metaData":{"id":"example","format":{"provider":"parquet","options":{}},',
+#'     '"schemaString":"{\\"type\\":\\"struct\\",\\"fields\\":[{\\"name\\":',
+#'     '\\"id\\",\\"type\\":\\"long\\",\\"nullable\\":true,\\"metadata\\":{}}]}",',
+#'     '"partitionColumns":[],"configuration":{}}}'
+#'   ),
+#'   paste0(
+#'     '{"add":{"path":"part-0.parquet","partitionValues":{},"size":100,',
+#'     '"modificationTime":0,"dataChange":true}}'
+#'   )
+#' ), file.path(path, "_delta_log", "00000000000000000000.json"))
+#'
+#' lake_is_table(path)
+#' tbl <- lake_open(path)
+#' lake_version(tbl)
+#' tbl0 <- lake_load(tbl, version = 0)
+#'
+#' unlink(path, recursive = TRUE)
+lake_open <- function(uri, version = NULL, timestamp = NULL, credentials = NULL) {
+  storage <- storage_for(uri, credentials)
+  snapshot_build(storage, uri, check_version(version), check_timestamp(timestamp))
+}
+
+#' @rdname lake_open
+#' @param tbl A snapshot, from `lake_open()` or `lake_load()`.
+#' @export
+lake_load <- function(tbl, version = NULL, timestamp = NULL) {
+  check_table(tbl)
+  snapshot_build(tbl$storage, tbl$uri, check_version(version), check_timestamp(timestamp))
+}
+
+#' Is there a table here?
+#'
+#' `lake_is_table()` says whether `uri` holds a Delta Lake table: a
+#' `_delta_log/` directory with at least one commit or checkpoint in it. It
+#' reads no log file, so a table it finds can still fail to open.
+#'
+#' @inheritParams lake_open
+#' @returns `TRUE` or `FALSE`.
+#' @seealso [lake_open()], whose example also calls `lake_is_table()`.
+#' @export
+#' @examples
+#' lake_is_table(tempdir())
+lake_is_table <- function(uri, credentials = NULL) {
+  storage <- storage_for(uri, credentials)
+  entries <- log_entries(storage$list(log_dir))
+  any(entries$kind %in% c("commit", "checkpoint"))
+}
+
+#' @rdname lake_open
+#' @export
+lake_version <- function(tbl) {
+  check_table(tbl)
+  tbl$version
+}
+
+# ---- the snapshot --------------------------------------------------------
+
+# A snapshot (class `zulake_table`) is a list:
+#
+#   format           "delta" (D11: the class is named for a table, not for
+#                    Delta, and records its format)
+#   uri              the location as given
+#   version          the snapshot's version, a double
+#   timestamp        that version's commit time, POSIXct in UTC
+#   protocol         the `protocol` action in force, as parsed
+#   metadata         the `metaData` action in force, as parsed, plus `schema`
+#                    (its `schemaString` parsed)
+#   column_mapping   "none" or "name"
+#   files            live files: data frame `path`, `deletion_vector_id`
+#                    ("" for none) and `action` (list column of the `add`
+#                    actions, as parsed), sorted by path and id in byte order
+#   removed          tombstones, in the same shape (`action` holds the
+#                    `remove` actions)
+#   transactions     list of `txn` actions by `appId`, latest each
+#   domains          list of `domainMetadata` actions by domain, removed ones
+#                    left out
+#   commit_info      the snapshot version's `commitInfo` action, or NULL
+#   log              the `_delta_log/` listing at open time (log_entries())
+#   last_checkpoint  `_last_checkpoint`, parsed, or NULL
+#   storage          the storage backend (storage.R)
+snapshot_build <- function(storage, uri, version = NULL, timestamp = NULL) {
+  if (!is.null(version) && !is.null(timestamp)) {
+    zulake_abort("argument", "Give `version` or `timestamp`, not both.")
+  }
+  entries <- log_entries(storage$list(log_dir))
+  if (!any(entries$kind %in% c("commit", "checkpoint"))) {
+    zulake_abort(
+      "not_table",
+      sprintf("%s is not a Delta table: it has no `_delta_log/` with a commit in it.", format_string(uri)),
+      uri = uri
+    )
+  }
+  commits <- entries$version[entries$kind == "commit"]
+  checkpoints <- entries$version[entries$kind == "checkpoint"]
+  if (!length(commits)) {
+    zulake_abort(
+      "checkpoint_unreadable",
+      sprintf(
+        "%s has checkpoints but no commits, and zulake cannot read checkpoints yet.",
+        format_string(uri)
+      ),
+      checkpoint = max(checkpoints)
+    )
+  }
+  latest <- max(commits)
+  last_checkpoint <- read_last_checkpoint(storage, entries)
+  if (!is.null(last_checkpoint) && last_checkpoint[["version"]] > latest) {
+    zulake_abort(
+      "corrupt_log",
+      sprintf(
+        "_last_checkpoint names version %s, but the log ends at version %s.",
+        format_number(last_checkpoint[["version"]]), format_number(latest)
+      )
+    )
+  }
+
+  cache <- new.env(parent = emptyenv())
+  read <- function(name) {
+    if (is.null(cache[[name]])) {
+      cache[[name]] <- read_actions(storage, name)
+    }
+    cache[[name]]
+  }
+
+  state <- NULL
+  if (!is.null(timestamp)) {
+    # The latest snapshot says whether commits carry in-commit timestamps,
+    # so it must itself be one zulake can read.
+    state <- replay(replay_plan(entries, latest), read)
+    check_reader_features(state$protocol, state$metadata, latest)
+    version <- version_at(timestamp, entries, state$protocol, state$metadata, read)
+    if (version != latest) state <- NULL
+  } else if (is.null(version)) {
+    version <- latest
+  } else if (version > latest) {
+    zulake_abort(
+      "version",
+      sprintf(
+        "%s has no version %s: its log ends at version %s.",
+        format_string(uri), format_number(version), format_number(latest)
+      ),
+      version = version
+    )
+  }
+  if (is.null(state)) {
+    state <- replay(replay_plan(entries, version), read)
+  }
+
+  check_reader_features(state$protocol, state$metadata, version)
+  mode <- column_mapping_mode(state$protocol, state$metadata)
+  files <- file_frame(state$adds)
+  check_partition_values(files$action, state$metadata, mode)
+
+  entry <- entries[entries$kind == "commit" & entries$version == version, , drop = FALSE]
+  commit_info <- NULL
+  time <- NA_real_
+  if (nrow(entry)) {
+    actions <- read(entry$name)
+    for (a in actions) {
+      if (!is.null(a[["commitInfo"]])) {
+        commit_info <- a[["commitInfo"]]
+        break
+      }
+    }
+    time <- commit_time_ms(entry, ict_info(state$protocol, state$metadata), read)
+  }
+
+  structure(
+    list(
+      format = "delta",
+      uri = uri,
+      version = version,
+      timestamp = ms_to_posixct(time),
+      protocol = state$protocol,
+      metadata = state$metadata,
+      column_mapping = mode,
+      files = files,
+      removed = file_frame(state$removes),
+      transactions = sort_by_name(state$txns),
+      domains = sort_by_name(state$domains),
+      commit_info = commit_info,
+      log = entries,
+      last_checkpoint = last_checkpoint,
+      storage = storage
+    ),
+    class = "zulake_table"
+  )
+}
+
+# A named list in byte order of its names; an empty one stays an empty
+# named list.
+sort_by_name <- function(x) {
+  if (!length(x)) {
+    return(structure(list(), names = character()))
+  }
+  x[order(names(x), method = "radix")]
+}
+
+# The file actions held in a replay environment, as a data frame sorted by
+# path, then deletion vector id, in byte order.
+file_frame <- function(env) {
+  actions <- mget(ls(env, all.names = TRUE, sorted = FALSE), envir = env)
+  path <- vapply(actions, function(a) a[["path"]], "", USE.NAMES = FALSE)
+  dv <- vapply(actions, function(a) dv_unique_id(a[["deletionVector"]]), "", USE.NAMES = FALSE)
+  ord <- order(path, dv, method = "radix")
+  new_data_frame(list(
+    path = path[ord],
+    deletion_vector_id = dv[ord],
+    action = unname(actions)[ord]
+  ))
+}
