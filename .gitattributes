@@ -1,0 +1,6 @@
+# Delta tables, their deltalake answers, the hostile logs and the recorded
+# cassettes are bytes, not text: a checkout with core.autocrlf (the Windows
+# runners' default) would rewrite their JSON with CRLF, and the shipped
+# inst/extdata/orders would no longer be the zl-orders fixture file for file.
+inst/extdata/** -text
+tests/testthat/fixtures/** -text
