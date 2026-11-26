@@ -291,7 +291,8 @@ test_that("a vector that disagrees with its descriptor or its data file is a cor
     rel <- dv_relative_path("", uuid)
     dv <- list(storageType = "u", pathOrInlineDv = test_z85_encode(uuid), offset = 1L,
                sizeInBytes = length(vec), cardinality = 2L)
-    if (case == "short") dv$pathOrInlineDv <- "abc"
+    # 19 characters, one short of a UUID's 20 (20 and 22 read, above).
+    if (case == "short") dv$pathOrInlineDv <- substring(test_z85_encode(uuid), 2L)
     if (case == "size") dv$sizeInBytes <- length(vec) - 4L
     tbl <- check(dv)
     if (case != "missing") {
