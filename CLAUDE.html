@@ -20,6 +20,7 @@
 <li class="nav-item"><a class="nav-link" href="news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="search.json"></form></li>
+<li class="nav-item"><a class="external-link nav-link" href="https://github.com/pedrobtz/zulake/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
       </ul></div>
 
 
@@ -29,7 +30,7 @@
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>CLAUDE.md</h1>
-
+      <small class="dont-index">Source: <a href="https://github.com/pedrobtz/zulake/blob/main/CLAUDE.md" class="external-link"><code>CLAUDE.md</code></a></small>
     </div>
 
 <div id="claudemd" class="section level1">
@@ -56,7 +57,9 @@
 </div>
 <div class="section level2">
 <h2 id="commands">Commands<a class="anchor" aria-label="anchor" href="#commands"></a></h2>
-<p>Only the shared commands so far.</p>
+<p>The shared commands, plus the suite as CI runs it (shuffled, seed printed, against the installed package):</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="ex">R</span> CMD INSTALL . <span class="kw">&amp;&amp;</span> <span class="ex">Rscript</span> tools/ci-run-tests.R</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="va">ZULAKE_TEST_SEED</span><span class="op">=&lt;</span>seed<span class="op">&gt;</span> Rscript <span class="ex">tools/ci-run-tests.R</span>   <span class="co"># replay an order</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="architecture">Architecture<a class="anchor" aria-label="anchor" href="#architecture"></a></h2>
@@ -79,11 +82,11 @@
 </ul></div>
 <div class="section level2">
 <h2 id="testing">Testing<a class="anchor" aria-label="anchor" href="#testing"></a></h2>
-<p>None yet: no conformance suite, helpers or runtime measured. The design (§8) plans DAT and <code>delta-rs</code> fixtures, <code>deltalake</code> 1.7.0 as the oracle in a development-only workflow, and a live Azure suite gated on <code>ZULAKE_AZURE_URI</code>.</p>
+<p><code>tests/testthat.R</code> runs every file with <code>shuffle = TRUE</code> after printing its seed, under R CMD check and covr alike; <code>tools/ci-run-tests.R</code> runs the same file from the source tree. The shuffle reorders every top-level expression of a test file, so shared functions go in <code>helper-*.R</code>, never at file scope. No conformance suite or fixtures yet. The design (§8) plans DAT and <code>delta-rs</code> fixtures, <code>deltalake</code> 1.7.0 as the oracle in a development-only workflow, and a live Azure suite gated on <code>ZULAKE_AZURE_URI</code>.</p>
 </div>
 <div class="section level2">
 <h2 id="continuous-integration">Continuous integration<a class="anchor" aria-label="anchor" href="#continuous-integration"></a></h2>
-<p><code>R-CMD-check.yaml</code> calls r-actions <code>r-cmd-check.yml@v1</code>; <code>coverage.yaml</code> calls r-actions <code>coverage.yml@v1</code> (badge on <code>gh-pages</code>); <code>pkgdown.yaml</code> builds and deploys the site. <code>cran-release.yaml</code> calls r-actions <code>cran-release.yml@v1</code> when <code>CRAN-SUBMISSION</code> is pushed: it tags the submitted commit, creates the GitHub release and opens the <code>.9000</code> bump. So <code>CRAN-SUBMISSION</code> is committed, not ignored. No package-specific workflows yet.</p>
+<p><code>R-CMD-check.yaml</code> calls r-actions <code>r-cmd-check.yml@v1</code>; <code>coverage.yaml</code> calls r-actions <code>coverage.yml@v1</code> (badge on <code>gh-pages</code>); <code>pkgdown.yaml</code> builds and deploys the site. <code>cran-release.yaml</code> calls r-actions <code>cran-release.yml@v1</code> when <code>CRAN-SUBMISSION</code> is pushed: it tags the submitted commit, creates the GitHub release and opens the <code>.9000</code> bump. So <code>CRAN-SUBMISSION</code> is committed, not ignored. <code>assurance.yaml</code> calls r-actions <code>assurance.yml@v1</code> with <code>ungated-jobs: fail</code> on <code>.agents/assurance.md</code>. The R-CMD-check caller adds Windows R-devel to the full profile’s runners and runs no container on a quick run (no <code>src/</code>; the full profile runs them). No package-specific workflows yet.</p>
 </div>
 </div>
 
@@ -92,7 +95,7 @@
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by First Last.</p>
+  <p>Developed by Pedro Baltazar.</p>
 </div>
 
 <div class="pkgdown-footer-right">

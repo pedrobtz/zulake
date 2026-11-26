@@ -1,5 +1,3 @@
 # Changelog
 
-## zulake (development version)
-
-- Initial CRAN submission.
+## zulake 0.0.0.9000
