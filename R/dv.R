@@ -40,6 +40,10 @@
 #'   descriptors.
 #' @export
 #' @examples
+#' # The example table the package ships has no deletion vector:
+#' orders <- lake_open(system.file("extdata", "orders", package = "zulake"))
+#' lake_deletion_vectors(orders, rows = FALSE)
+#'
 #' # A table of one file of ten rows, whose rows 0 and 9 are deleted by a
 #' # deletion vector written inline in the log.
 #' path <- tempfile("table")

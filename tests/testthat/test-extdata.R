@@ -59,3 +59,14 @@ test_that("the shipped table's commit times come from the log, whatever its file
   expect_identical(lake_version(lake_open(path, timestamp = day)), 2)
   expect_identical(lake_version(lake_open(shipped_orders(), timestamp = day)), 2)
 })
+
+test_that("every exported function is called by an example that opens the shipped table", {
+  code <- example_code()
+  opens <- vapply(code, function(x) any(grepl('system.file("extdata", "orders", package = "zulake")', x,
+                                              fixed = TRUE)), NA)
+  for (fn in getNamespaceExports("zulake")) {
+    calls <- vapply(code, function(x) any(grepl(paste0("\\b", fn, "\\("), x)), NA)
+    expect_true(any(calls & opens), label = paste(fn, "in an example on inst/extdata/orders"))
+  }
+  expect_gte(length(getNamespaceExports("zulake")), 25L)
+})

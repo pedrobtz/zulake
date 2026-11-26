@@ -90,40 +90,16 @@ one \verb{_last_checkpoint} names.
 }
 }
 \examples{
-path <- tempfile("table")
-dir.create(file.path(path, "_delta_log"), recursive = TRUE)
-log <- file.path(path, "_delta_log")
-writeLines(c(
-  '{"protocol":{"minReaderVersion":1,"minWriterVersion":2}}',
-  paste0(
-    '{"metaData":{"id":"example","format":{"provider":"parquet","options":{}},',
-    '"schemaString":"{\\\\"type\\\\":\\\\"struct\\\\",\\\\"fields\\\\":[{\\\\"name\\\\":',
-    '\\\\"id\\\\",\\\\"type\\\\":\\\\"long\\\\",\\\\"nullable\\\\":true,\\\\"metadata\\\\":{}}]}",',
-    '"partitionColumns":[],"configuration":{}}}'
-  ),
-  paste0(
-    '{"add":{"path":"a.parquet","partitionValues":{},"size":100,',
-    '"modificationTime":0,"dataChange":true}}'
-  )
-), file.path(log, "00000000000000000000.json"))
-writeLines(c(
-  '{"txn":{"appId":"loader","version":7}}',
-  '{"remove":{"path":"a.parquet","deletionTimestamp":1,"dataChange":true}}',
-  paste0(
-    '{"add":{"path":"b.parquet","partitionValues":{},"size":120,',
-    '"modificationTime":1,"dataChange":true}}'
-  )
-), file.path(log, "00000000000000000001.json"))
-
+# The example table the package ships: orders partitioned by region, five versions.
+path <- system.file("extdata", "orders", package = "zulake")
 tbl <- lake_open(path)
-lake_log(tbl)[c("name", "kind", "version")]
-lake_actions(tbl, 1)[c("line", "type")]
-lake_changes(tbl, from = 0)[c("change", "path")]
+lake_log(tbl)[c("name", "kind", "version", "size")]
+lake_actions(tbl, version = 3)[c("line", "type")]
+# Version 3 deleted order 5: one file removed, its other rows written again.
+lake_changes(tbl, from = 2, to = 3)[c("change", "path")]
 lake_transactions(tbl)
 lake_domains(tbl)
 lake_checkpoints(tbl)
-
-unlink(path, recursive = TRUE)
 }
 \seealso{
 \code{\link[=lake_versions]{lake_versions()}} for the table's versions and history.

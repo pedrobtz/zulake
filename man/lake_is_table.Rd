@@ -23,6 +23,7 @@ anonymous requests. Not used for local paths.}
 reads no log file, so a table it finds can still fail to open.
 }
 \examples{
+lake_is_table(system.file("extdata", "orders", package = "zulake"))
 lake_is_table(tempdir())
 }
 \seealso{

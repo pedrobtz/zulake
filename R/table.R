@@ -71,34 +71,18 @@
 #'   actions.
 #' @export
 #' @examples
-#' path <- tempfile("table")
-#' dir.create(file.path(path, "_delta_log"), recursive = TRUE)
-#' writeLines(c(
-#'   '{"commitInfo":{"timestamp":1767225600000,"operation":"CREATE TABLE"}}',
-#'   '{"protocol":{"minReaderVersion":1,"minWriterVersion":2}}',
-#'   paste0(
-#'     '{"metaData":{"id":"example","name":"orders","format":{"provider":"parquet","options":{}},',
-#'     '"schemaString":"{\\"type\\":\\"struct\\",\\"fields\\":[{\\"name\\":',
-#'     '\\"id\\",\\"type\\":\\"long\\",\\"nullable\\":true,\\"metadata\\":{}}]}",',
-#'     '"partitionColumns":[],"configuration":{"delta.appendOnly":"true"}}}'
-#'   ),
-#'   paste0(
-#'     '{"add":{"path":"part-0.parquet","partitionValues":{},"size":100,',
-#'     '"modificationTime":0,"dataChange":true,"stats":"{\\"numRecords\\":3}"}}'
-#'   )
-#' ), file.path(path, "_delta_log", "00000000000000000000.json"))
-#'
+#' # The example table the package ships: orders partitioned by region, five versions.
+#' path <- system.file("extdata", "orders", package = "zulake")
 #' tbl <- lake_open(path)
 #' lake_versions(tbl)
-#' lake_history(tbl)[c("version", "operation")]
-#' lake_metadata(tbl)[c("id", "name")]
-#' lake_schema(tbl)[c("name", "type", "nullable")]
+#' lake_history(tbl, limit = 2)[c("version", "timestamp", "operation")]
+#' lake_metadata(tbl)[c("name", "description", "created_time")]
+#' lake_schema(tbl)[c("name", "type", "nullable", "partition")]
 #' lake_partition_columns(tbl)
-#' lake_properties(tbl)
+#' props <- lake_properties(tbl)
+#' props[!props$default, ]  # the ones the table sets
 #' lake_protocol(tbl)
 #' lake_summary(tbl)
-#'
-#' unlink(path, recursive = TRUE)
 lake_versions <- function(tbl) {
   check_table(tbl)
   commits <- snapshot_commits(tbl)
