@@ -54,7 +54,7 @@ parse_time_text <- function(x, zone = TRUE) {
   ok <- !is.na(x) & grepl(re, x)
   if (any(ok)) {
     y <- x[ok]
-    part <- function(i) sub(re, paste0("\\", i), y)
+    part <- function(i) sub(re, sprintf("\\%d", as.integer(i)), y)
     days <- as.numeric(as.Date(sprintf("%s-%s-%s", part(1), part(2), part(3)), format = "%Y-%m-%d"))
     secs <- as.numeric(part(4)) * 3600 + as.numeric(part(5)) * 60 + as.numeric(part(6))
     frac <- part(7)
@@ -129,17 +129,40 @@ partition_double <- function(x) {
 # column per partition column, by logical name, as a data frame.
 partition_table <- function(actions, tbl, int64) {
   columns <- tbl$metadata[["partitionColumns"]]
-  fields <- schema_fields(tbl)
-  names_ <- vapply(fields, field_name, "")
+  types <- column_types(tbl)
   out <- list()
   for (col in columns) {
-    field <- fields[[match(col, names_)]]
-    key <- field_physical(field, tbl$column_mapping)
-    raw <- vapply(actions, function(a) {
-      v <- a[["partitionValues"]][[key]]
-      if (is.null(v) || !nzchar(v)) NA_character_ else v
-    }, "", USE.NAMES = FALSE)
-    out[[col]] <- parse_partition_values(raw, field_type(field), int64, col)
+    out[[col]] <- parse_partition_values(partition_raw(actions, tbl, col), types[[col]], int64, col)
+  }
+  new_data_frame_n(out, length(actions))
+}
+
+# The partition values of column `col` in `actions` as the log writes them,
+# NA for null (an empty string or a missing key).
+partition_raw <- function(actions, tbl, col) {
+  fields <- schema_fields(tbl)
+  field <- fields[[match(col, vapply(fields, field_name, ""))]]
+  key <- field_physical(field, tbl$column_mapping)
+  vapply(actions, function(a) {
+    v <- a[["partitionValues"]][[key]]
+    if (is.null(v) || !nzchar(v)) NA_character_ else v
+  }, "", USE.NAMES = FALSE)
+}
+
+# Partition columns `columns` of `actions` typed as a read returns them:
+# as partition_table() does, except that a decimal of precision 15 or less
+# is a double (design section 7).
+partition_read_table <- function(actions, tbl, int64, columns) {
+  types <- column_types(tbl)
+  out <- list()
+  for (col in columns) {
+    raw <- partition_raw(actions, tbl, col)
+    ps <- decimal_ps(types[[col]])
+    out[[col]] <- if (!is.null(ps) && ps[["precision"]] <= max_double_precision) {
+      as.numeric(raw)
+    } else {
+      parse_partition_values(raw, types[[col]], int64, col)
+    }
   }
   new_data_frame_n(out, length(actions))
 }
@@ -193,7 +216,10 @@ parse_stats <- function(stats, paths) {
 # keys turned from physical to logical names and its values typed by the
 # schema: `kind = "value"` types each leaf by its column, `kind = "count"`
 # reads every leaf as a 64-bit count. Decimals stay their JSON text (D10).
-stats_object <- function(x, fields, mode, kind, int64, what) {
+# A `long` value the `int64` mode cannot hold is NA when `skipped` is an
+# environment, recorded there as `skipped$values[[column]]`; `prefix` is the
+# column path of a nested object.
+stats_object <- function(x, fields, mode, kind, int64, what, skipped = NULL, prefix = "") {
   if (is.null(x)) {
     return(NULL)
   }
@@ -216,11 +242,24 @@ stats_object <- function(x, fields, mode, kind, int64, what) {
     leaf_what <- sprintf("%s of column %s", what, format_string(out_names[j]))
     sub_fields <- if (!is.null(field) && identical(field_type(field), "struct")) field[["type"]][["fields"]]
     if (is.list(v) && !is.null(names(v))) {
-      out[j] <- list(stats_object(v, sub_fields %||% list(), mode, kind, int64, leaf_what))
+      out[j] <- list(stats_object(v, sub_fields %||% list(), mode, kind, int64, leaf_what, skipped,
+                                  paste0(prefix, out_names[j], ".")))
     } else if (kind == "count") {
       out[j] <- list(int64_values(list(v), int64, leaf_what))
     } else {
-      out[j] <- list(stats_leaf(v, if (is.null(field)) NA_character_ else field_type(field), int64, leaf_what))
+      type <- if (is.null(field)) NA_character_ else field_type(field)
+      out[j] <- list(if (identical(type, "long") && is.environment(skipped)) {
+        tryCatch(stats_leaf(v, type, int64, leaf_what), zulake_error_int64 = function(e) {
+          column <- paste0(prefix, out_names[j])
+          if (is.null(skipped$values[[column]])) {
+            skipped$values[[column]] <- e$value
+            skipped$paths[[column]] <- skipped$path
+          }
+          if (int64 == "integer64") bit64::as.integer64(NA) else NA_real_
+        })
+      } else {
+        stats_leaf(v, type, int64, leaf_what)
+      })
     }
   }
   names(out) <- out_names
