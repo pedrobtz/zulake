@@ -45,9 +45,9 @@ against them (its own tests: `tests/testthat/test-fixtures.R`).
 <!-- markdownlint-disable MD013 -->
 | Boundary                                                                                          | Oracle                                                                                                       | Carried by |
 | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------- |
-| Delta commit log (`_delta_log/` listing, `_last_checkpoint`, JSON commits)                        | `deltalake` live add actions at every version of every fixture; the `_delta_log/` directory listing          | gap #16    |
-| Checkpoints (classic, multi-part, V2 with sidecars, compaction files)                             | replay from the checkpoint equals replay from commit 0, and both equal `deltalake`                           | gap #16    |
-| Reader-feature gate (`protocol.readerFeatures`)                                                   | the protocol's appendix of feature names: each unsupported one refused by name before any data file is read | gap #16    |
+| Delta commit log (`_delta_log/` listing, `_last_checkpoint`, JSON commits, log compaction files) | `deltalake` live add actions, protocol and transactions at every version of every fixture, and its `load_as_version()` timestamp answers; the `_delta_log/` directory listing; replay with and without the compaction file; hostile logs refused with a classed `zulake_error` | `tests/testthat/test-replay.R`, `tests/testthat/test-hostile.R` |
+| Checkpoints (classic, multi-part, V2 with sidecars) | replay from the checkpoint equals replay from commit 0, and both equal `deltalake`; Stage 2b ([#26](https://github.com/pedrobtz/zulake/issues/26)) | gap #16 |
+| Reader-feature gate (`protocol.readerFeatures`) | the protocol's appendix of feature names: each unsupported one refused by name before any file outside `_delta_log/` is read (a recording storage backend); `deltalake`'s own refusals of `catalogManaged` and an unknown feature | `tests/testthat/test-protocol.R` |
 | Data reading (Parquet data files through `qio`, partition columns added)                          | `deltalake`'s full table read of every fixture                                                               | gap #18    |
 | Pruning (partition values by Delta type, statistics, UTF-8 byte order, truncated maxima)          | the full read subset in R, for random filters; `deltalake`'s partition values                                | gap #18    |
 | Deletion vectors (descriptor, file format, CRC-32, `zuroar` bitmap)                               | `deltalake` `deletion_vectors()` row indexes, and its reads of every deletion-vector fixture                 | gap #19    |
@@ -65,4 +65,5 @@ One row per limit the package enforces. "Straddled by" is the test of
 | Limit                                                                                  | Unit          | Straddled by |
 | -------------------------------------------------------------------------------------- | ------------- | ------------ |
 | 64-bit values returned as double exact up to 2^53 (D10; `int64 = "integer64"` beyond) | integer value | gap #17      |
+| Log versions as doubles, exact up to 2^53 - 1 (design section 7): a log file name or `version` argument at 2^53 or more is refused | version | `tests/testthat/test-replay.R` ("log versions are exact up to 2^53 - 1 and refused from 2^53") |
 <!-- markdownlint-enable MD013 -->

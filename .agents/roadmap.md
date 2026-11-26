@@ -23,7 +23,7 @@ Stage 2b, checkpoints, waits for that `qio` and runs after Stage 7.
 | --- | --- | --- | --- | --- | --- |
 | 0 | [Package identity](#stage-0--package-identity) | quick | [#2](https://github.com/pedrobtz/zulake/issues/2) | [#21](https://github.com/pedrobtz/zulake/pull/21) | 2026-11-26 |
 | 1 | [Fixtures and oracle](#stage-1--fixtures-and-oracle) | quick | [#3](https://github.com/pedrobtz/zulake/issues/3) | [#23](https://github.com/pedrobtz/zulake/pull/23) | 2026-11-26 |
-| 2 | [Log replay](#stage-2--log-replay) | quick | [#4](https://github.com/pedrobtz/zulake/issues/4) | | |
+| 2 | [Log replay](#stage-2--log-replay) | quick | [#4](https://github.com/pedrobtz/zulake/issues/4) | [#30](https://github.com/pedrobtz/zulake/pull/30) | 2026-11-26 |
 | 3 | [Inspection](#stage-3--inspection) | quick | [#5](https://github.com/pedrobtz/zulake/issues/5) | | |
 | 4 | [Reading and pruning](#stage-4--reading-and-pruning) | quick | [#6](https://github.com/pedrobtz/zulake/issues/6) | | |
 | 5 | [Deletion vectors and column mapping](#stage-5--deletion-vectors-and-column-mapping) | full | [#7](https://github.com/pedrobtz/zulake/issues/7) | | |
@@ -193,6 +193,11 @@ so Stages 3 to 7 are built on replay from commits.
 - The reader-feature gate of [D7](design.md#10-decisions), with classed
   `zulake_error` conditions naming the feature.
 - `Imports: zujson`; `qio` stays in Suggests until Stage 4 reads data.
+
+  *Added (2026-11-26):* the `catalogManaged` refusal needed a fixture, so
+  `zl-catalog-managed` (commit 1 upgrades to `catalogManaged` with
+  in-commit timestamps, as the protocol requires) was written with
+  `tools/fixtures/generate.py`, its answers with `tools/oracle`.
 
 **Tests.**
 

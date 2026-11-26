@@ -231,6 +231,31 @@ def unknown_feature():
     ])
 
 
+def catalog_managed():
+    """The catalogManaged reader feature: zulake reads the filesystem only, and must refuse it by name."""
+    p = fresh("zl-catalog-managed")
+    sch = pa.schema([("id", pa.int64())])
+    write_deltalake(p, pa.table({"id": [0, 1]}, schema=sch))
+    # The protocol requires inCommitTimestamp alongside catalogManaged, and a
+    # txnId in commitInfo, so the only thing a reader can refuse is the feature.
+    first = [json.loads(line) for line in (log_dir(p) / commit_name(0)).read_text().splitlines() if line.strip()]
+    meta = next(a for a in first if "metaData" in a)
+    info = commit_info("UPGRADE PROTOCOL", txnId="5b4d6a8e-7f0c-4d1e-9a2b-3c4d5e6f7a8b")
+    info["commitInfo"]["inCommitTimestamp"] = info["commitInfo"]["timestamp"]
+    meta["metaData"]["configuration"].update({
+        "delta.enableInCommitTimestamps": "true",
+        "delta.inCommitTimestampEnablementVersion": "1",
+        "delta.inCommitTimestampEnablementTimestamp": str(info["commitInfo"]["inCommitTimestamp"]),
+    })
+    append_commit(p, [
+        info,
+        {"protocol": {"minReaderVersion": 3, "minWriterVersion": 7,
+                      "readerFeatures": ["catalogManaged"],
+                      "writerFeatures": ["catalogManaged", "inCommitTimestamp"]}},
+        meta,
+    ])
+
+
 Z85 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#"
 
 
@@ -301,7 +326,7 @@ def main():
     else:
         wanted = None
     for fn in (basic, types, partitioned, checkpointed, checkpoint_no_last, multipart_checkpoint, compacted, domains,
-               unknown_feature, inline_dv, column_mapping_id):
+               unknown_feature, catalog_managed, inline_dv, column_mapping_id):
         if wanted is None or fn.__name__ in wanted:
             fn()
             print("wrote", fn.__name__)
