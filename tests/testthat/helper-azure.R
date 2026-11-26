@@ -182,13 +182,24 @@ expect_no_token <- function(x, token, label = NULL) {
   if (inherits(x, "condition")) text <- paste(text, conditionMessage(x))
   for (p in token_pieces(token)) {
     found <- length(grepRaw(p, bytes, fixed = TRUE)) > 0L
-    where <- if (found) paste0(" (at ", token_path(x, p), ")") else ""
+    where <- if (found) paste0(" (at ", token_path(x, p), "; environments serialized: ", serialized_envs(x), ")") else ""
     testthat::expect_false(found,
                            label = paste0(label %||% "the serialization", " holds the token piece ", substr(p, 1, 12), where))
     testthat::expect_false(grepl(p, text, fixed = TRUE),
                            label = paste(label %||% "the printed form", "holds the token piece", substr(p, 1, 12)))
   }
   invisible(x)
+}
+
+# The bindings of every environment serialize() writes for `x`, promise
+# environments included, for a failure message.
+serialized_envs <- function(x) {
+  envs <- list()
+  serialize(x, NULL, refhook = function(e) {
+    if (is.environment(e)) envs[[length(envs) + 1L]] <<- paste(utils::head(ls(e, all.names = TRUE), 8), collapse = ",")
+    NULL
+  })
+  paste(unique(unlist(envs)), collapse = " | ")
 }
 
 # Where in `x` the string `piece` is, for a failure message: a path of
