@@ -19,18 +19,22 @@
 #' `min` and `max` typed as partition values are, except that a `decimal`
 #' statistic stays its JSON text exactly as the log writes it, since a
 #' double would round it; `null_count` and `num_records` are 64-bit counts.
-#' Statistics are optional in the protocol, so a file can have none (`NA`
-#' and `NULL`).
+#' A `long` minimum or maximum that `int64` cannot hold (past 2^53 - 1 as a
+#' double, or -2^63, which bit64 keeps for `NA`) is `NA`, with a warning of
+#' class `zulake_warning_int64` (fields `value`, `column` and `path`) once
+#' per column; its digits stay in `action`. Statistics are optional in the
+#' protocol, so a file can have none (`NA` and `NULL`).
 #'
 #' `filter` is an unevaluated R expression over column names, of
 #' comparisons (`==`, `!=`, `<`, `<=`, `>`, `>=`), `%in%` and `is.na()`
 #' joined by `!`, `&` and `|`, with literals or values from the calling
-#' environment. A file is kept when the filter can be `TRUE` for it: on a
-#' partition column the filter is evaluated exactly, as R evaluates it, on
-#' the file's partition values; a comparison on any other column cannot
-#' rule a file out yet, so it keeps every file. Any other call is refused
-#' with a `zulake_error_filter` error, since there are no rows here to apply
-#' it to.
+#' environment. A file is kept when the filter can be `TRUE` for one of its
+#' rows: a comparison on a partition column is decided by the file's
+#' partition value, one on another column by the file's statistics, and a
+#' file without statistics for that column is kept. Values compare exactly,
+#' as [lake_read()] describes. Any other call is refused with a
+#' `zulake_error_filter` error, since there are no rows here to apply it
+#' to.
 #'
 #' @param tbl A snapshot, from [lake_open()].
 #' @param filter An expression over column names; see Details. `NULL`, the
@@ -67,7 +71,8 @@
 #'   delete (each descriptor's `cardinality`). When a live file has no
 #'   `numRecords` the count is unknown: `NA_real_`, with a warning of class
 #'   `zulake_warning_count_unknown` whose `files` field gives the number of
-#'   such files. It is never a partial sum. A file with a deletion vector
+#'   such files, unless `footers = TRUE` reads those files' row counts from
+#'   their Parquet footers. It is never a partial sum. A file with a deletion vector
 #'   and no `numRecords` breaks the protocol: `zulake_error_corrupt_log`.
 #' @seealso [lake_summary()] for the totals in one row, [lake_changes()] for
 #'   the files added and removed between two versions.
@@ -156,27 +161,34 @@ lake_removed <- function(tbl, int64 = c("double", "integer64")) {
 }
 
 #' @rdname lake_files
+#' @param footers Whether to read the row count of each live file that has
+#'   no `numRecords` statistic from its Parquet footer, which downloads
+#'   those files. `FALSE`, the default, reads nothing but the log.
 #' @export
-lake_count <- function(tbl) {
+lake_count <- function(tbl, footers = FALSE) {
   check_table(tbl)
-  counts <- file_counts(tbl, "double")
-  if (counts$without_records) {
-    n <- counts$without_records
-    cnd <- structure(
-      class = c("zulake_warning_count_unknown", "zulake_warning", "warning", "condition"),
-      list(
-        message = sprintf(
-          "%s live file%s no `numRecords` statistic, so the row count is unknown (NA); `lake_files()` shows which.",
-          format_number(n), if (n == 1) " has" else "s have"
-        ),
-        call = NULL,
-        files = n
-      )
-    )
-    warning(cnd)
-    return(NA_real_)
+  if (!isTRUE(footers) && !isFALSE(footers)) {
+    zulake_abort("argument", "`footers` must be TRUE or FALSE.")
   }
-  counts$records
+  counts <- file_counts(tbl, "double")
+  if (!counts$without_records) {
+    return(counts$records)
+  }
+  if (footers) {
+    rows <- vapply(counts$missing, function(i) footer_rows(tbl, i), 0)
+    known <- int64_sum(counts$per_file[-counts$missing], "double", "The number of records")
+    return(int64_sum(c(known, rows), "double", "The number of records") - counts$deleted)
+  }
+  n <- counts$without_records
+  zulake_warn(
+    "count_unknown",
+    sprintf(
+      "%s live file%s no `numRecords` statistic, so the row count is unknown (NA); `lake_files()` shows which, and `footers = TRUE` reads their counts from the files.",
+      format_number(n), if (n == 1) " has" else "s have"
+    ),
+    files = n
+  )
+  NA_real_
 }
 
 # ---- building the frames -------------------------------------------------
@@ -211,19 +223,46 @@ stats_columns <- function(tbl, actions, paths, int64) {
   parsed <- parse_stats(text, paths)
   fields <- schema_fields(tbl)
   mode <- tbl$column_mapping
+  skipped <- new.env(parent = emptyenv())
+  skipped$values <- list()
+  skipped$paths <- list()
   obj <- function(name, kind) {
     lapply(seq_along(parsed), function(i) {
       what <- sprintf("the %s statistics of file %s", name, format_string(paths[i]))
-      stats_object(parsed[[i]][[name]], fields, mode, kind, int64, what)
+      skipped$path <- paths[i]
+      stats_object(parsed[[i]][[name]], fields, mode, kind, int64, what, if (kind == "value") skipped)
     })
   }
-  list(
+  out <- list(
     num_records = int64_values(
       lapply(seq_along(parsed), function(i) parsed[[i]][["numRecords"]]), int64, "a file's `numRecords`"
     ),
     null_count = obj("nullCount", "count"),
     min = obj("minValues", "value"),
     max = obj("maxValues", "value")
+  )
+  for (column in names(skipped$values)) {
+    warn_int64(skipped$values[[column]], column, skipped$paths[[column]], int64)
+  }
+  out
+}
+
+# A `long` statistic the `int64` mode cannot hold, shown as NA: one warning
+# per column, giving the first such value and the file it came from. The
+# exact digits stay in the `action` column's `stats` string.
+warn_int64 <- function(value, column, path, int64) {
+  limit <- if (int64 == "double") {
+    "a double holds integers exactly up to 2^53 - 1; `int64 = \"integer64\"` holds more"
+  } else {
+    "an integer64 holds -2^63 + 1 to 2^63 - 1"
+  }
+  zulake_warn(
+    "int64",
+    sprintf(
+      "The `long` statistics of column %s include %s (file %s), shown as NA: %s. The exact value stays in `action`.",
+      format_string(column), value, format_string(path), limit
+    ),
+    value = value, column = column, path = path
   )
 }
 
@@ -273,7 +312,9 @@ file_counts <- function(tbl, int64) {
     records = total,
     deleted = total_deleted,
     without_records = sum(no_records),
-    with_dv = sum(has_dv)
+    with_dv = sum(has_dv),
+    per_file = records,
+    missing = which(no_records)
   )
 }
 
