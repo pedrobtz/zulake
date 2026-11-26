@@ -12,7 +12,7 @@ uv run --frozen python answers.py            # every table
 uv run --frozen python answers.py zl-basic   # one table
 ```
 
-The environment is pinned: `.python-version` (CPython 3.12.12),
+The environment is pinned: `.python-version` (CPython 3.12.11),
 `pyproject.toml` and `uv.lock` (`deltalake` 1.7.0, `pyarrow` 22.0.0), run
 with `uv` 0.7.11. `.github/workflows/oracle.yaml` runs the same commands on
 every pull request that touches the harness or the fixtures, and on dispatch,
