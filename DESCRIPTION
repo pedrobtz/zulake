@@ -22,7 +22,7 @@ Config/roxygen2/version: 8.1.1
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Imports:
-    qio (>= 0.1.1),
+    qio (>= 0.1.2.9000),
     zuhttp,
     zujson
 Suggests:
@@ -37,5 +37,6 @@ Config/testthat/edition: 3
 URL: https://pedrobtz.github.io/zulake/, https://github.com/pedrobtz/zulake
 BugReports: https://github.com/pedrobtz/zulake/issues
 Remotes:
+    pedrobtz/qio,
     pedrobtz/zuhttp,
     pedrobtz/zuroar
