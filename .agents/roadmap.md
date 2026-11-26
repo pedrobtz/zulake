@@ -11,7 +11,10 @@ local fixtures first, then the Azure backend. `zuhttp` and `zuroar` are
 not on CRAN (checked 2026-11-26), so Stages 5 and 6 use them through
 `Remotes:`, and [Stage 10](#stage-10--v010-readiness) cannot finish until
 both are released ([D5](design.md#10-decisions); `zuroar` 0.1.0 waits on
-[pedrobtz/zuroar#64](https://github.com/pedrobtz/zuroar/issues/64)).
+[pedrobtz/zuroar#64](https://github.com/pedrobtz/zuroar/issues/64)), and a
+`qio` that reads nested columns
+([D14](design.md#10-decisions), [pedrobtz/qio#73](https://github.com/pedrobtz/qio/issues/73)).
+Stage 2b, checkpoints, waits for that `qio` and runs after Stage 7.
 
 ## Stages
 
@@ -26,6 +29,7 @@ both are released ([D5](design.md#10-decisions); `zuroar` 0.1.0 waits on
 | 5 | [Deletion vectors and column mapping](#stage-5--deletion-vectors-and-column-mapping) | full | [#7](https://github.com/pedrobtz/zulake/issues/7) | | |
 | 6 | [Azure backend](#stage-6--azure-backend) | quick | [#8](https://github.com/pedrobtz/zulake/issues/8) | | |
 | 7 | [Documentation](#stage-7--documentation) | quick | [#9](https://github.com/pedrobtz/zulake/issues/9) | | |
+| 2b | [Checkpoints](#stage-2b--checkpoints) | quick | [#26](https://github.com/pedrobtz/zulake/issues/26) | | |
 | 8 | [Assurance](#stage-8--assurance) | quick | [#10](https://github.com/pedrobtz/zulake/issues/10) | | |
 | 9 | [Full CI](#stage-9--full-ci) | full | [#11](https://github.com/pedrobtz/zulake/issues/11) | | |
 | 10 | [v0.1.0 readiness](#stage-10--v010-readiness) | full | [#12](https://github.com/pedrobtz/zulake/issues/12) | | |
@@ -167,22 +171,28 @@ committed, so the R tests compare without Python.
 **CI.** `quick`.
 
 **Goal.** `lake_open()` on a local path builds the snapshot the protocol
-prescribes, at the latest version, a version or a timestamp, and refuses
-what it cannot read by name.
+prescribes from its commits, at the latest version, a version or a
+timestamp, and refuses what it cannot read by name.
+
+Changed 2026-11-26: checkpoints moved to
+[Stage 2b](#stage-2b--checkpoints), because `qio` cannot read nested
+Parquet yet ([D14](design.md#10-decisions)). Every fixture keeps commit 0,
+so Stages 3 to 7 are built on replay from commits.
 
 **Work.**
 
 - The internal storage interface of [§4.1](design.md#41-storage) with its
   local backend.
-- Log replay of [§4.2](design.md#42-log-replay): `_last_checkpoint`,
-  listing, commits through `zujson`, classic, multi-part and V2
-  checkpoints and sidecars through `qio`, log compaction files, and the
-  reconciliation rules.
+- Log replay of [§4.2](design.md#42-log-replay) from commit 0:
+  `_last_checkpoint` parsed, listing, commits through `zujson`, log
+  compaction files, and the reconciliation rules. With `_last_checkpoint`
+  present and the commits complete, replay from commit 0; when the log no
+  longer reaches commit 0, a classed `zulake_error_checkpoint_unreadable`.
 - `lake_open()`, `lake_is_table()`, `lake_load()`, `lake_version()`; the
   `zulake_table` class records its format ([D11](design.md#10-decisions)).
 - The reader-feature gate of [D7](design.md#10-decisions), with classed
   `zulake_error` conditions naming the feature.
-- `Imports: zujson, qio`.
+- `Imports: zujson`; `qio` stays in Suggests until Stage 4 reads data.
 
 **Tests.**
 
@@ -190,13 +200,15 @@ what it cannot read by name.
   in `test-replay.R`.
 - Version from timestamp, with and without `inCommitTimestamp`: `deltalake`
   `load_as_version()` answers, in `test-replay.R`.
-- Checkpoint kinds (classic, multi-part, V2 with sidecars): replay from the
-  checkpoint equals replay from commit 0 on the same table, and both equal
-  `deltalake`, in `test-replay.R`.
+- Log without commit 0 (a fixture copy with the early commits removed):
+  `zulake_error_checkpoint_unreadable`, no snapshot returned, in
+  `test-replay.R`.
 - `(path, deletionVector.uniqueId)` key: a file rewritten with a new
   deletion vector is one live row, against `deltalake`, in `test-replay.R`.
-- Each hostile-log fixture: a classed `zulake_error`, and no snapshot
-  object is returned, in `test-hostile.R`.
+- Each hostile-log fixture that needs no checkpoint (truncated and
+  corrupt commits, a partition value of the wrong type): a classed
+  `zulake_error`, and no snapshot object is returned, in
+  `test-hostile.R`.
 - Unsupported features (`columnMapping` `id` mode, `catalogManaged`, an
   unknown name): refused by name before any data file is read, in
   `test-protocol.R`.
@@ -208,11 +220,12 @@ what it cannot read by name.
 - `R CMD check` passes on the quick r-actions profile.
 - Every `**Tests.**` line exists, compares against the named oracle, and
   was seen to fail.
-- `.agents/assurance.md` has Boundaries rows for the commit log, the
-  checkpoints and the reader-feature gate, each naming its test.
+- `.agents/assurance.md` has Boundaries rows for the commit log and the
+  reader-feature gate, each naming its test.
 
 **Design.** [§4.1](design.md#41-storage), [§4.2](design.md#42-log-replay),
-[D7](design.md#10-decisions), [D11](design.md#10-decisions).
+[D7](design.md#10-decisions), [D11](design.md#10-decisions),
+[D14](design.md#10-decisions).
 
 ## Stage 3 — Inspection
 
@@ -284,6 +297,10 @@ downloading only the files a filter cannot rule out.
   statistics, UTF-8 byte order, truncated string maxima.
 - Local values in filters looked up in the calling environment
   ([D8](design.md#10-decisions)).
+- `Imports: qio`.
+- A selected data column that `qio` cannot return is refused by name with
+  a classed error, from `qio::read_plan()`, never dropped
+  ([§7](design.md#7-types), [D14](design.md#10-decisions)).
 
 **Tests.**
 
@@ -301,6 +318,8 @@ downloading only the files a filter cannot rule out.
   `test-filter.R`.
 - `lake_walk()`: the pieces bound together equal `lake_read()`, in
   `test-read.R`.
+- A selected nested data column: a classed error naming it; the same table
+  read without it equals `deltalake`, in `test-read.R`.
 
 **Exit criteria.**
 
@@ -464,6 +483,51 @@ package ships, so users and CRAN see real output.
 
 **Design.** [§5](design.md#5-public-r-api-proposed).
 
+## Stage 2b — Checkpoints
+
+**Issue.** [#26](https://github.com/pedrobtz/zulake/issues/26), sub-issue of
+[v0.1.0](https://github.com/pedrobtz/zulake/issues/1).
+
+**CI.** `quick`.
+
+**Goal.** Replay starts from the latest checkpoint, as the protocol
+prescribes, so tables whose early commits were cleaned up open.
+
+Scheduled when `qio` reads nested columns
+([pedrobtz/qio#73](https://github.com/pedrobtz/qio/issues/73),
+[D14](design.md#10-decisions)), and before Stage 8. It keeps the number 2b
+because it is the half of Stage 2 that was split off on 2026-11-26.
+
+**Work.**
+
+- Classic, multi-part and V2 checkpoints, and V2 sidecars, read through
+  `qio` ([§4.2](design.md#42-log-replay)); replay from the checkpoint the
+  `_last_checkpoint` file or the listing names.
+- `zulake_error_checkpoint_unreadable` remains only for a log that has
+  neither commit 0 nor a readable checkpoint.
+- `Imports: qio` at the version that reads nested columns, with
+  `Remotes:` until it is on CRAN.
+
+**Tests.**
+
+- Checkpoint kinds (classic, multi-part, V2 with sidecars): replay from the
+  checkpoint equals replay from commit 0 on the same table, and both equal
+  `deltalake`, in `test-replay.R`.
+- A fixture copy with every commit before the checkpoint removed: the same
+  snapshot as the full log, in `test-replay.R`.
+- Checkpoint hostile fixtures (a missing checkpoint part, a
+  `_last_checkpoint` past the log): a classed `zulake_error`, and no
+  snapshot object is returned, in `test-hostile.R`.
+
+**Exit criteria.**
+
+- `R CMD check` passes on the quick r-actions profile.
+- Every `**Tests.**` line exists, compares against the named oracle, and
+  was seen to fail.
+- `.agents/assurance.md` has the checkpoints Boundaries row.
+
+**Design.** [§4.2](design.md#42-log-replay), [D14](design.md#10-decisions).
+
 ## Stage 8 — Assurance
 
 **Issue.** [#10](https://github.com/pedrobtz/zulake/issues/10), sub-issue of
@@ -529,7 +593,7 @@ package ships, so users and CRAN see real output.
 
 **Work.**
 
-- `zuhttp` and `zuroar` on CRAN; `Remotes:` removed
+- `zuhttp`, `zuroar` and the nested-reading `qio` on CRAN; `Remotes:` removed
   ([D5](design.md#10-decisions), [D9](design.md#10-decisions)).
 - `Version: 0.1.0` and the matching `NEWS.md` heading.
 - `cran-comments.md` listing the r-actions CI legs as test environments.
@@ -602,5 +666,8 @@ review, in that order.
 - [§11](design.md#11-acceptance-criteria-for-v010) criterion 4b blocks
   Stage 11: a real ADLS Gen2 account
   ([#24](https://github.com/pedrobtz/zulake/issues/24)).
-- [D5](design.md#10-decisions) and [D9](design.md#10-decisions) block Stage 10:
-  `zuhttp` and `zuroar` on CRAN.
+- [D5](design.md#10-decisions), [D9](design.md#10-decisions) and
+  [D14](design.md#10-decisions) block Stage 10: `zuhttp`, `zuroar` and a
+  `qio` that reads nested columns on CRAN.
+- [D14](design.md#10-decisions) blocks Stage 2b:
+  [pedrobtz/qio#73](https://github.com/pedrobtz/qio/issues/73).
