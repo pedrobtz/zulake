@@ -586,3 +586,25 @@ test_that("cassettes recorded from Azurite replay zulake's local answers", {
     if (!is.null(got$rows)) expect_identical(got$rows, lake_deletion_vectors(local)$rows, label = table)
   }
 })
+
+test_that("a deletion vector at an absolute Azure path is read with the table's credentials", {
+  skip_if_not_installed("zuroar")
+  rows <- c(1, 4, 5)
+  vec <- dv_bytes(rows)
+  dv <- list(storageType = "p", pathOrInlineDv = "abfss://lake@acct.dfs.core.windows.net/elsewhere/dv.bin",
+             offset = 1L, sizeInBytes = length(vec), cardinality = length(rows))
+  path <- dv_table(dv)
+  expect_identical(write_dv_file(file.path(dirname(path), "elsewhere", "dv.bin"), list(vec)), 1)
+  log <- new.env()
+  local_azure_fake(azure_fake(dirname(path), log, auth = function(h) if (!identical(h, "Bearer tok")) 401L))
+  tbl <- lake_open(fake_uri(basename(path)), credentials = function() "tok")
+  expect_identical(lake_deletion_vectors(tbl)$rows[[1L]], rows)
+  expect_identical(lake_read(tbl)$id, setdiff(0:9, rows) + 0)
+  # The vector's bytes, as the fake served them: a range of its blob, with
+  # the table's token.
+  got <- Filter(function(r) r$path == "elsewhere/dv.bin", log$requests)
+  expect_gt(length(got), 0L)
+  for (r in got) expect_identical(r$headers$authorization, "Bearer tok")
+  ranges <- unlist(lapply(got, function(r) r$headers$range))
+  expect_true(sprintf("bytes=1-%.0f", 1 + 4 + length(vec) + 4 - 1) %in% ranges)
+})
