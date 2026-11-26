@@ -1,48 +1,100 @@
 # The reader-feature gate (D7) and the checks that need the final metadata.
 
-# Reader features zulake supports (design section 2). Every other name in
-# `readerFeatures`, known to the protocol or not, is refused by name:
-# reading past one silently returns wrong rows. `columnMapping` is supported
-# in `name` mode only.
-supported_reader_features <- c("columnMapping", "deletionVectors", "timestampNtz", "v2Checkpoint")
+# Reader features zulake supports (design section 2 and the D7 amendment of
+# 2026-11-26): a reader feature is accepted only when the protocol's reader
+# requirements for it are implemented, or are empty. `vacuumProtocolCheck`
+# asks readers for nothing but to acknowledge it. `columnMapping` is
+# supported in `name` mode only. Every other name in `readerFeatures`, known
+# to the protocol or not, is refused by name: reading past one silently
+# returns wrong rows. `writerFeatures` is never consulted here: zulake does
+# not write.
+supported_reader_features <- c("columnMapping", "deletionVectors", "timestampNtz", "v2Checkpoint", "vacuumProtocolCheck")
+
+# Reader features the protocol defines that zulake refuses, and why. Names
+# not here and not supported are refused as unknown.
+refused_reader_features <- c(
+  catalogManaged = "a catalog to resolve commits",
+  typeWidening = "values converted to their widened type",
+  `typeWidening-preview` = "values converted to their widened type",
+  variantType = "variant values decoded",
+  `variantType-preview` = "variant values decoded",
+  variantShredding = "shredded variant values decoded",
+  `variantShredding-preview` = "shredded variant values decoded"
+)
 
 max_reader_version <- 3
 
 # Refuses a snapshot zulake cannot read correctly, naming what it lacks.
 # Called on the replayed protocol and metadata, before anything outside
-# `_delta_log/` is read.
+# `_delta_log/` is read. The condition carries `protocol`, the
+# lake_protocol() frame, with each requirement marked supported or not.
 check_reader_features <- function(protocol, metadata, version) {
   reader <- protocol[["minReaderVersion"]]
   if (reader > max_reader_version || reader < 1) {
     refuse_feature(
       sprintf("readerVersion %s", format_number(reader)),
       sprintf("reader version %s", format_number(reader)),
-      version
+      version, protocol, metadata
     )
   }
   features <- reader_features(protocol)
   unknown <- setdiff(features, supported_reader_features)
   if (length(unknown)) {
-    refuse_feature(unknown, sprintf("reader feature %s", paste(format_string(unknown), collapse = ", ")), version)
+    refuse_feature(
+      unknown,
+      paste("reader feature", paste(feature_label(unknown), collapse = ", ")),
+      version, protocol, metadata
+    )
   }
   mode <- column_mapping_mode(protocol, metadata)
   if (!mode %in% c("none", "name")) {
     refuse_feature(
       "columnMapping",
       sprintf("column mapping in %s mode (only \"name\" mode is supported)", format_string(mode)),
-      version
+      version, protocol, metadata
     )
   }
   invisible()
 }
 
-refuse_feature <- function(feature, what, version) {
+# "\"typeWidening\" (it needs values converted to their widened type)", or
+# the quoted name alone for a feature the package does not know.
+feature_label <- function(features) {
+  why <- unname(refused_reader_features[features])
+  ifelse(is.na(why), format_string(features), sprintf("%s (it needs %s)", format_string(features), why))
+}
+
+refuse_feature <- function(feature, what, version, protocol, metadata) {
   zulake_abort(
     "unsupported_feature",
     sprintf("Version %s of this table needs %s, which zulake does not support.", format_number(version), what),
     feature = feature,
-    version = version
+    version = version,
+    protocol = protocol_frame(protocol, metadata)
   )
+}
+
+# The protocol as lake_protocol() returns it: one row per requirement, the
+# reader and writer versions first, then each feature, with `reader` and
+# `writer` saying which list names it and `supported` whether zulake reads a
+# table that needs it. Writer requirements are always supported: zulake does
+# not write, so they are never a reason to refuse.
+protocol_frame <- function(protocol, metadata) {
+  reader <- protocol[["minReaderVersion"]]
+  rf <- reader_features(protocol)
+  wf <- if (protocol[["minWriterVersion"]] >= 7) as.character(protocol[["writerFeatures"]]) else character()
+  features <- unique(c(rf, wf))
+  mode <- column_mapping_mode(protocol, metadata)
+  in_reader <- features %in% rf
+  ok <- !in_reader | features %in% supported_reader_features
+  ok[features == "columnMapping" & in_reader] <- mode %in% c("none", "name")
+  new_data_frame(list(
+    name = c("readerVersion", "writerVersion", features),
+    reader = c(TRUE, FALSE, in_reader),
+    writer = c(FALSE, TRUE, features %in% wf),
+    version = c(as.numeric(reader), as.numeric(protocol[["minWriterVersion"]]), rep(NA_real_, length(features))),
+    supported = c(reader >= 1 && reader <= max_reader_version, TRUE, ok)
+  ))
 }
 
 reader_features <- function(protocol) {

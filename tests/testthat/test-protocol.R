@@ -72,9 +72,9 @@ test_that("each reader feature the protocol names is supported or refused by nam
   # The protocol's appendix "Valid Feature Names in Table Features" lists
   # these as reader (and writer) features; variantType, variantShredding and
   # typeWidening are reader features its own sections name.
-  supported <- c("columnMapping", "deletionVectors", "timestampNtz", "v2Checkpoint")
-  refused <- c("catalogManaged", "vacuumProtocolCheck", "variantType", "variantShredding", "typeWidening",
-               "variantType-preview", "typeWidening-preview", "zulakeUnknownFeature")
+  supported <- c("columnMapping", "deletionVectors", "timestampNtz", "v2Checkpoint", "vacuumProtocolCheck")
+  refused <- c("catalogManaged", "variantType", "variantShredding", "typeWidening",
+               "variantType-preview", "variantShredding-preview", "typeWidening-preview", "zulakeUnknownFeature")
   for (f in supported) {
     path <- hand_table(c(protocol_line(3L, 7L, f, f), metadata_line(), add_line("a.parquet")))
     expect_identical(lake_version(lake_open(path)), 0, label = f)
@@ -136,4 +136,73 @@ test_that("the gate looks at the snapshot's own version", {
   expect_identical(lake_version(lake_open(path, version = 0)), 0)
   expect_error(lake_open(path, version = 1), class = "zulake_error_unsupported_feature")
   expect_identical(lake_version(lake_open(path)), 2)
+})
+
+test_that("vacuumProtocolCheck is accepted: readers only acknowledge it, as deltalake does", {
+  path <- fixture_table("zl-vacuum-protocol-check")
+  for (version in oracle_versions("zl-vacuum-protocol-check")) {
+    expect_null(oracle_refusal("zl-vacuum-protocol-check", version))
+    tbl <- lake_open(path, version = version)
+    expect_oracle(replay_files_frame(tbl, "path"), "zl-vacuum-protocol-check", version, "add_actions")
+  }
+  expect_identical(oracle_field("zl-vacuum-protocol-check", 2, c("protocol", "reader_features")), "vacuumProtocolCheck")
+  p <- lake_protocol(lake_open(path))
+  row <- p[p$name == "vacuumProtocolCheck", ]
+  expect_identical(nrow(row), 1L)
+  expect_true(row$reader)
+  expect_true(row$writer)
+  expect_true(row$supported)
+})
+
+test_that("writerFeatures are never a reason to refuse", {
+  # Every name, known to the protocol as a reader feature or not, listed only
+  # as a writer feature: the table opens, and lake_protocol() marks it
+  # supported (zulake does not write).
+  names <- c("catalogManaged", "typeWidening", "variantType", "variantShredding", "zulakeUnknownFeature",
+             "columnMapping", "invariants", "checkConstraints", "rowTracking", "inCommitTimestamp")
+  for (f in names) {
+    path <- hand_table(c(protocol_line(3L, 7L, character(), f), metadata_line(), add_line("a.parquet")))
+    tbl <- lake_open(path)
+    expect_identical(lake_version(tbl), 0, label = f)
+    p <- lake_protocol(tbl)
+    row <- p[p$name == f, ]
+    expect_identical(c(row$reader, row$writer, row$supported), c(FALSE, TRUE, TRUE), label = f)
+  }
+  # Reader version 1: neither list is read.
+  path <- hand_table(c(protocol_line(1L, 7L, "zzz", c("zzz", "catalogManaged")), metadata_line()))
+  expect_identical(lake_version(lake_open(path)), 0)
+})
+
+test_that("the refusal's protocol field marks what it refuses unsupported, and lake_protocol() agrees", {
+  cases <- list(
+    list(protocol_line(3L, 7L, c("deletionVectors", "typeWidening", "zzz"), c("deletionVectors", "typeWidening")),
+         metadata_line(), c("typeWidening", "zzz")),
+    list(protocol_line(3L, 7L, "columnMapping", "columnMapping"),
+         metadata_line(configuration = list(delta.columnMapping.mode = "id")), "columnMapping"),
+    list(protocol_line(4L, 7L), metadata_line(), "readerVersion")
+  )
+  for (case in cases) {
+    err <- tryCatch(lake_open(hand_table(case[1:2])), error = identity)
+    expect_s3_class(err, "zulake_error_unsupported_feature")
+    p <- err$protocol
+    expect_s3_class(p, "data.frame")
+    expect_identical(sort(p$name[!p$supported]), sort(case[[3]]))
+  }
+  # The refusal names the reason for a feature the protocol defines.
+  err <- tryCatch(lake_open(hand_table(c(protocol_line(3L, 7L, "typeWidening", "typeWidening"), metadata_line()))),
+                  error = identity)
+  expect_match(conditionMessage(err), "widened type", fixed = TRUE)
+  # A table that opens: every requirement supported, and the versions and
+  # feature lists equal deltalake's.
+  for (table in c("zl-types", "deletion_vectors", "column_mapping", "checkpoint-v2-table", "zl-basic")) {
+    v <- max(oracle_versions(table))
+    p <- lake_protocol(lake_open(fixture_table(table)))
+    expect_true(all(p$supported), label = table)
+    expect_oracle(p$version[p$name == "readerVersion"], table, v, c("protocol", "min_reader_version"))
+    expect_oracle(p$version[p$name == "writerVersion"], table, v, c("protocol", "min_writer_version"))
+    rf <- oracle_field(table, v, c("protocol", "reader_features"))
+    wf <- oracle_field(table, v, c("protocol", "writer_features"))
+    expect_setequal(p$name[p$reader & is.na(p$version)], as.character(rf))
+    expect_setequal(p$name[p$writer & is.na(p$version)], as.character(wf))
+  }
 })
