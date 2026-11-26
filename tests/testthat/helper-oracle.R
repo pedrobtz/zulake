@@ -278,3 +278,10 @@ oracle_table_frame <- function(x) {
   cols <- lapply(x$columns, function(col) if (is.list(col)) I(col) else col)
   structure(cols, class = "data.frame", row.names = seq_len(x$num_rows))
 }
+
+# The example table the package ships, which the README, the vignette and the
+# examples open: inst/extdata/orders, a copy of the zl-orders fixture
+# (tools/fixtures/pack.py writes it).
+shipped_orders <- function() {
+  system.file("extdata", "orders", package = "zulake", mustWork = TRUE)
+}
