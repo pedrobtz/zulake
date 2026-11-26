@@ -12,10 +12,27 @@
 #' Its pruning subset is comparisons (`==`, `!=`, `<`, `<=`, `>`, `>=`),
 #' `%in%` and `is.na()` between a column and values, joined by `!`, `&` and
 #' `|`. That subset rules files out by their partition values and their
-#' statistics (minimum, maximum, null count and record count); anything else
-#' in the expression is only applied to rows. Statistics only decide what is
-#' read: the rows returned are the rows `filter` is `TRUE` for whatever the
-#' statistics say, and a missing statistic only means a file is read.
+#' statistics (minimum, maximum, null count and record count). Statistics
+#' only decide what is read: the rows returned are the rows `filter` is
+#' `TRUE` for whatever the statistics say, and a missing statistic only
+#' means a file is read.
+#'
+#' A filter may also apply these row-wise functions to columns: `+`, `-`,
+#' `*`, `/`, `%%`, `%/%`, `^`, `abs()`, `round()`, `floor()`, `ceiling()`,
+#' `sqrt()`, `exp()`, `log()`, `nchar()`, `toupper()`, `tolower()`,
+#' `substr()`, `startsWith()`, `endsWith()`, `grepl()`, `is.nan()`,
+#' `is.finite()`, `xor()`, `as.character()`, `as.numeric()` and
+#' `as.integer()`; and compare two columns, or use a logical column alone.
+#' R evaluates those on the rows after reading (they never prune), with base
+#' R's functions whatever the caller defines, and each must give one `TRUE`,
+#' `FALSE` or `NA` per row. Any other call with a column inside it, such as
+#' `max(x)`, `mean(x)`, `rank(x)`, `cumsum(x)`, `duplicated(x)`, `x[1]`,
+#' `%in%` with a column on its right, or a function of your own, is an error
+#' of class `zulake_error_filter`: a filter is decided row by row, so the
+#' rows it keeps do not depend on how the table's rows are split into files,
+#' and `lake_read()` equals the pieces of `lake_walk()` bound together. A
+#' part of the filter that names no column is a value, evaluated once where
+#' `lake_read()` is called, and may be any R expression.
 #'
 #' Inside the pruning subset, comparisons are exact: a `long`, `integer`,
 #' `short`, `byte` or `decimal` column is compared with the value as decimal
@@ -40,10 +57,15 @@
 #' Data files are read in place on local disk; other stores download each
 #' file once per session, to the session's temporary directory.
 #'
-#' This version cannot read a table whose live files have deletion vectors,
-#' or that maps column names: both are refused with a
-#' `zulake_error_unsupported_feature` error naming the feature, before any
-#' data file is read, so a read never returns deleted rows or wrong columns.
+#' Rows a deletion vector marks as deleted are never returned (see
+#' [lake_deletion_vectors()]); reading their vectors needs the zuroar
+#' package, and without it a read of a table with deletion vectors in the
+#' files it reads is an error of class `zulake_error_missing_package`. Every
+#' such vector is read and checked before any data file, so a corrupt one
+#' (`zulake_error_corrupt_log`) returns no rows. A table that maps column
+#' names (column mapping in `name` mode) is read by each column's physical
+#' name in the files and returned with its logical names; a
+#' `timestamp_ntz` column is a `POSIXct` in UTC.
 #'
 #' @inheritParams lake_files
 #' @param columns Columns to return, a character vector of column names, in
@@ -136,11 +158,11 @@ lake_walk <- function(tbl, FUN, columns = NULL, filter = NULL, int64 = c("double
 # read_scan() decides everything before a row is read: refusals, the filter
 # plan, the files that survive pruning (fetched to local paths), each file's
 # qio read plan, and the columns returned. read_piece() reads one surviving
-# file into a filtered piece; bind_pieces() binds them. Stage 5's deletion
-# vectors drop rows in read_piece(), between the read and the row filter.
+# file into a filtered piece; bind_pieces() binds them. Deletion vectors,
+# read in read_scan(), drop rows in read_piece(), between the read and the
+# row filter.
 
 read_scan <- function(tbl, columns, expr, env, int64) {
-  read_refusals(tbl)
   types <- column_types(tbl)
   all <- names(types)
   if (!is.null(columns)) {
@@ -169,6 +191,11 @@ read_scan <- function(tbl, columns, expr, env, int64) {
     why <- type_unreadable(types[[col]])
     if (!is.na(why)) reasons[[col]] <- why
   }
+  # Deletion vectors are read and checked before any data file, so a bad
+  # one returns no rows, from lake_walk() too.
+  has_dv <- !vapply(tbl$files$action[keep], function(a) is.null(a[["deletionVector"]]), NA)
+  deleted <- vector("list", length(keep))
+  deleted[has_dv] <- dv_rows_of(tbl, keep[has_dv])
   paths <- vapply(keep, function(i) fetch_file(tbl, i), "")
   data_cols <- setdiff(need, c(pcols, names(reasons)))
   plans <- lapply(paths, function(p) qio::read_plan(p, int64 = int64))
@@ -214,7 +241,7 @@ read_scan <- function(tbl, columns, expr, env, int64) {
   list(
     tbl = tbl, keep = keep, paths = paths, plan = plan, env = env, int64 = int64,
     types = types, physical = physical, read_cols = read_cols, out_cols = setdiff(out_cols, names(reasons)),
-    present = present, vetted = vetted,
+    present = present, vetted = vetted, deleted = deleted,
     parts = partition_read_table(tbl$files$action[keep], tbl, int64, intersect(read_cols, pcols))
   )
 }
@@ -251,39 +278,9 @@ plan_unreadable <- function(plan, name) {
   NA_character_
 }
 
-# Refuses a snapshot whose rows this version cannot read correctly.
-read_refusals <- function(tbl) {
-  dv <- !vapply(tbl$files$action, function(a) is.null(a[["deletionVector"]]), NA)
-  if (any(dv)) {
-    read_refuse(
-      tbl, "deletionVectors",
-      sprintf(
-        "%s of its live files %s deletion vectors, which zulake cannot apply to rows yet (reads of such tables arrive with Stage 5); lake_files() and lake_count() still work",
-        format_number(sum(dv)), if (sum(dv) == 1) "has" else "have"
-      )
-    )
-  }
-  if (tbl$column_mapping != "none") {
-    read_refuse(
-      tbl, "columnMapping",
-      "it maps column names (column mapping), which zulake cannot apply to rows yet (reads of such tables arrive with Stage 5); lake_files() and lake_count() still work"
-    )
-  }
-  invisible()
-}
-
-read_refuse <- function(tbl, feature, why) {
-  zulake_abort(
-    "unsupported_feature",
-    sprintf("Version %s of this table cannot be read: %s.", format_number(tbl$version), why),
-    feature = feature,
-    version = tbl$version,
-    protocol = protocol_frame(tbl$protocol, tbl$metadata)
-  )
-}
-
 # One surviving file's rows: read with qio, partition columns added, absent
-# columns filled with NA, then the filter applied to rows.
+# columns filled with NA, the rows its deletion vector marks dropped, then
+# the filter applied to rows.
 read_piece <- function(scan, k) {
   i <- scan$keep[k]
   sel <- scan$present[[k]]
@@ -303,6 +300,18 @@ read_piece <- function(scan, k) {
     read()
   }
   n <- nrow(df)
+  gone <- scan$deleted[[k]]
+  if (length(gone) && gone[length(gone)] >= n) {
+    file <- scan$tbl$files$path[i]
+    zulake_abort(
+      "corrupt_log",
+      sprintf(
+        "The deletion vector of file %s deletes row %s, but the file has %s rows.",
+        format_string(file), format_number(gone[length(gone)]), format_number(n)
+      ),
+      file = file
+    )
+  }
   cols <- list()
   for (col in scan$read_cols) {
     cols[[col]] <- if (col %in% names(scan$parts)) {
@@ -312,6 +321,11 @@ read_piece <- function(scan, k) {
     } else {
       empty_column(scan$types[[col]], scan$int64, n)
     }
+  }
+  if (length(gone)) {
+    alive <- seq_len(n)[-(gone + 1)]
+    cols <- lapply(cols, function(x) x[alive])
+    n <- length(alive)
   }
   piece <- new_data_frame_n(cols, n)
   if (!is.null(scan$plan)) {
@@ -394,19 +408,8 @@ fetch_file <- function(tbl, i) {
   a <- tbl$files$action[[i]]
   path <- a[["path"]]
   storage <- tbl$storage
-  if (grepl("^[A-Za-z][A-Za-z0-9+.-]*:", path) && !grepl("^[A-Za-z]:[/\\\\]", path) || startsWith(path, "/")) {
-    local <- if (startsWith(path, "/") || grepl("^[A-Za-z]:[/\\\\]", path)) {
-      path
-    } else if (startsWith(path, "file:")) {
-      # file:///home/x, file:/home/x, and file:///C:/x on Windows.
-      sub("^/([A-Za-z]:)", "\\1", percent_decode(sub("^file:(//)?", "", path)))
-    } else {
-      zulake_abort(
-        "uri",
-        sprintf("data file %s is at a location zulake cannot read yet.", format_string(path)),
-        path = path
-      )
-    }
+  if (is_absolute_path(path)) {
+    local <- absolute_local_path(path)
     if (!file.exists(local) || dir.exists(local)) {
       zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path)
     }
@@ -442,6 +445,29 @@ fetch_file <- function(tbl, i) {
   }
   cache_env$files[[key]] <- f
   f
+}
+
+# Whether a path from the log (an `add` path, a deletion vector's absolute
+# path) is absolute: a URI with a scheme, or a path from the root.
+is_absolute_path <- function(path) {
+  startsWith(path, "/") || grepl("^[A-Za-z]:[/\\\\]", path) || grepl("^[A-Za-z][A-Za-z0-9+.-]*:", path)
+}
+
+# The local path of an absolute path from the log: itself, or the path of a
+# file: URI; other schemes are a zulake_error_uri.
+absolute_local_path <- function(path) {
+  if (startsWith(path, "/") || grepl("^[A-Za-z]:[/\\\\]", path)) {
+    return(path)
+  }
+  if (startsWith(path, "file:")) {
+    # file:///home/x, file:/home/x, and file:///C:/x on Windows.
+    return(sub("^/([A-Za-z]:)", "\\1", percent_decode(sub("^file:(//)?", "", path))))
+  }
+  zulake_abort(
+    "uri",
+    sprintf("%s is at a location zulake cannot read yet.", format_string(path)),
+    path = path
+  )
 }
 
 # The number of rows of live file `i`, from its Parquet footer.

@@ -128,7 +128,7 @@ test_that("lake_read(filter = f) equals the full read subset in R, and no pruned
         next
       }
       expect_identical(got, r_subset(full, expr), label = label)
-      kept <- eval(bquote(lake_files(tbl, filter = .(expr), stats = FALSE)))$path
+      kept <- paths[prune_files(tbl, filter_plan(expr, column_types(tbl), environment(), strict = FALSE), "double")]
       for (k in which(!paths %in% kept)) {
         pruned <- pruned + 1L
         expect_identical(nrow(r_subset(pieces[[k]], expr)), 0L, label = paste(label, paths[k]))
@@ -146,7 +146,9 @@ test_that("partition values are compared as their Delta type, exactly as deltala
     if (!length(pcols)) next
     parts <- oracle_partition_frame(case$table, case$version)
     for (col in pcols) {
-      for (v in unique(parts[[col]])) {
+      values <- unique(parts[[col]])
+      # By index: for () drops a Date's class before R 4.6.
+      for (v in lapply(seq_along(values), function(j) values[j])) {
         expr <- if (is.na(v)) bquote(is.na(.(as.symbol(col)))) else bquote(.(as.symbol(col)) == .(v))
         got <- eval(bquote(lake_files(tbl, filter = .(expr), stats = FALSE)))$path
         want <- parts$path[if (is.na(v)) is.na(parts[[col]]) else parts[[col]] %in% v]
@@ -373,7 +375,8 @@ test_that("filter values arrive the same in a hostile session", {
     list(
       lake_files(tbl, filter = p_int > 1.5 & p_date < "2024-01-04", stats = FALSE)$path,
       lake_files(tbl, filter = value > 12345678.25, stats = FALSE)$path,
-      lake_read(tbl, filter = value %in% c(0.5, 2, 1e6) | p_str == "café")
+      lake_read(tbl, filter = value %in% c(0.5, 2, 1e6) | p_str == "café"),
+      lake_read(tbl, filter = round(value / 3, 1) > 0.5 & substr(p_str, 1, 1) %in% c("a", "c") | nchar(p_str) == 4)
     )
   }
   stats <- '{\\"numRecords\\":1,\\"minValues\\":{\\"t\\":\\"2024-01-05T10:00:00.123Z\\"},\\"maxValues\\":{\\"t\\":\\"2024-01-05T10:00:00.123Z\\"}}'
@@ -396,7 +399,7 @@ test_that("filter values arrive the same in a hostile session", {
   expect_identical(hostile, plain)
 })
 
-test_that("anything outside the pruning subset only filters rows in lake_read()", {
+test_that("row-wise functions and two-column comparisons only filter rows in lake_read()", {
   tbl <- lake_open(fixture_table("zl-partitioned"))
   full <- lake_read(tbl)
   cases <- list(
@@ -405,16 +408,124 @@ test_that("anything outside the pruning subset only filters rows in lake_read()"
     quote(grepl("a", p_str) & !is.na(p_int)),
     quote(p_int %in% c(1, 2) & nchar(p_str) > 0),
     quote(TRUE),
-    quote(value %% 2 == 0)
+    quote(value %% 2 == 0),
+    quote(value > p_int),
+    quote(xor(is.na(p_str), p_int > 2)),
+    quote(substr(p_str, 1, 1) == "a"),
+    quote(is.na(p_int + 1)),
+    quote(round(value / 3) %in% c(0, 1))
   )
   for (expr in cases) {
     got <- eval(bquote(lake_read(tbl, filter = .(expr))))
     expect_identical(got, r_subset(full, expr), label = deparse(expr))
     expect_error(eval(bquote(lake_files(tbl, filter = .(expr)))), class = "zulake_error_filter")
+    expect_error(eval(bquote(lake_partitions(tbl, filter = .(expr)))), class = "zulake_error_filter")
   }
   expect_error(lake_read(tbl, filter = p_int + 1), class = "zulake_error_filter")
   expect_error(lake_read(tbl, filter = c(TRUE, FALSE)), class = "zulake_error_filter")
-  # Each file's rows are filtered on their own, as lake_walk() sees them.
-  per_file <- lake_read(tbl, filter = value == max(value))
-  expect_identical(nrow(per_file), nrow(lake_files(tbl)))
+  expect_error(lake_read(tbl, filter = p_int), class = "zulake_error_filter")
+  # A value inside a row-wise call must mean the same for every row.
+  expect_error(lake_read(tbl, filter = value + c(1, 2) > 3), class = "zulake_error_filter")
+  expect_error(lake_read(tbl, filter = grepl(p_str, "a")), class = "zulake_error_filter")
+  # A row-evaluated node on partition columns never prunes, so lake_read()
+  # reads every file for it.
+  env <- new.env()
+  tbl$storage <- remote_storage(tbl$storage, env)
+  lake_read(tbl, filter = nchar(p_str) > 100)
+  expect_identical(sum(startsWith(env$calls, "get ")), nrow(lake_files(tbl)))
+})
+
+test_that("a call outside the pruning subset and the row-wise list is refused everywhere (2026-11-26 correction)", {
+  tbl <- lake_open(fixture_table("zl-partitioned"))
+  f <- function(x) x > 1
+  bad <- list(
+    quote(value == max(value)), quote(value > mean(value)), quote(rank(value) <= 2),
+    quote(cumsum(value) < 10), quote(!duplicated(value)), quote(value %in% p_int),
+    quote(3 %in% value), quote(f(value)), quote(format(value) == "1"), quote(any(value > 3)),
+    quote(value[1] == 1), quote(p_int == 1 && p_str == "a"), quote(base::nchar(p_str) > 1),
+    quote(nchar(p_str) > max(p_int))
+  )
+  for (expr in bad) {
+    for (call in list(
+      bquote(lake_read(tbl, filter = .(expr))),
+      bquote(lake_walk(tbl, identity, filter = .(expr))),
+      bquote(lake_files(tbl, filter = .(expr))),
+      bquote(lake_partitions(tbl, filter = .(expr)))
+    )) {
+      err <- tryCatch(eval(call), error = identity)
+      expect_s3_class(err, "zulake_error_filter")
+      expect_s3_class(err, "zulake_error")
+    }
+  }
+  # On a partition column too: year == max(year) would prune with the
+  # table's maximum but filter each file with its own.
+  tbl <- lake_open(fixture_table("delta-0.8.0-partitioned"))
+  expect_gt(nrow(lake_files(tbl)), 1L)
+  for (call in list(quote(lake_read(tbl, filter = year == max(year))),
+                    quote(lake_walk(tbl, identity, filter = year == max(year))),
+                    quote(lake_files(tbl, filter = year == max(year))))) {
+    expect_error(eval(call), class = "zulake_error_filter")
+  }
+  expect_match(conditionMessage(tryCatch(lake_read(tbl, filter = year == max(year)), error = identity)),
+               "max() is applied to a column but is not row-wise", fixed = TRUE)
+})
+
+test_that("a filter gives the same rows however the rows are split into files", {
+  withr::local_seed(20261129)
+  withr::local_collate("C")
+  n <- 60L
+  data <- data.frame(
+    id = as.numeric(seq_len(n)),
+    x = round(stats::rnorm(n, sd = 10), 1),
+    k = sample(c(1:5, NA), n, replace = TRUE),
+    s = sample(c("a", "ab", "b", "B", "caf\u00e9", NA), n, replace = TRUE),
+    d = as.Date("2024-01-01") + sample(c(0:9, NA), n, replace = TRUE),
+    flag = sample(c(TRUE, FALSE, NA), n, replace = TRUE),
+    stringsAsFactors = FALSE
+  )
+  one <- lake_open(split_table(data, 1L))
+  here <- environment()
+  many <- lapply(c(2L, 7L, 20L), function(k) lake_open(split_table(data, k, env = here)))
+  expect_identical(lake_read(one), data, ignore_attr = TRUE)
+  # What a filter that looks at other rows would give differs by layout; so
+  # each is refused, the same way, whatever the layout.
+  outcome <- function(tbl, expr) {
+    tryCatch(eval(bquote(lake_read(tbl, filter = .(expr)))), zulake_error_filter = function(e) "refused")
+  }
+  for (expr in list(quote(x == max(x)), quote(x > mean(x, na.rm = TRUE)), quote(rank(id) <= 2),
+                    quote(cumsum(id) < 100), quote(!duplicated(s)), quote(any(x > 3)))) {
+    want <- outcome(one, expr)
+    expect_identical(want, "refused", label = deparse(expr))
+    for (tbl in many) expect_identical(outcome(tbl, expr), want, label = deparse(expr))
+  }
+  for (i in seq_len(80)) {
+    expr <- random_row_filter(data)
+    label <- paste(deparse(expr), collapse = " ")
+    want <- suppressWarnings(eval(bquote(lake_read(one, filter = .(expr)))))
+    expect_identical(want, r_subset(data, expr), ignore_attr = TRUE, label = label)
+    for (tbl in many) {
+      got <- suppressWarnings(eval(bquote(lake_read(tbl, filter = .(expr)))))
+      expect_identical(got, want, label = label)
+      pieces <- list()
+      suppressWarnings(eval(bquote(lake_walk(tbl, function(p) pieces[[length(pieces) + 1L]] <<- p, filter = .(expr)))))
+      bound <- if (length(pieces)) do.call(rbind, pieces) else want[0L, , drop = FALSE]
+      expect_identical(bound, want, ignore_attr = TRUE, label = label)
+    }
+  }
+})
+
+test_that("the row-wise functions are base R's, whatever the caller defines", {
+  tbl <- lake_open(fixture_table("zl-partitioned"))
+  full <- lake_read(tbl)
+  want <- r_subset(full, quote(nchar(p_str) > 2 & abs(value) >= 0))
+  nchar <- function(x) max(x)
+  abs <- function(x) -1
+  `>` <- function(e1, e2) TRUE
+  expect_identical(lake_read(tbl, filter = nchar(p_str) > 2 & abs(value) >= 0), want)
+  # A value is evaluated in the caller's environment, with the caller's
+  # functions: here nchar("a") is the local max("a"), "a".
+  rm(`>`)
+  got <- lake_read(tbl, filter = p_str == nchar("a"))
+  expect_gt(nrow(got), 0L)
+  expect_identical(got, full[full$p_str %in% "a", , drop = FALSE], ignore_attr = TRUE)
 })

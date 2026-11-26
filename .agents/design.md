@@ -196,6 +196,11 @@ a choice:
   time otherwise. Why: the protocol's split at the enablement version
   gives the same answer under this rule, since in-commit timestamps only
   grow from there.
+- *File times* (settled 2026-11-26, Stage 5). File modification times
+  are read through R, which on Windows is exact only to about 1 µs;
+  zulake rounds to 10 µs and then truncates to milliseconds, so a file
+  time within 5 µs below a millisecond boundary counts as the next
+  millisecond. With inCommitTimestamp this does not apply.
 - *Partition values* of live files are checked against their column's
   type (the protocol's "Partition Value Serialization"; by physical name
   under column mapping) when the snapshot is built; a value that does
@@ -223,21 +228,21 @@ Settled in Stage 4 (2026-11-26):
   then per file: read, partition columns added, a column the file lacks
   filled with `NA` of its type, rows filtered. Stage 5 drops the rows a
   deletion vector marks between the read and the row filter.
-- *Deletion vectors are applied only in Stage 5.* Until then `lake_read()`
-  and `lake_walk()` refuse a snapshot whose live files carry deletion
-  vectors with `zulake_error_unsupported_feature` (`feature =
-  "deletionVectors"`), and one that maps column names likewise (`feature =
-  "columnMapping"`), before any data file is read, so a read never returns
-  deleted rows or physical column names. Stage 5 removes both refusals.
-  Why: Stage 5's work and tests (the roadmap) own deletion vectors and
-  column mapping on rows; the column-mapping refusal follows the same rule
-  and is recorded as a Stage 4 deviation in the roadmap.
+- *Deletion vectors and column mapping on rows* (Stage 5, 2026-11-26,
+  replacing Stage 4's refusal of both). The deletion vectors of the files
+  that survive pruning are read and checked after the read plans and
+  before any data file, so a corrupt one returns no rows (from
+  `lake_walk()` too); a pruned file's vector is never read. `name`-mode
+  column mapping reads each column by its physical name and returns it by
+  its logical name; a column a file lacks is `NA`, as the protocol asks.
 - *`int64`.* `lake_read()` and `lake_walk()` take `int64` like the
   inspection functions, since a `long` partition column holds 64-bit
   values from the log (§5), and pass it to `qio` for data columns.
-- *Row filter.* The whole filter is evaluated on each file's rows on their
-  own, so an expression that looks at other rows (`x == max(x)`) sees one
-  file at a time, as `lake_walk()` does.
+- *Row filter* (settled 2026-11-26, replacing Stage 4's "an expression
+  that looks at other rows sees one file at a time"). A filter is row-wise
+  by construction (D8, §6), so evaluating it per file equals evaluating it
+  on the whole table, and `lake_read()` equals binding `lake_walk()`'s
+  pieces.
 
 ### 4.4 Deletion vectors
 
@@ -250,6 +255,40 @@ a CRC-32, read by range at `offset`. The bitmap is the little-endian
 magic number 1681511377 followed by a portable 64-bit Roaring bitmap,
 which `zuroar::roar64_unserialize()` reads. Row indexes are 0-based
 positions in the Parquet file. The checksum is verified (D9).
+
+Settled in Stage 5 (2026-11-26):
+
+- *Location.* A `u` path is `<prefix>/deletion_vector_<uuid>.bin` under
+  the table root (no `/` without a prefix), the UUID in lower-case
+  canonical form from the last 20 Z85 characters. A `p` path is read like
+  an absolute `add` path: a local path or `file:` URI, any other scheme a
+  `zulake_error_uri` until Stage 6. An absent `offset` is 0, as the
+  protocol says. Inline bytes are decoded whole and cut to `sizeInBytes`
+  (Delta pads them to a multiple of 4).
+- *Checks.* Each is a `zulake_error_corrupt_log` (field `file`, the data
+  file), with no rows returned: Z85 that is not Z85; a file that does not
+  exist, or a vector running past its end (checked against `head()`'s size
+  before reading); a format version byte other than 1 (read once per file
+  per call); a stored size other than `sizeInBytes`; a CRC-32 (IEEE, as
+  zlib) other than the stored one; a magic number other than 1681511377; a
+  bitmap `zuroar` rejects; a bitmap whose size is not `cardinality`; a row
+  at or past the data file's row count. A row at or above 2^53 is a
+  `zulake_error_int64` (D12). Why: each is a vector that does not say what
+  its descriptor says, and applying it could return deleted rows.
+- *Only the portable format.* The protocol's Deletion Vector Format
+  defines magic 1681511377 (portable 64-bit Roaring). Example 3 of its
+  descriptor schema is in Delta's other, "native" format (magic
+  1681511376, big-endian), which the format section does not define; it is
+  refused as above, not guessed at. Why: the protocol is the
+  specification, and Delta's writers use the portable format.
+- *`zuroar` absent.* Reading rows of a deletion vector (`lake_read()`,
+  `lake_walk()`, `lake_deletion_vectors(rows = TRUE)`) needs `zuroar`;
+  without it, a call that has a vector to read is a
+  `zulake_error_missing_package` (field `package = "zuroar"`) before any
+  data file is read. `lake_count()`, `lake_files()` and
+  `lake_deletion_vectors(rows = FALSE)` need only the log.
+- *CRC-32 in R.* Table-driven, about 5 µs a byte; a vector of 1 MB takes
+  some seconds. Why: D1, and no hard dependency exports one.
 
 ## 5. Public R API (proposed)
 
@@ -297,9 +336,19 @@ lake_walk(tbl, FUN, columns = NULL, filter = NULL, int64)
 `filter` is an unevaluated R expression over column names: `==`, `!=`,
 `<`, `<=`, `>`, `>=`, `%in%`, `is.na()`, `!`, `&` and `|`, with literals
 or values from the calling environment (`!!`-free; local values are
-looked up there). That subset prunes. Any other call is allowed but only
-filters rows after reading; `lake_files()` refuses it, since it has no
-rows to filter (D8).
+looked up there). That subset prunes. A filter may also apply these
+row-wise functions to columns: `+ - * / %% %/% ^`, `abs`, `round`,
+`floor`, `ceiling`, `sqrt`, `exp`, `log`, `nchar`, `toupper`, `tolower`,
+`substr`, `startsWith`, `endsWith`, `grepl`, `is.nan`, `is.finite`, `xor`,
+`as.character`, `as.numeric`, `as.integer`; and compare two columns. These
+filter rows after reading and never prune; `lake_files()` and
+`lake_partitions()` refuse them. Any other call with a column inside it
+(`max`, `mean`, `rank`, `cumsum`, `duplicated`, `%in%` with a column on the
+right, `[`, a user function) is a `zulake_error_filter` everywhere: a
+filter is decided row by row, so its result does not depend on how rows are
+split into files. A subexpression that names no column is a value,
+evaluated once in the caller's environment, and may be any R (settled
+2026-11-26, a correction to Stage 4, D8).
 
 `lake_count(tbl)` is the sum of `numRecords` over the live files minus
 the cardinality of their deletion vectors, from the log alone. `stats` is
@@ -374,7 +423,8 @@ Settled in Stage 3 (2026-11-26), the shapes the roxygen documents in full:
   at any precision (settled 2026-11-26, Stage 4, replacing Stage 3's
   "compared as a double"). Anything outside the subset is a
   `zulake_error_filter` in `lake_files()` and `lake_partitions()`, which
-  have no rows; `lake_read()` and `lake_walk()` apply it to rows only.
+  have no rows; `lake_read()` and `lake_walk()` apply the row-wise
+  functions to rows only and refuse every other call (settled 2026-11-26).
 
 `credentials` is a function of no arguments returning a bearer token as
 a single string. `zulake` calls it before the first request, and again
@@ -394,7 +444,9 @@ feature (D7) and `protocol` field holds the `lake_protocol()` frame,
 digits), `zulake_error_filter` (a filter outside the pruning subset, or
 a value it cannot compare exactly) and `zulake_error_column_unreadable` (a
 column named in `columns` or used in `filter` that `qio` cannot return,
-§7; fields `column`, `reason`). The warnings, each also of class
+§7; fields `column`, `reason`) and `zulake_error_missing_package` (a
+suggested package the call needs, `zuroar` for deletion-vector rows;
+field `package`, Stage 5). The warnings, each also of class
 `zulake_warning`, are `zulake_warning_count_unknown` from `lake_count()`,
 `zulake_warning_int64` from `lake_files()` (a `long` statistic shown as
 `NA`) and `zulake_warning_column_skipped` from `lake_read()` and
@@ -502,6 +554,20 @@ statistics and on rows, so pruning and the row filter cannot disagree:
   nulls, and one with `numRecords` 0 nothing; a missing count is
   unknown.
 
+Settled 2026-11-26 (a correction to Stage 4, on a design adviser's
+recommendation): a filter is row-wise by construction (D8), so evaluating
+it per file equals evaluating it on the whole table, and `lake_read()`
+equals binding `lake_walk()`'s pieces. Values are evaluated once and
+inlined; the listed functions are then resolved in base, not the caller's
+environment, so a local `nchar` cannot change a filter. A row-evaluated
+node must return a logical of exactly one value per row. A row-evaluated
+node on partition columns is never used to prune. Two details the
+implementation fixes: a value inside a row-evaluated call must have length
+1, so it means the same for every row (the right of `%in%` excepted), and
+a logical column alone is a row-evaluated node. Row-evaluated comparisons
+are R's own (a string `<` there follows the session's collation); only the
+pruning subset uses the exact comparator above.
+
 ## 7. Types
 
 Delta's types map to what `qio` returns for the Parquet column, so
@@ -566,7 +632,10 @@ breaking type change for p <= 15 (settled 2026-11-26, Stage 4).
   zulake's: an `int32` of -2^31 reads as `NA`, a 64-bit value past 2^53
   (as a double) or -2^63 (as `integer64`) as `NA`, a decimal as the
   nearest double, a `float` as the double of its float; and the nested
-  and `decimal(38, 18)` columns of `zl-types` are left out (§7).
+  and `decimal(38, 18)` columns of `zl-types` are left out (§7). Since
+  Stage 5 the deletion-vector and `name`-mode column-mapping fixtures are
+  read and compared too, and `deletion_vectors()`' selection vectors are
+  compared as `which(!selection_vector) - 1` (D12).
 - **Hostile log.** Truncated and corrupt commits, a missing checkpoint
   part, a `_last_checkpoint` that points past the log, a deletion vector
   with a bad checksum, a magic number that differs, a partition value of
@@ -629,9 +698,12 @@ The order of work, and what 0.1.0 waits for, are in
   names stay refused, because each obliges the reader to convert or
   decode data. `writerFeatures` is never a reason to refuse (replay reads
   it for in-commit timestamps; reworded 2026-11-26, Stage 4).
-- **D8.** Filters are R expressions, not `deltalake`'s DNF tuples; the
-  pruning subset is fixed and documented, and anything outside it only
-  filters rows.
+- **D8 (reworded 2026-11-26).** Filters are R expressions, not
+  `deltalake`'s DNF tuples. The pruning subset and the row-wise function
+  list are fixed and documented; a call outside both is refused, never
+  evaluated per file, because a per-file result would be silently
+  different from the table's (D7). Was: "anything outside it only filters
+  rows".
 - **D9.** Deletion vectors are in 0.1.0, because tables written by
   Databricks use them by default and refusing them would refuse most
   Azure tables. Their CRC-32 is verified.
@@ -645,7 +717,11 @@ The order of work, and what 0.1.0 waits for, are in
   for Delta, and a snapshot records its format, so that Iceberg can be
   added without renaming anything. Iceberg needs `zuavro` (RFC 0063) for
   its manifests.
-- **D12 (2026-11-26).** `lake_deletion_vectors(tbl, files = NULL,
+- **D12 (2026-11-26; `files` settled in Stage 5).** `files` is `NULL` or
+  live files' `path`s or `uri`s as `lake_files()` gives them (another is a
+  `zulake_error_argument`); rows follow `lake_files()`' order, `offset` is
+  `NA` for an inline vector, and the counts are doubles.
+  `lake_deletion_vectors(tbl, files = NULL,
   rows = TRUE)` returns a base data frame with one row per live file
   that has a deletion vector: `uri`, the descriptor (`storage_type`,
   `path_or_inline_dv`, `offset`, `size_in_bytes`, `cardinality`) and

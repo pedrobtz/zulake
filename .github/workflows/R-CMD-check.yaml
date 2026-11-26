@@ -45,3 +45,8 @@ jobs:
       # from source in the image took 10.5 of the leg's 11.8 minutes on #15,
       # past the five-minute quick budget. The full profile keeps all three.
       quick-containers: '[]'
+      # CRAN's NOSUGGESTS flavor, full profile only: zuroar, which deletion
+      # vectors need, is suggested (design D9), and a table that needs it
+      # must fail with a classed error when it is absent, which only a check
+      # without the Suggests shows (tests/zuroar-absent.R).
+      nosuggests: true

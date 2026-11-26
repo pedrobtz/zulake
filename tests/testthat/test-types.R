@@ -218,7 +218,7 @@ test_that("mark_numbers() rewrites number tokens only, never digits inside strin
   expect_identical(parsed$b, list(1.5, "\036-9223372036854775808"))
   expect_identical(parsed$c, 9007199254740991)
   # Digits after a point or in an exponent are not an integer of their own.
-  expect_identical(parsed$e, 0.12345678901234567)
+  expect_identical(parsed$e, zujson::json_parse('{"e":0.12345678901234567}')$e)
   expect_identical(parsed$g, Inf)
   all <- zujson::json_parse(mark('{"v":1.50,"w":[1E+2,-0.0],"k":"1.50"}', all = TRUE))
   expect_identical(all, list(v = "\0361.50", w = c("\0361E+2", "\036-0.0"), k = "1.50"))

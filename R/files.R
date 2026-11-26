@@ -32,7 +32,8 @@
 #' rows: a comparison on a partition column is decided by the file's
 #' partition value, one on another column by the file's statistics, and a
 #' file without statistics for that column is kept. Values compare exactly,
-#' as [lake_read()] describes. Any other call is refused with a
+#' as [lake_read()] describes. Anything else, the row-wise functions
+#' [lake_read()] applies to rows included, is refused with a
 #' `zulake_error_filter` error, since there are no rows here to apply it
 #' to.
 #'

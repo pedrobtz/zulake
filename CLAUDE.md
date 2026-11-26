@@ -35,8 +35,10 @@ commit 0, local disk only) is in: `lake_open()`, `lake_is_table()`,
 `lake_load()`, `lake_version()`. Stage 3 (inspection) adds the table, file
 and log functions of design §5, except `lake_deletion_vectors()`. Stage 4
 (reading and pruning) adds `lake_read()`, `lake_walk()` and
-`lake_count(footers = TRUE)`; reads refuse deletion vectors and column
-mapping until Stage 5. The roadmap
+`lake_count(footers = TRUE)`. Stage 5 adds deletion vectors
+(`lake_deletion_vectors()`, rows dropped on read, `zuroar` suggested) and
+`name`-mode column mapping on reads, and makes filters row-wise by
+construction. The roadmap
 in [`.agents/roadmap.md`](.agents/roadmap.md) takes it to v0.1.0. 0.1.0 waits
 for `zuhttp` on CRAN and for `zuroar` 0.1.0 (design §9); local log replay,
 inspection and reading are built on local fixtures first.
@@ -86,11 +88,14 @@ by design (D1).
   (`int64_values()`, `unmark_tree()`).
 - `R/values.R`: the schema, partition values and statistics typed by
   Delta type.
-- `R/filter.R`: the filter plan (pruning subset, or row-only nodes), its
-  outcomes per file from partition values and statistics, and the row
-  filter.
+- `R/filter.R`: the filter plan (pruning subset, row-wise nodes, or a
+  refusal), its outcomes per file from partition values and statistics,
+  and the row filter.
 - `R/compare.R`: the exact comparator (decimal text), byte-order string
   comparison, and filter values turned into comparison keys.
+- `R/dv.R`: `lake_deletion_vectors()`, a vector's bytes from its
+  descriptor (Z85, UUID paths, ranges, CRC-32, magic) and its rows through
+  `zuroar`, which is suggested: `need_zuroar()` refuses by name.
 - `R/read.R`: `lake_read()`, `lake_walk()`, the read pipeline
   (`read_scan()`, `read_piece()`, `bind_pieces()`), `fetch_file()` and the
   session cache.
@@ -110,6 +115,11 @@ by design (D1).
 - **Unknown or unsupported reader features are refused by name before any
   data is read** (D7). Ignoring `columnMapping` in `id` mode or deletion
   vectors returns wrong rows silently.
+- **A filter is row-wise by construction** (D8). A call that is neither
+  in the pruning subset nor in `row_wise_functions` is refused, never
+  evaluated per file: per file it would give other rows than on the table.
+- **`zuroar` is only suggested.** Call it as `zuroar::` after
+  `need_zuroar()`; `tests/zuroar-absent.R` is the `nosuggests` check.
 - **Statistics only decide what is downloaded.** A file is pruned only on
   "cannot match"; the whole filter is then applied to rows, so a read is
   exact whatever the statistics say (design §6).

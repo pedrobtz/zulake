@@ -26,7 +26,7 @@ Stage 2b, checkpoints, waits for that `qio` and runs after Stage 7.
 | 2 | [Log replay](#stage-2--log-replay) | quick | [#4](https://github.com/pedrobtz/zulake/issues/4) | [#30](https://github.com/pedrobtz/zulake/pull/30) | 2026-11-26 |
 | 3 | [Inspection](#stage-3--inspection) | quick | [#5](https://github.com/pedrobtz/zulake/issues/5) | [#31](https://github.com/pedrobtz/zulake/pull/31) | 2026-11-26 |
 | 4 | [Reading and pruning](#stage-4--reading-and-pruning) | quick | [#6](https://github.com/pedrobtz/zulake/issues/6) | [#32](https://github.com/pedrobtz/zulake/pull/32) | 2026-11-26 |
-| 5 | [Deletion vectors and column mapping](#stage-5--deletion-vectors-and-column-mapping) | full | [#7](https://github.com/pedrobtz/zulake/issues/7) | | |
+| 5 | [Deletion vectors and column mapping](#stage-5--deletion-vectors-and-column-mapping) | full | [#7](https://github.com/pedrobtz/zulake/issues/7) | [#33](https://github.com/pedrobtz/zulake/pull/33) | 2026-11-26 |
 | 6 | [Azure backend](#stage-6--azure-backend) | quick | [#8](https://github.com/pedrobtz/zulake/issues/8) | | |
 | 7 | [Documentation](#stage-7--documentation) | quick | [#9](https://github.com/pedrobtz/zulake/issues/9) | | |
 | 2b | [Checkpoints](#stage-2b--checkpoints) | quick | [#26](https://github.com/pedrobtz/zulake/issues/26) | | |
@@ -380,6 +380,21 @@ downloading only the files a filter cannot rule out.
   deletion vectors refused until Stage 5) are in design §4.3, §5, §6 and
   §7.
 
+**Correction (2026-11-26, after merge; made in Stage 5's pull request).**
+Settled by the coordinator on a design adviser's recommendation, under the
+maintainer's rule for open questions: a filter is row-wise by construction
+(design §5, §6, D8 reworded). Stage 4 let any call filter rows per file, so
+`x == max(x)` saw one file at a time while `year == max(year)` on a
+partition column pruned with the table's maximum, and a length-1 result
+(`any(x > 3)`) was accepted. Now the row-wise functions of §5 and two-column
+comparisons filter rows (never pruning, also on partition columns), and
+every other call with a column inside is a `zulake_error_filter` in
+`lake_read()`, `lake_walk()`, `lake_files()` and `lake_partitions()`.
+Unreleased, so no deprecation. Tests: the property test draws from the
+row-wise list; file-layout invariance (1 file against 2, 7 and 20);
+refusals on a multi-file fixture; shadowing of `nchar` by the caller, in
+`test-filter.R`.
+
 **Design.** [§4.3](design.md#43-reading),
 [§6](design.md#6-pruning-and-filtering), [D8](design.md#10-decisions).
 
@@ -431,6 +446,37 @@ downloading only the files a filter cannot rule out.
   was seen to fail.
 - `.agents/assurance.md` has Boundaries rows for deletion vectors, Z85 and
   column mapping.
+
+**Deviations (2026-11-26).**
+
+- The `nosuggests` test of `zuroar`'s absence is `tests/zuroar-absent.R`,
+  a base-R script, not a `test-dv.R` test: the `nosuggests` image has no
+  testthat, so no `test-dv.R` test can run there. It checks only where
+  `zuroar` is absent; `test-dv.R` checks the same on every leg with
+  `zuroar_available()` mocked. The R-CMD-check caller now passes
+  `nosuggests: true` (r-actions runs the job only when asked).
+- The `name`-mode column-mapping and `timestampNtz` tests are in
+  `test-read.R` as listed; `timestampNtz` has one fixture (`zl-types`),
+  since `column_mapping` has no such column.
+- The protocol's own inline Example 3 is in Delta's "native" format
+  (magic 1681511376), which its format section does not define, so it is
+  tested as refused (design §4.4), and its Z85 decoding is checked against
+  the example's rows through a 32-bit bitmap.
+- Begins with the 2026-11-26 Stage 4 correction (filters row-wise by
+  construction), recorded under Stage 4.
+- The first full-profile run (on this pull request; Stages 0 to 4 ran
+  quick only) found failures from earlier stages, fixed here because this
+  stage merges on the full profile: a Windows drive path (`C:/...`) in an
+  `add` action was taken as relative (`is_absolute_path()`, Stage 4); and
+  in the tests, a test-file path with backslashes written into code, a
+  `for ()` over Dates (R before 4.6 drops the class), and `zujson`'s
+  parse of `0.12345678901234567` on macOS, which differs from R's in the
+  last bit, compared with R's. Behind the Windows timestamp failures was a
+  product bug: `mtime_ms()` read whole-millisecond commit times 1 ms early
+  on Windows (R reads Windows file times up to about 1 µs low), fixed by
+  rounding to 10 µs before truncating (design §4.2); the tests set commit
+  times half a millisecond on, since `Sys.setFileTime()` truncates to
+  milliseconds there.
 
 **Design.** [§4.4](design.md#44-deletion-vectors),
 [D9](design.md#10-decisions).

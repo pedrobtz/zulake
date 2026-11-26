@@ -54,10 +54,27 @@ from the calling environment (a column's name always means the column).
 Its pruning subset is comparisons (\code{==}, \code{!=}, \code{<}, \code{<=}, \code{>}, \code{>=}),
 \code{\%in\%} and \code{is.na()} between a column and values, joined by \code{!}, \code{&} and
 \code{|}. That subset rules files out by their partition values and their
-statistics (minimum, maximum, null count and record count); anything else
-in the expression is only applied to rows. Statistics only decide what is
-read: the rows returned are the rows \code{filter} is \code{TRUE} for whatever the
-statistics say, and a missing statistic only means a file is read.
+statistics (minimum, maximum, null count and record count). Statistics
+only decide what is read: the rows returned are the rows \code{filter} is
+\code{TRUE} for whatever the statistics say, and a missing statistic only
+means a file is read.
+
+A filter may also apply these row-wise functions to columns: \code{+}, \code{-},
+\code{*}, \code{/}, \code{\%\%}, \code{\%/\%}, \code{^}, \code{abs()}, \code{round()}, \code{floor()}, \code{ceiling()},
+\code{sqrt()}, \code{exp()}, \code{log()}, \code{nchar()}, \code{toupper()}, \code{tolower()},
+\code{substr()}, \code{startsWith()}, \code{endsWith()}, \code{grepl()}, \code{is.nan()},
+\code{is.finite()}, \code{xor()}, \code{as.character()}, \code{as.numeric()} and
+\code{as.integer()}; and compare two columns, or use a logical column alone.
+R evaluates those on the rows after reading (they never prune), with base
+R's functions whatever the caller defines, and each must give one \code{TRUE},
+\code{FALSE} or \code{NA} per row. Any other call with a column inside it, such as
+\code{max(x)}, \code{mean(x)}, \code{rank(x)}, \code{cumsum(x)}, \code{duplicated(x)}, \code{x[1]},
+\code{\%in\%} with a column on its right, or a function of your own, is an error
+of class \code{zulake_error_filter}: a filter is decided row by row, so the
+rows it keeps do not depend on how the table's rows are split into files,
+and \code{lake_read()} equals the pieces of \code{lake_walk()} bound together. A
+part of the filter that names no column is a value, evaluated once where
+\code{lake_read()} is called, and may be any R expression.
 
 Inside the pruning subset, comparisons are exact: a \code{long}, \code{integer},
 \code{short}, \code{byte} or \code{decimal} column is compared with the value as decimal
@@ -82,10 +99,15 @@ error of class \code{zulake_error_column_unreadable} with the same fields.
 Data files are read in place on local disk; other stores download each
 file once per session, to the session's temporary directory.
 
-This version cannot read a table whose live files have deletion vectors,
-or that maps column names: both are refused with a
-\code{zulake_error_unsupported_feature} error naming the feature, before any
-data file is read, so a read never returns deleted rows or wrong columns.
+Rows a deletion vector marks as deleted are never returned (see
+\code{\link[=lake_deletion_vectors]{lake_deletion_vectors()}}); reading their vectors needs the zuroar
+package, and without it a read of a table with deletion vectors in the
+files it reads is an error of class \code{zulake_error_missing_package}. Every
+such vector is read and checked before any data file, so a corrupt one
+(\code{zulake_error_corrupt_log}) returns no rows. A table that maps column
+names (column mapping in \code{name} mode) is read by each column's physical
+name in the files and returned with its logical names; a
+\code{timestamp_ntz} column is a \code{POSIXct} in UTC.
 }
 \examples{
 # A partitioned table of two files: the data written with qio, the log by

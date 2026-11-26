@@ -12,7 +12,14 @@ set_commit_mtimes <- function(path) {
     for (a in zujson::json_parse_ndjson(readBin(f, "raw", file.size(f)))) {
       ts <- a[["commitInfo"]][["timestamp"]]
       if (!is.null(ts)) {
-        stopifnot(Sys.setFileTime(f, as.POSIXct(ts / 1000, origin = "1970-01-01", tz = "UTC")))
+        # Half a millisecond on: R's Sys.setFileTime() on Windows truncates
+        # the fraction to whole milliseconds, so ts itself can be stored
+        # 1 ms low. Readers truncate to milliseconds, so this reads as ts.
+        stopifnot(Sys.setFileTime(f, as.POSIXct((ts + 0.5) / 1000, origin = "1970-01-01", tz = "UTC")))
+        got <- mtime_ms(file.mtime(f))
+        if (got != ts) {
+          stop(sprintf("cannot set %s to %.0f ms: it reads back as %.0f ms", f, ts, got), call. = FALSE)
+        }
         break
       }
     }
@@ -25,7 +32,7 @@ commit_mtimes_ms <- function(path) {
   log <- file.path(path, "_delta_log")
   names <- list.files(log, pattern = "^[0-9]{20}[.]json$")
   stats::setNames(
-    floor(round(as.numeric(file.mtime(file.path(log, names))) * 1e6) / 1000),
+    mtime_ms(file.mtime(file.path(log, names))),
     as.numeric(substr(names, 1L, 20L))
   )
 }

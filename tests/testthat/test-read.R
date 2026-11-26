@@ -132,27 +132,65 @@ test_that("decimals of precision 15 or less are doubles, data and partition colu
                    sum(suppressWarnings(lake_read(tbl))$p == -0.001))
 })
 
-test_that("tables with deletion vectors or column mapping are refused before any data file is read", {
-  for (table in c("deletion_vectors", "table-with-dv-small", "table-with-dv-small-inline",
-                  "column_mapping", "table_with_column_mapping")) {
-    tbl <- lake_open(fixture_table(table))
-    env <- new.env()
-    tbl$storage <- recording_storage(tbl$storage, env)
-    for (f in list(function() lake_read(tbl), function() lake_walk(tbl, identity))) {
-      err <- tryCatch(f(), error = identity)
-      expect_s3_class(err, "zulake_error_unsupported_feature")
-      want <- if (grepl("column_mapping", table)) "columnMapping" else "deletionVectors"
-      expect_identical(err$feature, want)
-      expect_match(conditionMessage(err), "Stage 5", fixed = TRUE)
-      expect_s3_class(err$protocol, "data.frame")
+test_that("name-mode column mapping reads physical columns under logical names, as deltalake does", {
+  for (table in c("column_mapping", "table_with_column_mapping")) {
+    for (v in oracle_versions(table)) {
+      tbl <- lake_open(fixture_table(table), version = v)
+      expect_identical(tbl$column_mapping, "name")
+      got <- lake_read(tbl)
+      expect_read_oracle(got, table, v)
+      expect_identical(names(got), lake_schema(tbl)$name)
+      expect_false(any(startsWith(names(got), "col-")))
     }
-    expect_length(env$calls, 0L)
-    # The log is still there to inspect.
-    expect_gt(nrow(lake_files(tbl)), 0L)
   }
-  # A version before the deletion vector was written reads.
-  tbl <- lake_open(fixture_table("table-with-dv-small"), version = 0)
-  expect_read_oracle(lake_read(tbl), "table-with-dv-small", 0)
+  # Filters by logical name: pruning uses statistics and partition values
+  # keyed by physical name, and the rows equal R's subset.
+  withr::local_collate("C")
+  tbl <- lake_open(fixture_table("column_mapping"))
+  full <- lake_read(tbl)
+  schema <- lake_schema(tbl)
+  expect_true(all(schema$physical_name != schema$name))
+  for (expr in list(quote(letter == "a"), quote(new_int > 500), quote(is.na(date)), quote(new_int %in% c(25, 228)),
+                    quote(nchar(letter) == 1 & new_int < 300))) {
+    expect_identical(eval(bquote(lake_read(tbl, filter = .(expr)))), r_subset(full, expr), label = deparse(expr))
+  }
+  expect_identical(nrow(lake_files(tbl, filter = new_int > 1e9)), 0L)
+  tbl <- lake_open(fixture_table("table_with_column_mapping"))
+  full <- lake_read(tbl)
+  got <- lake_read(tbl, filter = `Company Very Short` == "BME")
+  expect_identical(got, r_subset(full, quote(`Company Very Short` == "BME")))
+  expect_gt(nrow(got), 0L)
+  # A column the files do not have (added after they were written) reads as
+  # NA, found by physical name.
+  path <- local_fixture_copy("column_mapping")
+  tbl <- lake_open(path)
+  s <- lake_schema(tbl)
+  types <- stats::setNames(s$type, s$name)
+  physical <- stats::setNames(s$physical_name, s$name)
+  write_commit(path, 4, metadata_line(c(types, extra = "string"), physical = c(physical, extra = "col-extra"),
+                                      configuration = list(delta.columnMapping.mode = "name")))
+  r <- lake_read(lake_open(path))
+  expect_true(all(is.na(r$extra)))
+  expect_identical(r[names(full <- lake_read(tbl))], full)
+})
+
+test_that("timestamp_ntz columns read as POSIXct in UTC, equal to deltalake's", {
+  tbl <- lake_open(fixture_table("zl-types"))
+  expect_true("timestampNtz" %in% lake_protocol(tbl)$name)
+  expect_identical(lake_schema(tbl)$type[lake_schema(tbl)$name == "ntz"], "timestamp_ntz")
+  r <- lake_read(tbl, columns = "ntz")
+  expect_s3_class(r$ntz, "POSIXct")
+  expect_identical(attr(r$ntz, "tzone"), "UTC")
+  others <- setdiff(names(oracle_field("zl-types", 0, c("read", "columns"))), "ntz")
+  expect_read_oracle(r, "zl-types", 0, skipped = others)
+  text <- unlist(oracle_field("zl-types", 0, c("read", "columns", "ntz")))
+  expect_false(any(endsWith(text[!is.na(text)], "Z")))
+  expect_gt(sum(!is.na(r$ntz)), 0L)
+  # The same instants whatever the session's time zone.
+  tbl <- lake_open(fixture_table("zl-types"))
+  a <- withr::with_timezone("America/New_York", lake_read(tbl, columns = "ntz"))
+  b <- withr::with_timezone("Asia/Tokyo", lake_read(tbl, columns = "ntz"))
+  expect_identical(a, b)
 })
 
 test_that("lake_walk() pieces bound together equal lake_read(), one piece per file with rows", {
@@ -313,6 +351,20 @@ test_that("data files at absolute paths and file: URIs are read; other schemes a
   gone <- file.path(normalizePath(withr::local_tempdir(), winslash = "/"), "gone.parquet")
   write_commit(path, 8, c(remove_line("no-such-file.parquet"), add_line(gone)))
   expect_error(lake_read(lake_open(path)), class = "zulake_error_storage")
+})
+
+test_that("a Windows drive path is absolute, as are a root path and a URI; a table-relative path is not", {
+  for (p in c("C:/data/part-0.parquet", "c:\\data\\part-0.parquet", "/data/part-0.parquet", "file:///data/x.parquet",
+              "file:/data/x.parquet", "abfss://lake@account.dfs.core.windows.net/t/x.parquet")) {
+    expect_true(is_absolute_path(p), label = p)
+  }
+  for (p in c("part-0.parquet", "year=2024/part-0.parquet", "p%3A1/part-0.parquet")) {
+    expect_false(is_absolute_path(p), label = p)
+  }
+  expect_identical(absolute_local_path("C:/data/part-0.parquet"), "C:/data/part-0.parquet")
+  expect_identical(absolute_local_path("file:///C:/data/a%20b.parquet"), "C:/data/a b.parquet")
+  expect_identical(absolute_local_path("file:///data/a%20b.parquet"), "/data/a b.parquet")
+  expect_error(absolute_local_path("s3://bucket/x.parquet"), class = "zulake_error_uri")
 })
 
 test_that("a column two files store as different types is a corrupt log", {
