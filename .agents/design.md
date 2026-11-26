@@ -591,10 +591,12 @@ direction).
 A `decimal(p, s)` data or partition column is a double when p <= 15,
 where a double holds it exactly; a wider one is a column `qio` cannot
 return (D10, D14) until `qio` 0.2.0 (`reason = "decimal precision <p> >
-15"`). zulake muffles `qio`'s unclassed decimal-as-double message only
-when every decimal column of the read was vetted that way;
-[pedrobtz/qio#74](https://github.com/pedrobtz/qio/issues/74) asks for a
-class. With `qio` 0.2.0 decimals become exact character, and the row
+15"`). zulake muffles `qio`'s decimal-as-double message only when every
+decimal column it names is that narrow: by the `precision` of each column in
+the `qio_message_decimal_double` condition that `qio` signals from
+[pedrobtz/qio#75](https://github.com/pedrobtz/qio/pull/75) on, and, for an
+older `qio` whose message is plain text, only when zulake vetted every
+decimal column of the read beforehand (2026-11-26). With `qio` 0.2.0 decimals become exact character, and the row
 filter must then use the exact comparator (§6) on them: a recorded future
 breaking type change for p <= 15 (settled 2026-11-26, Stage 4).
 

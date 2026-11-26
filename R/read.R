@@ -287,18 +287,7 @@ read_piece <- function(scan, k) {
   read <- function() {
     qio::read_parquet(scan$paths[k], columns = unname(scan$physical[sel]), int64 = scan$int64)
   }
-  df <- if (scan$vetted[k]) {
-    # qio says once per read that decimals are doubles and may be inexact;
-    # each one here is of precision 15 or less, which a double holds
-    # exactly. pedrobtz/qio#74 would give that message a class.
-    withCallingHandlers(read(), message = function(m) {
-      if (grepl("Parquet DECIMAL columns? as double", conditionMessage(m))) {
-        invokeRestart("muffleMessage")
-      }
-    })
-  } else {
-    read()
-  }
+  df <- withCallingHandlers(read(), message = qio_decimal_muffler(scan$vetted[k]))
   n <- nrow(df)
   gone <- scan$deleted[[k]]
   if (length(gone) && gone[length(gone)] >= n) {
@@ -475,4 +464,30 @@ footer_rows <- function(tbl, i) {
   pf <- qio::open_parquet(fetch_file(tbl, i))
   on.exit(qio::close_parquet(pf))
   as.numeric(dim(pf)[1L])
+}
+
+# A message handler for the one message qio emits per read when it returns
+# decimal columns as doubles, saying the values may be inexact. A decimal of
+# precision 15 or less is exact as a double (design section 7), so the
+# message is muffled when every decimal column read is that narrow:
+#
+# - qio from pedrobtz/qio#75 on signals class `qio_message_decimal_double`
+#   with a `columns` data frame giving each column's `precision`, so the
+#   check is made on the columns the message names;
+# - older qio (0.1.1, 0.1.2 on CRAN) sends unclassed text, so the check is
+#   `vetted`, made by zulake from the read plan before the read.
+#
+# Every other message passes through.
+qio_decimal_muffler <- function(vetted) {
+  function(m) {
+    if (inherits(m, "qio_message_decimal_double")) {
+      precision <- m$columns$precision
+      if (length(precision) && all(!is.na(precision) & precision <= max_double_precision)) {
+        invokeRestart("muffleMessage")
+      }
+    } else if (isTRUE(vetted) && inherits(m, "simpleMessage") &&
+               grepl("Parquet DECIMAL columns? as double", conditionMessage(m))) {
+      invokeRestart("muffleMessage")
+    }
+  }
 }
