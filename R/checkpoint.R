@@ -66,8 +66,10 @@ read_checkpoint <- function(storage, set, read) {
       }
       actions
     },
-    zulake_error_auth = function(e) stop(e),
     error = function(e) {
+      if (inherits(e, "zulake_error_auth")) {
+        stop(e)
+      }
       zulake_abort(
         "checkpoint_unreadable",
         sprintf(
