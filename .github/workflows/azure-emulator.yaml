@@ -1,0 +1,140 @@
+# zulake's own workflow: the emulator layer of the Azure tests (design
+# section 8, D13, acceptance criterion 4a). Azurite runs over HTTPS with
+# `--oauth basic` and a certificate made for the run; every fixture table is
+# uploaded to it; deltalake 1.7.0 reads the same container
+# (tools/oracle/azurite.py); and test-azure.R and test-azure-emulator.R run
+# against the installed package, with no test allowed to skip. The
+# cassettes the run records are uploaded as an artifact
+# (tools/azurite/README.md says how they reach the package). No secrets:
+# the token is the fixed test token of tests/testthat/helper-azure.R, which
+# only Azurite accepts.
+#
+# Gated by r-actions' changes.yml (ci.md): a documentation-only pull request
+# and the `ci:docs`, `ci:minimal` and `skip-ci:azure-emulator` labels skip
+# it. On demand: `gh workflow run azure-emulator.yaml --ref <branch>`.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  # No `push:`: a pull request already checks its merge with main, and the
+  # schedule checks main (r-actions README, "Pushes to main").
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+name: azure-emulator
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    # Labels are decided here, without a runner (ci.md, Labels).
+    if: >-
+      github.event_name != 'pull_request'
+      || contains(github.event.pull_request.labels.*.name, 'full-ci')
+      || !(contains(github.event.pull_request.labels.*.name, 'ci:docs')
+        || contains(github.event.pull_request.labels.*.name, 'ci:minimal')
+        || contains(github.event.pull_request.labels.*.name, 'skip-ci:azure-emulator'))
+    uses: pedrobtz/r-actions/.github/workflows/changes.yml@v1
+    with:
+      name: azure-emulator
+
+  emulator:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.result != 'skipped' && needs.changes.outputs.docs-only != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ZULAKE_AZURITE_ENDPOINT: https://127.0.0.1:10000/devstoreaccount1
+      NOT_CRAN: "true"
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      # The runner context is not available in a job's env.
+      - name: Paths
+        run: |
+          {
+            echo "ZULAKE_AZURITE_CA=$RUNNER_TEMP/azurite/ca.pem"
+            echo "ZULAKE_AZURITE_ANSWERS=$RUNNER_TEMP/azurite/answers"
+            echo "ZULAKE_RECORD_CASSETTES=$RUNNER_TEMP/azurite/cassettes"
+          } >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: "22"
+
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          # The uv that wrote tools/oracle/uv.lock (oracle.yaml).
+          version: "0.7.11"
+          enable-cache: false
+
+      - uses: r-lib/actions/setup-r@v2.14.0
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2.14.0
+        with:
+          extra-packages: any::testthat, any::withr
+
+      - name: Certificate for Azurite
+        run: |
+          d="$RUNNER_TEMP/azurite"
+          mkdir -p "$d/data"
+          openssl req -x509 -newkey rsa:2048 -nodes -keyout "$d/ca.key" -out "$d/ca.pem" -days 2 \
+            -subj "/CN=zulake test CA" -addext "basicConstraints=critical,CA:TRUE" \
+            -addext "keyUsage=critical,keyCertSign,cRLSign"
+          openssl req -newkey rsa:2048 -nodes -keyout "$d/server.key" -out "$d/server.csr" -subj "/CN=127.0.0.1"
+          printf "subjectAltName=IP:127.0.0.1,DNS:localhost\nbasicConstraints=CA:FALSE\nkeyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n" > "$d/ext.cnf"
+          openssl x509 -req -in "$d/server.csr" -CA "$d/ca.pem" -CAkey "$d/ca.key" -CAcreateserial \
+            -out "$d/server.pem" -days 2 -extfile "$d/ext.cnf"
+
+      - name: Start Azurite
+        timeout-minutes: 5
+        run: |
+          d="$RUNNER_TEMP/azurite"
+          nohup npx --yes azurite@3.35.0 --oauth basic --cert "$d/server.pem" --key "$d/server.key" \
+            --silent --location "$d/data" --blobHost 127.0.0.1 > "$d/azurite.log" 2>&1 &
+          for i in $(seq 1 60); do nc -z 127.0.0.1 10000 && break; sleep 1; done
+          nc -z 127.0.0.1 10000 || { cat "$d/azurite.log"; exit 1; }
+
+      - name: Install zulake
+        run: R CMD INSTALL .
+
+      - name: Upload the fixtures
+        run: Rscript tools/azurite/upload.R
+
+      - name: deltalake's answers from Azurite
+        working-directory: tools/oracle
+        run: |
+          export ZULAKE_AZURITE_TOKEN="$(Rscript -e 'source("../../tests/testthat/helper-azure.R"); cat(azurite_token)')"
+          uv run --frozen python azurite.py "$ZULAKE_AZURITE_ANSWERS"
+
+      - name: The Azure suites, none skipped
+        run: |
+          Rscript -e '
+            library(testthat)
+            r <- test_dir("tests/testthat", filter = "azure$|azure-emulator", package = "zulake",
+                          load_package = "installed", reporter = "summary", stop_on_failure = TRUE)
+            d <- as.data.frame(r)
+            print(d[c("file", "test", "nb", "failed", "skipped", "error")])
+            if (any(d$skipped & d$file == "test-azure-emulator.R")) stop("an emulator test skipped")
+            if (!all(c("test-azure.R", "test-azure-emulator.R") %in% d$file)) stop("a suite did not run")
+          '
+
+      - name: Recorded cassettes
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: cassettes
+          path: ${{ runner.temp }}/azurite/cassettes
+          if-no-files-found: ignore
+
+      - name: Azurite's log
+        if: failure()
+        run: cat "$RUNNER_TEMP/azurite/azurite.log"

@@ -87,3 +87,15 @@
   millisecond, because R reads Windows file times up to about 1 µs low.
   File times are now rounded to 10 µs before they are truncated to
   milliseconds.
+* Tables on Azure: every function now reads a table given as
+  `abfss://<container>@<account>.dfs.core.windows.net/<path>`,
+  `https://<account>.dfs.core.windows.net/<container>/<path>` or
+  `https://<account>.blob.core.windows.net/<container>/<path>`, through
+  the Blob service API, which serves Blob Storage and Data Lake Storage
+  Gen2 alike. `credentials` is a function returning a bearer token; it is
+  called before the first request and once more after a `401`, and the
+  token is never kept in the snapshot, printed or put in an error. A
+  refused token is a `zulake_error_auth`, other Azure failures a
+  `zulake_error_storage` with the HTTP `status` and Azure's error `code`.
+  Other schemes, and an Azure URI with a query string such as a SAS, are a
+  `zulake_error_uri`. Requests go through `zuhttp`, now imported.

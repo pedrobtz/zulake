@@ -24,12 +24,24 @@ deleted and superseded rows. zulake reads the log itself: this page opens a
 table, looks inside it, and then reads it.
 
 Every section uses one table on Azure, and a function you supply that
-returns a bearer token:
+returns a Microsoft Entra ID token for Azure Storage. zulake calls it before
+its first request and again if Azure says the token has expired; it never
+stores, prints or saves the token. Here the token comes from the Azure CLI:
 
 ```{r}
 uri <- "abfss://lake@account.dfs.core.windows.net/sales/orders"
-token <- function() my_token()
+token <- function() {
+  system2("az", c(
+    "account", "get-access-token", "--resource", "https://storage.azure.com",
+    "--query", "accessToken", "--output", "tsv"
+  ), stdout = TRUE)
+}
 ```
+
+The same table is also
+`https://account.dfs.core.windows.net/lake/sales/orders` or
+`https://account.blob.core.windows.net/lake/sales/orders`; a local path
+works too, with no `credentials`.
 
 ## Open a table
 

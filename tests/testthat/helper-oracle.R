@@ -64,7 +64,19 @@ fixture_log_versions <- function(path) {
 }
 
 oracle_answers_dir <- function() {
+  if (!is.null(oracle_env$answers_dir)) {
+    return(oracle_env$answers_dir)
+  }
   testthat::test_path("fixtures", "answers")
+}
+
+# Answers from `dir` instead, until `env` ends: deltalake's answers for the
+# tables on Azurite (test-azure-emulator.R, tools/oracle/azurite.py).
+local_oracle_answers <- function(dir, env = parent.frame()) {
+  old <- oracle_env$answers_dir
+  oracle_env$answers_dir <- dir
+  withr::defer(oracle_env$answers_dir <- old, envir = env)
+  invisible(dir)
 }
 
 # Versions with an answer file, as doubles, ascending.
@@ -79,7 +91,7 @@ oracle_answer <- function(table, version) {
   if (!file.exists(path)) {
     stop("no deltalake answer for ", table, " at version ", version, call. = FALSE)
   }
-  key <- paste(table, version)
+  key <- paste(oracle_answers_dir(), table, version)
   if (is.null(oracle_env$answers[[key]])) {
     if (is.null(oracle_env$answers)) oracle_env$answers <- list()
     oracle_env$answers[[key]] <- zujson::json_parse_file(path)

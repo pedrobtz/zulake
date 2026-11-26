@@ -146,6 +146,64 @@ and an `x-ms-version` header pinned in the package. The interface stays
 internal so that a future `zustore` can replace the backend without
 changing the public API (Q6).
 
+Settled in Stage 6 (2026-11-26):
+
+- **URIs.** `abfss://<container>@<account>.dfs.core.windows.net/<path>`,
+  `https://<account>.dfs.core.windows.net/<container>/<path>` and
+  `https://<account>.blob.core.windows.net/<container>/<path>` all become
+  requests to `https://<account>.blob.core.windows.net/<container>/`.
+  Account names are 3 to 24 lowercase letters and digits (the host is
+  lower-cased), container names 3 to 63 lowercase letters, digits and
+  single hyphens (or `$root`), as Azure defines them; a path segment `.`,
+  `..` or empty, a query string (a SAS) and user information are refused
+  with `zulake_error_uri`, whose message never repeats the query or the
+  user information. `abfs://`, `wasbs://`, `http://`, other hosts
+  (sovereign clouds included) and other schemes are refused too (D3).
+  Why: the three forms are what Databricks, Synapse and `deltalake`
+  print; anything else is a guess at an endpoint.
+- **Requests.** `x-ms-version: 2023-11-03`, the version `object_store`
+  (`deltalake`'s storage layer) sends. `List Blobs` with `prefix`,
+  `delimiter=/` and `include=metadata`, following `NextMarker` until it is
+  empty, so `list()` sees only the directory's own files; a blob whose
+  metadata says `hdi_isfolder=true` (a directory of a hierarchical
+  namespace) is not a file, and neither is a `BlobPrefix`. A marker that
+  repeats is an error, not a loop. `after` is applied to the listing, as
+  Q6 says Blob listing cannot start after a name. `ContainerNotFound`
+  lists nothing, as a missing local directory does, so `lake_is_table()`
+  is `FALSE` and `lake_open()` a `zulake_error_not_table`. `Get Blob` is
+  sent with `decode = FALSE` (the stored bytes, whatever their
+  `Content-Encoding`), no body limit and a 600-second timeout. A range
+  needs `206` with exactly `to - from + 1` bytes; a short body or `416` is
+  a `zulake_error_storage`, as reading past a local file's end is.
+- **Credentials (D4).** `credentials()` is called before the first request
+  of a snapshot's backend and once more after a `401`; the new token is
+  kept for later requests. A second `401`, or a `403`, is a
+  `zulake_error_auth` with `status` and Azure's `code`; anything else
+  unexpected is a `zulake_error_storage` with the same fields; a transport
+  failure is a `zulake_error_storage` with zuhttp's message and class name
+  (`reason`), not its condition, which holds the request. `credentials()`
+  must return one non-empty string without control characters (a leading
+  `Bearer ` is dropped); otherwise, or if it fails, `zulake_error_auth`.
+  `credentials = NULL` sends anonymous requests (a public container) and
+  never retries. The token and the function live in a package-level
+  registry keyed by an id; the snapshot holds only a handle with that id,
+  whose finalizer removes the entry. So `serialize()` of a snapshot
+  carries neither, even when the function's environment holds the token
+  as a literal, and a snapshot restored in another session gets
+  `zulake_error_auth` on its next request. Why: a `function() token`
+  closure in the snapshot would put the token in every `saveRDS()`. The
+  registry is made in `.onLoad()`, and the backend's functions carry no
+  srcref and its frame no argument promises: with the package's source
+  kept (covr, `R_KEEP_PKG_SOURCE=yes`), a srcref reached the lazy-load
+  loader's environments, which hold every environment the build made,
+  the registry included (found on CI in Stage 6); a test asserts the two
+  environments a snapshot serializes.
+- **Absolute paths in the log.** An `add` path or a deletion vector path
+  that is one of the three Azure URI forms is read through the Blob
+  endpoint of its own account and container with the table's credentials,
+  when the table is on Azure; on a local table it stays a
+  `zulake_error_uri`.
+
 ### 4.2 Log replay
 
 A snapshot at version `v` is built as the protocol prescribes:
@@ -655,14 +713,30 @@ breaking type change for p <= 15 (settled 2026-11-26, Stage 4).
     `R CMD check`, never written by hand. A cassette checks nothing about
     the request it answers, so the request assertions stay with the fake.
     The cassette key ignores `Range` (pedrobtz/zuhttp#353), so each ranged
-    request gets its own cassette until that is fixed.
+    request gets its own cassette until that is fixed. One deliberate
+    difference (Stage 6): `deltalake` 1.7.0 lists `_delta_log/`
+    recursively on an object store, finds
+    `_delta_log/.tmp/00000000000000000005.json` in `simple_table` and then
+    opens no version but the latest ("No table version found"), where it
+    opens every version from local disk; zulake lists the directory alone,
+    as the protocol's log is, so those versions are compared with zulake's
+    local answers only.
   - *Live.* A suite against a real ADLS Gen2 account, run only when
     `ZULAKE_AZURE_URI` and a token are set, by `azure-live.yaml` on
     dispatch or by the maintainer locally; it never runs on CRAN.
 
   Azurite URLs are path-style (`https://127.0.0.1:10000/devstoreaccount1/`),
   so tests reach it through an internal option, `zulake.azure_endpoint`;
-  the public API still refuses other schemes (D3).
+  the public API still refuses other schemes (D3). A second internal
+  option, `zulake.azure_client` (settled in Stage 6, 2026-11-26), is the
+  `zuhttp` client requests go out with: a `zu_mock_transport()` fake, a
+  cassette, or a client that trusts Azurite's CA. Why: `zuhttp` has no
+  process-wide trust setting, and the fake and the cassettes replace the
+  transport, which only a client carries. Cassettes go through a router
+  that sends a request with `Range` to a cassette of its own,
+  `<name>-range-<from>-<to>` (pedrobtz/zuhttp#353), and are recorded with
+  a fixed test token, so the suite can search every cassette file for
+  it.
 - **Filters.** A property test: for random filters over the fixtures,
   `lake_read(filter = f)` equals reading everything and subsetting in R.
 
@@ -744,14 +818,27 @@ The order of work, and what 0.1.0 waits for, are in
   carquet already decodes the leaf streams and nested assembly is `qio`'s
   by its own design, while a commits-only 0.1.0 would refuse most
   Databricks tables, whose log cleanup removes old commits. D1 stands.
-- **D13 (2026-11-26, provisional).** Azurite over HTTPS with
-  `--oauth basic` is the CI stand-in for Azure; a live ADLS Gen2 run is
-  the release gate (§11, criterion 4b). Why: no storage account or token
-  is available yet, and Azurite is an independent implementation of the
-  Blob REST API. A spike at the start of Stage 6 confirms that Azurite
-  accepts bearer tokens through `zuhttp`; if it does not, the request
-  fake and criterion 4b are the only Azure oracles, and Stage 6 cannot
-  close until a real account exists.
+- **D13 (2026-11-26; settled 2026-11-26 by the Stage 6 spike).** Azurite
+  over HTTPS with `--oauth basic` is the CI stand-in for Azure; a live ADLS
+  Gen2 run is the release gate (§11, criterion 4b). Why: no storage account
+  or token is available yet, and Azurite is an independent implementation
+  of the Blob REST API. The spike (Azurite 3.35.0, Node 22, a CA and
+  server certificate made with `openssl`, `zuhttp` 0.1.0 trusting the CA
+  through `zu_tls(ca_extra =)`) confirmed it: with an unsigned JWT
+  (`aud` `https://storage.azure.com`, `iss`
+  `https://sts.windows.net/<tenant>/`, `exp` in the future) and
+  `x-ms-version: 2023-11-03`, Create Container, Put Blob, `List Blobs` with
+  `prefix`, `maxresults` and `marker` (two pages), a ranged `Get Blob`
+  (`206`, `Content-Range: bytes 6-10/13`) and Get Blob Properties (`HEAD`,
+  `404` for a missing blob) all succeeded, and an expired token, a wrong
+  audience, a wrong issuer and a non-JWT were each refused. One difference
+  from Azure: Azurite refuses a bad token with `403 AuthenticationFailed`,
+  where Azure answers `401` (`InvalidAuthenticationInfo`) for an expired
+  or invalid token, so the `401` retry of D4 is tested with the request
+  fake, and the emulator suite tests the refusal. `deltalake` 1.7.0 reads
+  the same containers with the same token (`azure_storage_endpoint`,
+  `bearer_token`, `allow_invalid_certificates`), so it is the emulator
+  oracle too.
 
 ## 11. Acceptance criteria for v0.1.0
 
@@ -785,9 +872,8 @@ The order of work, and what 0.1.0 waits for, are in
 - **Q4.** Should downloads be cached across sessions (for example
   through `dazcache`), keyed by path and the `add` action's size and
   modification time, which never change for a Delta data file?
-- **Q5.** Provisionally settled 2026-11-26 as D13: yes, Azurite over
-  HTTPS with `--oauth basic`, confirmed by a spike at the start of
-  Stage 6.
+- **Q5.** Settled 2026-11-26 as D13: yes, Azurite over HTTPS with
+  `--oauth basic`, confirmed by the spike at the start of Stage 6.
 - **Q6.** Should `List Blobs` be replaced by probing successive commit
   names after the checkpoint, as Delta kernels can, when listing is
   slow on large logs? Blob listing has no "start after" for an arbitrary

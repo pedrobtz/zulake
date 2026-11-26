@@ -23,6 +23,7 @@ Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Imports:
     qio (>= 0.1.1),
+    zuhttp,
     zujson
 Suggests:
     bit64,
@@ -36,4 +37,5 @@ Config/testthat/edition: 3
 URL: https://pedrobtz.github.io/zulake/, https://github.com/pedrobtz/zulake
 BugReports: https://github.com/pedrobtz/zulake/issues
 Remotes:
+    pedrobtz/zuhttp,
     pedrobtz/zuroar

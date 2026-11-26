@@ -27,7 +27,7 @@ Stage 2b, checkpoints, waits for that `qio` and runs after Stage 7.
 | 3 | [Inspection](#stage-3--inspection) | quick | [#5](https://github.com/pedrobtz/zulake/issues/5) | [#31](https://github.com/pedrobtz/zulake/pull/31) | 2026-11-26 |
 | 4 | [Reading and pruning](#stage-4--reading-and-pruning) | quick | [#6](https://github.com/pedrobtz/zulake/issues/6) | [#32](https://github.com/pedrobtz/zulake/pull/32) | 2026-11-26 |
 | 5 | [Deletion vectors and column mapping](#stage-5--deletion-vectors-and-column-mapping) | full | [#7](https://github.com/pedrobtz/zulake/issues/7) | [#33](https://github.com/pedrobtz/zulake/pull/33) | 2026-11-26 |
-| 6 | [Azure backend](#stage-6--azure-backend) | quick | [#8](https://github.com/pedrobtz/zulake/issues/8) | | |
+| 6 | [Azure backend](#stage-6--azure-backend) | quick | [#8](https://github.com/pedrobtz/zulake/issues/8) | [#35](https://github.com/pedrobtz/zulake/pull/35) | 2026-11-26 |
 | 7 | [Documentation](#stage-7--documentation) | quick | [#9](https://github.com/pedrobtz/zulake/issues/9) | | |
 | 2b | [Checkpoints](#stage-2b--checkpoints) | quick | [#26](https://github.com/pedrobtz/zulake/issues/26) | | |
 | 8 | [Assurance](#stage-8--assurance) | quick | [#10](https://github.com/pedrobtz/zulake/issues/10) | | |
@@ -548,6 +548,18 @@ with a caller's bearer token, and the token never leaves the request.
   was seen to fail.
 - `.agents/assurance.md` has the Azure Blob REST boundary row.
 
+**Deviations (2026-11-26).**
+
+- Azurite refuses a bad token with `403`, not Azure's `401`, so the `401`
+  retry is tested with the request fake only; the emulator suite tests the
+  refusal (design D13).
+- `deltalake` 1.7.0 on Azurite opens no version of `simple_table` but the
+  latest (it lists `_delta_log/` recursively and finds
+  `_delta_log/.tmp/`), so those five cases are compared with zulake's local
+  answers only, and asserted to be that refusal (design section 8).
+- A second internal option, `zulake.azure_client`, carries the fake, the
+  cassettes and Azurite's CA (design section 8).
+
 **Design.** [§4.1](design.md#41-storage), [D3](design.md#10-decisions) to
 [D5](design.md#10-decisions).
 
@@ -765,8 +777,6 @@ review, in that order.
 
 ## Blocking open questions
 
-- [D13](design.md#10-decisions) blocks Stage 6 until its spike confirms
-  that Azurite accepts bearer tokens through `zuhttp`.
 - [§11](design.md#11-acceptance-criteria-for-v010) criterion 4b blocks
   Stage 11: a real ADLS Gen2 account
   ([#24](https://github.com/pedrobtz/zulake/issues/24)).

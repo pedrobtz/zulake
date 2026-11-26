@@ -166,6 +166,15 @@ def encode_table(table, sort_by=None):
 
 # ---- one table -----------------------------------------------------------
 
+# deltalake's storage options for every table opened: None for local paths;
+# azurite.py sets the Azurite endpoint and token.
+STORAGE_OPTIONS = None
+
+
+def open_table(path, **kwargs):
+    return DeltaTable(path, storage_options=STORAGE_OPTIONS, **kwargs)
+
+
 
 class Scrub:
     """Replaces every spelling of the scratch copy's location with "<table>"."""
@@ -259,7 +268,7 @@ def answer_version(path, table_dir, version, scrub, latest_history, apps):
     out = {"deltalake": DELTALAKE_VERSION, "engine": ENGINE, "table": table_dir.name, "version": version}
     out["actions"] = read_commit(table_dir, version)
     try:
-        t = DeltaTable(path, version=version)
+        t = open_table(path, version=version)
     except Exception as e:
         out["refusal"] = error(e, scrub)["error"]
         return out
@@ -321,7 +330,7 @@ def timestamp_lookup(path, version, latest_history, scrub):
     out = []
     for at in (ms - 1, ms):
         when = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc) + dt.timedelta(milliseconds=at)
-        t = DeltaTable(path)
+        t = open_table(path)
         try:
             t.load_as_version(when)
             resolved = t.version()
@@ -339,7 +348,7 @@ def answer_table(table_dir):
         scrub = Scrub(path)
         versions = log_versions(table_dir)
         try:
-            latest_history = [json_value(h) for h in DeltaTable(path).history()]
+            latest_history = [json_value(h) for h in open_table(path).history()]
         except Exception as e:
             latest_history = error(e, scrub)
         apps = app_ids(table_dir)
