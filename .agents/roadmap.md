@@ -30,7 +30,7 @@ Stage 2b, checkpoints, waits for that `qio` and runs after Stage 7.
 | 6 | [Azure backend](#stage-6--azure-backend) | quick | [#8](https://github.com/pedrobtz/zulake/issues/8) | [#35](https://github.com/pedrobtz/zulake/pull/35) | 2026-11-26 |
 | 7 | [Documentation](#stage-7--documentation) | quick | [#9](https://github.com/pedrobtz/zulake/issues/9) | [#36](https://github.com/pedrobtz/zulake/pull/36) | 2026-11-26 |
 | 2b | [Checkpoints](#stage-2b--checkpoints) | quick | [#26](https://github.com/pedrobtz/zulake/issues/26) | [#38](https://github.com/pedrobtz/zulake/pull/38) | 2026-11-26 |
-| 8 | [Assurance](#stage-8--assurance) | quick | [#10](https://github.com/pedrobtz/zulake/issues/10) | | |
+| 8 | [Assurance](#stage-8--assurance) | quick | [#10](https://github.com/pedrobtz/zulake/issues/10) | | 2026-11-26 |
 | 9 | [Full CI](#stage-9--full-ci) | full | [#11](https://github.com/pedrobtz/zulake/issues/11) | | |
 | 10 | [v0.1.0 readiness](#stage-10--v010-readiness) | full | [#12](https://github.com/pedrobtz/zulake/issues/12) | | |
 | 11 | [Review](#stage-11--review) | full | [#13](https://github.com/pedrobtz/zulake/issues/13) | | |
@@ -670,6 +670,18 @@ because it is the half of Stage 2 that was split off on 2026-11-26.
 
 **Design.** [§8](design.md#8-testing-and-validation).
 
+**Deviations (2026-11-26).** The kinds `lifecycle` (the credential
+handle) and `emits` (the Blob REST requests) were added, with an Objects
+table and seven Limits rows. The coverage gap list was closed in the
+stage's pull request rather than filed: one new test per branch no test
+entered, except branches no input can reach, which the pull request
+lists. It found one wrong result, fixed there (a checkpoint `LIST` of
+longs read as `integer64`), and one deliberate difference from R now
+written down (`is.na()` of a `binary` column, design §6). `Depends: R (>=
+3.5.0)` closes [#37](https://github.com/pedrobtz/zulake/issues/37), and
+[#39](https://github.com/pedrobtz/zulake/issues/39) moved to "After
+0.1.0".
+
 ## Stage 9 — Full CI
 
 **Issue.** [#11](https://github.com/pedrobtz/zulake/issues/11), sub-issue of
@@ -776,6 +788,10 @@ review, in that order.
   0.1.0 caches per session.
 - [§12](design.md#12-open-questions) Q6: probing commit names instead of
   listing; listing is correct, only possibly slow.
+- Turning checkpoint rows into actions vectorised
+  ([#39](https://github.com/pedrobtz/zulake/issues/39)): 2.4 s of a 3.2 s
+  open for a 20,000-file checkpoint, against 23 to 38 ms for the fixtures;
+  correct as it is, only slow on large tables.
 
 ## Blocking open questions
 
