@@ -66,3 +66,31 @@
   `zulake_error_checkpoint_unreadable` until checkpoints can be read; a
   corrupt log (a commit that is not JSON, a partition value of the wrong
   type) with `zulake_error_corrupt_log`.
+- [`lake_read()`](https://pedrobtz.github.io/zulake/reference/lake_read.md)
+  returns a snapshot’s rows and
+  [`lake_walk()`](https://pedrobtz.github.io/zulake/reference/lake_read.md)
+  calls a function on each file’s rows, reading the data files with qio
+  (now imported) and adding partition columns from the log. A `filter`
+  prunes files by partition values and statistics (minimum, maximum,
+  null and record counts) before any is read, then filters rows;
+  anything outside the pruning subset only filters rows. Comparisons in
+  the subset are exact: `long`, integer and `decimal` columns digit by
+  digit (a double with no exact 15-digit form is a `zulake_error_filter`
+  asking for the value as text), strings in UTF-8 byte order whatever
+  the collation. `lake_files(filter =)` and `lake_partitions(filter =)`
+  now use the statistics too.
+- Columns qio cannot return (nested columns, and decimals of precision
+  above 15, which a double cannot hold) are left out of a read with a
+  `zulake_warning_column_skipped` warning naming each, or are a
+  `zulake_error_column_unreadable` error when named in `columns` or used
+  in `filter`. A decimal of precision 15 or less is a double.
+- Reading a table with deletion vectors or column mapping is refused
+  with `zulake_error_unsupported_feature` until a later version applies
+  them, so a read never returns deleted rows.
+- `lake_count(footers = TRUE)` reads the row count of each file without
+  a `numRecords` statistic from its Parquet footer.
+- A `long` statistic in
+  [`lake_files()`](https://pedrobtz.github.io/zulake/reference/lake_files.md)
+  that the `int64` mode cannot hold (such as -2^63) is now `NA` with a
+  `zulake_warning_int64` warning, once per column, instead of an error;
+  its digits stay in `action`.

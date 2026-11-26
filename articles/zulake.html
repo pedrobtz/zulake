@@ -101,7 +101,9 @@ doubles, exact up to 2^53 - 1, and an error beyond; ask for
 <code>int64 = "integer64"</code> to get <code>bit64</code> integers
 instead. A table whose files carry no statistics has an unknown row
 count: <code><a href="../reference/lake_files.html">lake_count()</a></code> says so with <code>NA</code> and a
-warning rather than counting only the files it can.</p>
+warning rather than counting only the files it can, and
+<code>lake_count(tbl, footers = TRUE)</code> reads those files’ counts
+from their Parquet footers.</p>
 </div>
 <div class="section level2">
 <h2 id="filters-prune-files-then-rows">Filters prune files, then rows<a class="anchor" aria-label="anchor" href="#filters-prune-files-then-rows"></a>
@@ -109,12 +111,21 @@ warning rather than counting only the files it can.</p>
 <p>A filter is an R expression over column names. Partition values and
 statistics drop files that cannot match before anything is downloaded;
 the rows that remain are then filtered exactly, so the result never
-depends on the statistics. Local values are looked up where you
-call.</p>
+depends on the statistics. Local values are looked up where you call.
+Numbers in integer and decimal columns compare exactly, so a value a
+double cannot write exactly is given as text; strings compare in UTF-8
+byte order.</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/lake_files.html">lake_files</a></span><span class="op">(</span><span class="va">tbl</span>, filter <span class="op">=</span> <span class="va">year</span> <span class="op">==</span> <span class="fl">2026</span> <span class="op">&amp;</span> <span class="va">region</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"EU"</span>, <span class="st">"UK"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">yr</span> <span class="op">&lt;-</span> <span class="fl">2026</span></span>
-<span><span class="fu">lake_read</span><span class="op">(</span><span class="va">tbl</span>, columns <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"id"</span>, <span class="st">"amount"</span><span class="op">)</span>, filter <span class="op">=</span> <span class="va">year</span> <span class="op">==</span> <span class="va">yr</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu"><a href="../reference/lake_read.html">lake_read</a></span><span class="op">(</span><span class="va">tbl</span>, columns <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"id"</span>, <span class="st">"amount"</span><span class="op">)</span>, filter <span class="op">=</span> <span class="va">year</span> <span class="op">==</span> <span class="va">yr</span> <span class="op">&amp;</span> <span class="va">amount</span> <span class="op">&gt;</span> <span class="st">"1000.10"</span><span class="op">)</span></span></code></pre></div>
+<p><code><a href="../reference/lake_read.html">lake_walk()</a></code> reads one file at a time and hands each
+piece to a function, for a table larger than memory. Columns qio cannot
+return yet (nested columns, decimals of more than 15 digits) are left
+out with a warning naming each.</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">total</span> <span class="op">&lt;-</span> <span class="fl">0</span></span>
+<span><span class="fu"><a href="../reference/lake_read.html">lake_walk</a></span><span class="op">(</span><span class="va">tbl</span>, <span class="kw">function</span><span class="op">(</span><span class="va">piece</span><span class="op">)</span> <span class="va">total</span> <span class="op">&lt;&lt;-</span> <span class="va">total</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">piece</span><span class="op">$</span><span class="va">amount</span><span class="op">)</span>, filter <span class="op">=</span> <span class="va">year</span> <span class="op">==</span> <span class="va">yr</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="unsupported-features-are-refused">Unsupported features are refused<a class="anchor" aria-label="anchor" href="#unsupported-features-are-refused"></a>
@@ -125,7 +136,7 @@ because ignoring it would return wrong rows.
 <code><a href="../reference/lake_versions.html">lake_protocol()</a></code> shows which features a table uses, each
 marked supported; the error of a refused table carries the same data
 frame.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/lake_versions.html">lake_protocol</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
 <span><span class="va">err</span> <span class="op">&lt;-</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span></span>
 <span>  <span class="fu"><a href="../reference/lake_open.html">lake_open</a></span><span class="op">(</span><span class="st">"abfss://lake@account.dfs.core.windows.net/sales/widened"</span>, credentials <span class="op">=</span> <span class="va">token</span><span class="op">)</span>,</span>

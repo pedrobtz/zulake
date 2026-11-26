@@ -40,7 +40,11 @@ commit 0, local disk only) is in:
 [`lake_load()`](https://pedrobtz.github.io/zulake/reference/lake_open.md),
 [`lake_version()`](https://pedrobtz.github.io/zulake/reference/lake_open.md).
 Stage 3 (inspection) adds the table, file and log functions of design
-§5, except `lake_deletion_vectors()`. The roadmap in
+§5, except `lake_deletion_vectors()`. Stage 4 (reading and pruning) adds
+[`lake_read()`](https://pedrobtz.github.io/zulake/reference/lake_read.md),
+[`lake_walk()`](https://pedrobtz.github.io/zulake/reference/lake_read.md)
+and `lake_count(footers = TRUE)`; reads refuse deletion vectors and
+column mapping until Stage 5. The roadmap in
 [`.agents/roadmap.md`](https://pedrobtz.github.io/zulake/.agents/roadmap.md)
 takes it to v0.1.0. 0.1.0 waits for `zuhttp` on CRAN and for `zuroar`
 0.1.0 (design §9); local log replay, inspection and reading are built on
@@ -93,8 +97,16 @@ See `.agents/design.md` for the why. There is no native layer: no
   `integer64` (`int64_values()`, `unmark_tree()`).
 - `R/values.R`: the schema, partition values and statistics typed by
   Delta type.
-- `R/filter.R`: the pruning subset of a filter and its outcomes per
-  file.
+- `R/filter.R`: the filter plan (pruning subset, or row-only nodes), its
+  outcomes per file from partition values and statistics, and the row
+  filter.
+- `R/compare.R`: the exact comparator (decimal text), byte-order string
+  comparison, and filter values turned into comparison keys.
+- `R/read.R`:
+  [`lake_read()`](https://pedrobtz.github.io/zulake/reference/lake_read.md),
+  [`lake_walk()`](https://pedrobtz.github.io/zulake/reference/lake_read.md),
+  the read pipeline (`read_scan()`, `read_piece()`, `bind_pieces()`),
+  `fetch_file()` and the session cache.
 - `R/table.R`, `R/files.R`, `R/log-inspect.R`, `R/print.R`: the
   inspection functions and the print method.
 - `R/conditions.R`: `zulake_abort()` and the `zulake_error_*` classes.

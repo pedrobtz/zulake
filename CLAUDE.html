@@ -49,7 +49,7 @@
 </div>
 <div class="section level2">
 <h2 id="current-state">Current state<a class="anchor" aria-label="anchor" href="#current-state"></a></h2>
-<p>Scaffolded 2026-11-26 with <code>create-pkg.sh</code>. Stage 2 (log replay from commit 0, local disk only) is in: <code><a href="reference/lake_open.html">lake_open()</a></code>, <code><a href="reference/lake_is_table.html">lake_is_table()</a></code>, <code><a href="reference/lake_open.html">lake_load()</a></code>, <code><a href="reference/lake_open.html">lake_version()</a></code>. Stage 3 (inspection) adds the table, file and log functions of design §5, except <code>lake_deletion_vectors()</code>. The roadmap in <a href=".agents/roadmap.html"><code>.agents/roadmap.md</code></a> takes it to v0.1.0. 0.1.0 waits for <code>zuhttp</code> on CRAN and for <code>zuroar</code> 0.1.0 (design §9); local log replay, inspection and reading are built on local fixtures first.</p>
+<p>Scaffolded 2026-11-26 with <code>create-pkg.sh</code>. Stage 2 (log replay from commit 0, local disk only) is in: <code><a href="reference/lake_open.html">lake_open()</a></code>, <code><a href="reference/lake_is_table.html">lake_is_table()</a></code>, <code><a href="reference/lake_open.html">lake_load()</a></code>, <code><a href="reference/lake_open.html">lake_version()</a></code>. Stage 3 (inspection) adds the table, file and log functions of design §5, except <code>lake_deletion_vectors()</code>. Stage 4 (reading and pruning) adds <code><a href="reference/lake_read.html">lake_read()</a></code>, <code><a href="reference/lake_read.html">lake_walk()</a></code> and <code>lake_count(footers = TRUE)</code>; reads refuse deletion vectors and column mapping until Stage 5. The roadmap in <a href=".agents/roadmap.html"><code>.agents/roadmap.md</code></a> takes it to v0.1.0. 0.1.0 waits for <code>zuhttp</code> on CRAN and for <code>zuroar</code> 0.1.0 (design §9); local log replay, inspection and reading are built on local fixtures first.</p>
 </div>
 <div class="section level2">
 <h2 id="versions-and-dependents">Versions and dependents<a class="anchor" aria-label="anchor" href="#versions-and-dependents"></a></h2>
@@ -85,7 +85,11 @@
 <li>
 <code>R/values.R</code>: the schema, partition values and statistics typed by Delta type.</li>
 <li>
-<code>R/filter.R</code>: the pruning subset of a filter and its outcomes per file.</li>
+<code>R/filter.R</code>: the filter plan (pruning subset, or row-only nodes), its outcomes per file from partition values and statistics, and the row filter.</li>
+<li>
+<code>R/compare.R</code>: the exact comparator (decimal text), byte-order string comparison, and filter values turned into comparison keys.</li>
+<li>
+<code>R/read.R</code>: <code><a href="reference/lake_read.html">lake_read()</a></code>, <code><a href="reference/lake_read.html">lake_walk()</a></code>, the read pipeline (<code>read_scan()</code>, <code>read_piece()</code>, <code>bind_pieces()</code>), <code>fetch_file()</code> and the session cache.</li>
 <li>
 <code>R/table.R</code>, <code>R/files.R</code>, <code>R/log-inspect.R</code>, <code>R/print.R</code>: the inspection functions and the print method.</li>
 <li>

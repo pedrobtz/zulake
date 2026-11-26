@@ -16,7 +16,7 @@ lake_partitions(tbl, filter = NULL, int64 = c("double", "integer64"))
 
 lake_removed(tbl, int64 = c("double", "integer64"))
 
-lake_count(tbl)
+lake_count(tbl, footers = FALSE)
 ```
 
 ## Arguments
@@ -46,6 +46,12 @@ lake_count(tbl)
   64-bit counts and values; inside an action or `commitInfo` as the log
   writes it, only a number a double cannot hold becomes an integer64.
 
+- footers:
+
+  Whether to read the row count of each live file that has no
+  `numRecords` statistic from its Parquet footer, which downloads those
+  files. `FALSE`, the default, reads nothing but the log.
+
 ## Value
 
 `lake_files()` returns a data frame with one row per live file, sorted
@@ -70,8 +76,10 @@ files the filter keeps; a table without partition columns has none.
 delete (each descriptor's `cardinality`). When a live file has no
 `numRecords` the count is unknown: `NA_real_`, with a warning of class
 `zulake_warning_count_unknown` whose `files` field gives the number of
-such files. It is never a partial sum. A file with a deletion vector and
-no `numRecords` breaks the protocol: `zulake_error_corrupt_log`.
+such files, unless `footers = TRUE` reads those files' row counts from
+their Parquet footers. It is never a partial sum. A file with a deletion
+vector and no `numRecords` breaks the protocol:
+`zulake_error_corrupt_log`.
 
 ## Details
 
@@ -86,18 +94,23 @@ Statistics come from each file's `stats` JSON, keyed by column name:
 `min` and `max` typed as partition values are, except that a `decimal`
 statistic stays its JSON text exactly as the log writes it, since a
 double would round it; `null_count` and `num_records` are 64-bit counts.
-Statistics are optional in the protocol, so a file can have none (`NA`
-and `NULL`).
+A `long` minimum or maximum that `int64` cannot hold (past 2^53 - 1 as a
+double, or -2^63, which bit64 keeps for `NA`) is `NA`, with a warning of
+class `zulake_warning_int64` (fields `value`, `column` and `path`) once
+per column; its digits stay in `action`. Statistics are optional in the
+protocol, so a file can have none (`NA` and `NULL`).
 
 `filter` is an unevaluated R expression over column names, of
 comparisons (`==`, `!=`, `<`, `<=`, `>`, `>=`), `%in%` and
 [`is.na()`](https://rdrr.io/r/base/NA.html) joined by `!`, `&` and `|`,
 with literals or values from the calling environment. A file is kept
-when the filter can be `TRUE` for it: on a partition column the filter
-is evaluated exactly, as R evaluates it, on the file's partition values;
-a comparison on any other column cannot rule a file out yet, so it keeps
-every file. Any other call is refused with a `zulake_error_filter`
-error, since there are no rows here to apply it to.
+when the filter can be `TRUE` for one of its rows: a comparison on a
+partition column is decided by the file's partition value, one on
+another column by the file's statistics, and a file without statistics
+for that column is kept. Values compare exactly, as
+[`lake_read()`](https://pedrobtz.github.io/zulake/reference/lake_read.md)
+describes. Any other call is refused with a `zulake_error_filter` error,
+since there are no rows here to apply it to.
 
 ## See also
 

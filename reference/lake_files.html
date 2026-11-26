@@ -61,7 +61,7 @@ alone.</p>
 <span></span>
 <span><span class="fu">lake_removed</span><span class="op">(</span><span class="va">tbl</span>, int64 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"double"</span>, <span class="st">"integer64"</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu">lake_count</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">lake_count</span><span class="op">(</span><span class="va">tbl</span>, footers <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -91,6 +91,12 @@ so that value is an error too). It applies to the columns that hold
 64-bit counts and values; inside an action or <code>commitInfo</code> as the log
 writes it, only a number a double cannot hold becomes an integer64.</p></dd>
 
+
+<dt id="arg-footers">footers<a class="anchor" aria-label="anchor" href="#arg-footers"></a></dt>
+<dd><p>Whether to read the row count of each live file that has
+no <code>numRecords</code> statistic from its Parquet footer, which downloads
+those files. <code>FALSE</code>, the default, reads nothing but the log.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -114,7 +120,8 @@ them), <code>deletion_vector</code> and <code>action</code>.</p>
 delete (each descriptor's <code>cardinality</code>). When a live file has no
 <code>numRecords</code> the count is unknown: <code>NA_real_</code>, with a warning of class
 <code>zulake_warning_count_unknown</code> whose <code>files</code> field gives the number of
-such files. It is never a partial sum. A file with a deletion vector
+such files, unless <code>footers = TRUE</code> reads those files' row counts from
+their Parquet footers. It is never a partial sum. A file with a deletion vector
 and no <code>numRecords</code> breaks the protocol: <code>zulake_error_corrupt_log</code>.</p>
     </div>
     <div class="section level2">
@@ -130,17 +137,21 @@ is <code>NA</code>.</p>
 <code>min</code> and <code>max</code> typed as partition values are, except that a <code>decimal</code>
 statistic stays its JSON text exactly as the log writes it, since a
 double would round it; <code>null_count</code> and <code>num_records</code> are 64-bit counts.
-Statistics are optional in the protocol, so a file can have none (<code>NA</code>
-and <code>NULL</code>).</p>
+A <code>long</code> minimum or maximum that <code>int64</code> cannot hold (past 2^53 - 1 as a
+double, or -2^63, which bit64 keeps for <code>NA</code>) is <code>NA</code>, with a warning of
+class <code>zulake_warning_int64</code> (fields <code>value</code>, <code>column</code> and <code>path</code>) once
+per column; its digits stay in <code>action</code>. Statistics are optional in the
+protocol, so a file can have none (<code>NA</code> and <code>NULL</code>).</p>
 <p><code>filter</code> is an unevaluated R expression over column names, of
 comparisons (<code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code>), <code>%in%</code> and <code><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na()</a></code>
 joined by <code>!</code>, <code>&amp;</code> and <code>|</code>, with literals or values from the calling
-environment. A file is kept when the filter can be <code>TRUE</code> for it: on a
-partition column the filter is evaluated exactly, as R evaluates it, on
-the file's partition values; a comparison on any other column cannot
-rule a file out yet, so it keeps every file. Any other call is refused
-with a <code>zulake_error_filter</code> error, since there are no rows here to apply
-it to.</p>
+environment. A file is kept when the filter can be <code>TRUE</code> for one of its
+rows: a comparison on a partition column is decided by the file's
+partition value, one on another column by the file's statistics, and a
+file without statistics for that column is kept. Values compare exactly,
+as <code><a href="lake_read.html">lake_read()</a></code> describes. Any other call is refused with a
+<code>zulake_error_filter</code> error, since there are no rows here to apply it
+to.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

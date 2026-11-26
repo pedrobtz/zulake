@@ -20,6 +20,9 @@
   [`lake_load()`](https://pedrobtz.github.io/zulake/reference/lake_open.md)
   [`lake_version()`](https://pedrobtz.github.io/zulake/reference/lake_open.md)
   : Open a table
+- [`lake_read()`](https://pedrobtz.github.io/zulake/reference/lake_read.md)
+  [`lake_walk()`](https://pedrobtz.github.io/zulake/reference/lake_read.md)
+  : Read a table's rows
 - [`lake_versions()`](https://pedrobtz.github.io/zulake/reference/lake_versions.md)
   [`lake_history()`](https://pedrobtz.github.io/zulake/reference/lake_versions.md)
   [`lake_metadata()`](https://pedrobtz.github.io/zulake/reference/lake_versions.md)

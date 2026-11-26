@@ -56,7 +56,8 @@ doubles, exact up to 2^53 - 1, and an error beyond; ask for
 files carry no statistics has an unknown row count:
 [`lake_count()`](https://pedrobtz.github.io/zulake/reference/lake_files.md)
 says so with `NA` and a warning rather than counting only the files it
-can.
+can, and `lake_count(tbl, footers = TRUE)` reads those files’ counts
+from their Parquet footers.
 
 ## Filters prune files, then rows
 
@@ -64,12 +65,27 @@ A filter is an R expression over column names. Partition values and
 statistics drop files that cannot match before anything is downloaded;
 the rows that remain are then filtered exactly, so the result never
 depends on the statistics. Local values are looked up where you call.
+Numbers in integer and decimal columns compare exactly, so a value a
+double cannot write exactly is given as text; strings compare in UTF-8
+byte order.
 
 ``` r
 
 lake_files(tbl, filter = year == 2026 & region %in% c("EU", "UK"))
 yr <- 2026
-lake_read(tbl, columns = c("id", "amount"), filter = year == yr)
+lake_read(tbl, columns = c("id", "amount"), filter = year == yr & amount > "1000.10")
+```
+
+[`lake_walk()`](https://pedrobtz.github.io/zulake/reference/lake_read.md)
+reads one file at a time and hands each piece to a function, for a table
+larger than memory. Columns qio cannot return yet (nested columns,
+decimals of more than 15 digits) are left out with a warning naming
+each.
+
+``` r
+
+total <- 0
+lake_walk(tbl, function(piece) total <<- total + sum(piece$amount), filter = year == yr)
 ```
 
 ## Unsupported features are refused
