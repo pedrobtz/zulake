@@ -155,7 +155,10 @@ A snapshot at version `v` is built as the protocol prescribes:
    enabled, otherwise from the commit files' modification times, as the
    protocol requires.
 3. Read the checkpoint with `qio` (every part, and the sidecars of a V2
-   checkpoint), then apply the commits in order.
+   checkpoint), then apply the commits in order. Checkpoints are nested
+   Parquet, which `qio` cannot read yet (D14): until it can, replay
+   starts at commit 0, and a table whose log no longer reaches commit 0
+   is refused with a classed `zulake_error_checkpoint_unreadable`.
 4. Reconcile: the latest `metaData` and `protocol` win; an `add` is live
    unless a later `remove` names the same path and deletion vector id;
    `txn` keeps the latest version per `appId`; `domainMetadata` keeps the
@@ -312,7 +315,9 @@ Delta's types map to what `qio` returns for the Parquet column, so
 `timestamp` is `POSIXct` in UTC. `timestamp_ntz` is `POSIXct` with
 `tzone = "UTC"`, and `lake_schema()` marks the column as zone-less.
 `decimal` statistics stay as their JSON text, since a double would round
-them (D10).
+them (D10). A selected data column that `qio` cannot return (nested, until
+D14's `qio` slice; anything beyond it after) is refused by name, never
+dropped (D7).
 
 ## 8. Testing and validation
 
@@ -419,6 +424,14 @@ The order of work, and what 0.1.0 waits for, are in
   print, compare or be saved without `zuroar`, which is only suggested
   (D2), and the 32-bit `zuroar_bits` of pedrobtz/zuroar#71 does not hold
   64-bit vectors. The oracle comparison is `which(!selection_vector) - 1`.
+- **D14 (2026-11-26).** Checkpoints and sidecars are read by `qio`, and
+  0.1.0 waits for a `qio` that reads structs, maps and lists of
+  repetition level 1 (pedrobtz/qio#73). Until then replay starts at
+  commit 0, a table that needs a checkpoint is refused with a classed
+  error, and a selected nested data column is refused by name (D7). Why:
+  carquet already decodes the leaf streams and nested assembly is `qio`'s
+  by its own design, while a commits-only 0.1.0 would refuse most
+  Databricks tables, whose log cleanup removes old commits. D1 stands.
 - **D13 (2026-11-26, provisional).** Azurite over HTTPS with
   `--oauth basic` is the CI stand-in for Azure; a live ADLS Gen2 run is
   the release gate (§11, criterion 4b). Why: no storage account or token
