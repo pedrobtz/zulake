@@ -227,8 +227,11 @@ nested_value <- function(x) {
     return(logical())
   }
   if (inherits(x, "integer64")) {
-    x <- as.character(x)
-    return(if (any(integer_past_exact(x[!is.na(x)]))) paste0(num_mark, x) else as.numeric(x))
+    # The JSON array a commit would hold, parsed the way a commit is.
+    text <- as.character(x)
+    text[is.na(text)] <- "null"
+    json <- mark_numbers(paste0("{\"v\":[", paste(text, collapse = ","), "]}"))
+    return(zujson::json_parse(json)$v)
   }
   if (is.double(x) && all(is_int32_value(x[!is.na(x)]))) {
     return(as.integer(x))
