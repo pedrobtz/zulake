@@ -13,7 +13,7 @@ lake_partitions(tbl, filter = NULL, int64 = c("double", "integer64"))
 
 lake_removed(tbl, int64 = c("double", "integer64"))
 
-lake_count(tbl)
+lake_count(tbl, footers = FALSE)
 }
 \arguments{
 \item{tbl}{A snapshot, from \code{\link[=lake_open]{lake_open()}}.}
@@ -31,6 +31,10 @@ package, exact from -2^63 + 1 to 2^63 - 1 (bit64 keeps -2^63 for \code{NA},
 so that value is an error too). It applies to the columns that hold
 64-bit counts and values; inside an action or \code{commitInfo} as the log
 writes it, only a number a double cannot hold becomes an integer64.}
+
+\item{footers}{Whether to read the row count of each live file that has
+no \code{numRecords} statistic from its Parquet footer, which downloads
+those files. \code{FALSE}, the default, reads nothing but the log.}
 }
 \value{
 \code{lake_files()} returns a data frame with one row per live file,
@@ -56,7 +60,8 @@ them), \code{deletion_vector} and \code{action}.
 delete (each descriptor's \code{cardinality}). When a live file has no
 \code{numRecords} the count is unknown: \code{NA_real_}, with a warning of class
 \code{zulake_warning_count_unknown} whose \code{files} field gives the number of
-such files. It is never a partial sum. A file with a deletion vector
+such files, unless \code{footers = TRUE} reads those files' row counts from
+their Parquet footers. It is never a partial sum. A file with a deletion vector
 and no \code{numRecords} breaks the protocol: \code{zulake_error_corrupt_log}.
 }
 \description{
@@ -80,18 +85,22 @@ Statistics come from each file's \code{stats} JSON, keyed by column name:
 \code{min} and \code{max} typed as partition values are, except that a \code{decimal}
 statistic stays its JSON text exactly as the log writes it, since a
 double would round it; \code{null_count} and \code{num_records} are 64-bit counts.
-Statistics are optional in the protocol, so a file can have none (\code{NA}
-and \code{NULL}).
+A \code{long} minimum or maximum that \code{int64} cannot hold (past 2^53 - 1 as a
+double, or -2^63, which bit64 keeps for \code{NA}) is \code{NA}, with a warning of
+class \code{zulake_warning_int64} (fields \code{value}, \code{column} and \code{path}) once
+per column; its digits stay in \code{action}. Statistics are optional in the
+protocol, so a file can have none (\code{NA} and \code{NULL}).
 
 \code{filter} is an unevaluated R expression over column names, of
 comparisons (\code{==}, \code{!=}, \code{<}, \code{<=}, \code{>}, \code{>=}), \code{\%in\%} and \code{is.na()}
 joined by \code{!}, \code{&} and \code{|}, with literals or values from the calling
-environment. A file is kept when the filter can be \code{TRUE} for it: on a
-partition column the filter is evaluated exactly, as R evaluates it, on
-the file's partition values; a comparison on any other column cannot
-rule a file out yet, so it keeps every file. Any other call is refused
-with a \code{zulake_error_filter} error, since there are no rows here to apply
-it to.
+environment. A file is kept when the filter can be \code{TRUE} for one of its
+rows: a comparison on a partition column is decided by the file's
+partition value, one on another column by the file's statistics, and a
+file without statistics for that column is kept. Values compare exactly,
+as \code{\link[=lake_read]{lake_read()}} describes. Any other call is refused with a
+\code{zulake_error_filter} error, since there are no rows here to apply it
+to.
 }
 \examples{
 # A partitioned table of two files, written by hand.
