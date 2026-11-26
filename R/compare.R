@@ -225,9 +225,6 @@ literal_number <- function(value, type, expr) {
   if (type == "date" && inherits(value, "POSIXt") || type %in% c("timestamp", "timestamp_ntz") && inherits(value, "Date")) {
     filter_error(expr, sprintf("a %s value cannot be compared with a %s column", class(value)[1L], type))
   }
-  if (inherits(value, "POSIXlt")) {
-    value <- as.POSIXct(value)
-  }
   if (!is.numeric(unclass(value)) && !is.logical(value)) {
     filter_error(expr, sprintf("a %s value cannot be compared with a %s column", class(value)[1L], type))
   }

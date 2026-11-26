@@ -347,7 +347,7 @@ test_that("filter values become exact text by the documented rules", {
   same_as(factor("7.5"), "7.5")
   expect_identical(literal_keys(c(NA, NaN, 1), "exact", "long", expr)$nan, c(FALSE, TRUE, FALSE))
   expect_true(all(is.na(literal_keys(c(NA, NaN), "exact", "long", expr)$keys$sign)))
-  for (bad in list(1 / 3, 0.1 + 0.2, "1.2.3", " 1", "1e", "0x10", "Inf")) {
+  for (bad in list(1 / 3, 0.1 + 0.2, "1.2.3", " 1", "1e", "0x10", "Inf", as.raw(1), 1i)) {
     expect_error(literal_keys(bad, "exact", "long", expr), class = "zulake_error_filter", label = deparse(bad))
   }
   expect_match(conditionMessage(tryCatch(literal_keys(1 / 3, "exact", "long", expr), error = identity)),
@@ -361,7 +361,8 @@ test_that("filter values become exact text by the documented rules", {
   expect_identical(num("1970-01-01T01:00:00+01:00", "timestamp"), 0)
   expect_identical(num(TRUE, "boolean"), 1)
   for (bad in list(list("TRUE", "boolean"), list("tomorrow", "date"), list(Sys.time(), "date"),
-                   list(Sys.Date(), "timestamp"), list("1,5", "double"))) {
+                   list(Sys.Date(), "timestamp"), list("1,5", "double"), list(as.raw(1), "double"),
+                   list(as.raw(1), "date"), list(1i, "timestamp"))) {
     expect_error(literal_keys(bad[[1L]], "number", bad[[2L]], expr), class = "zulake_error_filter")
   }
   skip_if_not_installed("bit64")
@@ -429,6 +430,10 @@ test_that("row-wise functions and two-column comparisons only filter rows in lak
   expect_error(lake_read(tbl, filter = 1 %in% p_int), "column on its left", fixed = TRUE, class = "zulake_error_filter")
   expect_error(lake_read(tbl, filter = abs(p_str) > 1), "evaluating it on rows failed", fixed = TRUE,
                class = "zulake_error_filter")
+  # A value is a vector: a Date, a POSIXct or text for a date (?lake_read),
+  # not a POSIXlt, which is a list.
+  expect_error(lake_read(tbl, filter = p_date > as.POSIXlt("2024-01-01", tz = "UTC")), "a value must be a vector",
+               fixed = TRUE, class = "zulake_error_filter")
   # A value inside a row-wise call must mean the same for every row.
   expect_error(lake_read(tbl, filter = value + c(1, 2) > 3), class = "zulake_error_filter")
   expect_error(lake_read(tbl, filter = grepl(p_str, "a")), class = "zulake_error_filter")
