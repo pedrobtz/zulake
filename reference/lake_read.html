@@ -112,10 +112,26 @@ from the calling environment (a column's name always means the column).
 Its pruning subset is comparisons (<code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code>),
 <code>%in%</code> and <code><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na()</a></code> between a column and values, joined by <code>!</code>, <code>&amp;</code> and
 <code>|</code>. That subset rules files out by their partition values and their
-statistics (minimum, maximum, null count and record count); anything else
-in the expression is only applied to rows. Statistics only decide what is
-read: the rows returned are the rows <code>filter</code> is <code>TRUE</code> for whatever the
-statistics say, and a missing statistic only means a file is read.</p>
+statistics (minimum, maximum, null count and record count). Statistics
+only decide what is read: the rows returned are the rows <code>filter</code> is
+<code>TRUE</code> for whatever the statistics say, and a missing statistic only
+means a file is read.</p>
+<p>A filter may also apply these row-wise functions to columns: <code>+</code>, <code>-</code>,
+<code>*</code>, <code>/</code>, <code>%%</code>, <code>%/%</code>, <code>^</code>, <code><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs()</a></code>, <code><a href="https://rdrr.io/r/base/Round.html" class="external-link">round()</a></code>, <code><a href="https://rdrr.io/r/base/Round.html" class="external-link">floor()</a></code>, <code><a href="https://rdrr.io/r/base/Round.html" class="external-link">ceiling()</a></code>,
+<code><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">sqrt()</a></code>, <code><a href="https://rdrr.io/r/base/Log.html" class="external-link">exp()</a></code>, <code><a href="https://rdrr.io/r/base/Log.html" class="external-link">log()</a></code>, <code><a href="https://rdrr.io/r/base/nchar.html" class="external-link">nchar()</a></code>, <code><a href="https://rdrr.io/r/base/chartr.html" class="external-link">toupper()</a></code>, <code><a href="https://rdrr.io/r/base/chartr.html" class="external-link">tolower()</a></code>,
+<code><a href="https://rdrr.io/r/base/substr.html" class="external-link">substr()</a></code>, <code><a href="https://rdrr.io/r/base/startsWith.html" class="external-link">startsWith()</a></code>, <code><a href="https://rdrr.io/r/base/startsWith.html" class="external-link">endsWith()</a></code>, <code><a href="https://rdrr.io/r/base/grep.html" class="external-link">grepl()</a></code>, <code><a href="https://rdrr.io/r/base/is.finite.html" class="external-link">is.nan()</a></code>,
+<code><a href="https://rdrr.io/r/base/is.finite.html" class="external-link">is.finite()</a></code>, <code><a href="https://rdrr.io/r/base/Logic.html" class="external-link">xor()</a></code>, <code><a href="https://rdrr.io/r/base/character.html" class="external-link">as.character()</a></code>, <code><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric()</a></code> and
+<code><a href="https://rdrr.io/r/base/integer.html" class="external-link">as.integer()</a></code>; and compare two columns, or use a logical column alone.
+R evaluates those on the rows after reading (they never prune), with base
+R's functions whatever the caller defines, and each must give one <code>TRUE</code>,
+<code>FALSE</code> or <code>NA</code> per row. Any other call with a column inside it, such as
+<code>max(x)</code>, <code>mean(x)</code>, <code>rank(x)</code>, <code>cumsum(x)</code>, <code>duplicated(x)</code>, <code>x[1]</code>,
+<code>%in%</code> with a column on its right, or a function of your own, is an error
+of class <code>zulake_error_filter</code>: a filter is decided row by row, so the
+rows it keeps do not depend on how the table's rows are split into files,
+and <code>lake_read()</code> equals the pieces of <code>lake_walk()</code> bound together. A
+part of the filter that names no column is a value, evaluated once where
+<code>lake_read()</code> is called, and may be any R expression.</p>
 <p>Inside the pruning subset, comparisons are exact: a <code>long</code>, <code>integer</code>,
 <code>short</code>, <code>byte</code> or <code>decimal</code> column is compared with the value as decimal
 numbers, digit by digit, and a <code>string</code> column in UTF-8 byte order
@@ -136,10 +152,15 @@ warning of class <code>zulake_warning_column_skipped</code> (fields <code>column
 error of class <code>zulake_error_column_unreadable</code> with the same fields.</p>
 <p>Data files are read in place on local disk; other stores download each
 file once per session, to the session's temporary directory.</p>
-<p>This version cannot read a table whose live files have deletion vectors,
-or that maps column names: both are refused with a
-<code>zulake_error_unsupported_feature</code> error naming the feature, before any
-data file is read, so a read never returns deleted rows or wrong columns.</p>
+<p>Rows a deletion vector marks as deleted are never returned (see
+<code><a href="lake_deletion_vectors.html">lake_deletion_vectors()</a></code>); reading their vectors needs the zuroar
+package, and without it a read of a table with deletion vectors in the
+files it reads is an error of class <code>zulake_error_missing_package</code>. Every
+such vector is read and checked before any data file, so a corrupt one
+(<code>zulake_error_corrupt_log</code>) returns no rows. A table that maps column
+names (column mapping in <code>name</code> mode) is read by each column's physical
+name in the files and returned with its logical names; a
+<code>timestamp_ntz</code> column is a <code>POSIXct</code> in UTC.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

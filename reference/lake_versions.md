@@ -148,7 +148,7 @@ writeLines(c(
 tbl <- lake_open(path)
 lake_versions(tbl)
 #>   version           timestamp
-#> 1       0 2026-11-26 14:13:01
+#> 1       0 2026-11-26 15:34:20
 lake_history(tbl)[c("version", "operation")]
 #>   version    operation
 #> 1       0 CREATE TABLE
@@ -176,7 +176,7 @@ lake_protocol(tbl)
 #> 2 writerVersion  FALSE   TRUE       2      TRUE
 lake_summary(tbl)
 #>   version           timestamp files bytes records deleted_rows
-#> 1       0 2026-11-26 14:13:01     1   100       3            0
+#> 1       0 2026-11-26 15:34:20     1   100       3            0
 #>   files_with_deletion_vectors files_without_records
 #> 1                           0                     0
 

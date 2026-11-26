@@ -88,6 +88,36 @@ total <- 0
 lake_walk(tbl, function(piece) total <<- total + sum(piece$amount), filter = year == yr)
 ```
 
+A filter is decided row by row. Besides comparisons it may use row-wise
+functions such as [`nchar()`](https://rdrr.io/r/base/nchar.html),
+[`round()`](https://rdrr.io/r/base/Round.html) or arithmetic, which
+filter rows but never rule out files; a call that looks at other rows,
+such as `amount > mean(amount)`, is an error, because its answer would
+depend on how the table is split into files.
+
+``` r
+
+lake_read(tbl, filter = year == yr & nchar(region) == 2 & amount * 1.2 > 1000)
+```
+
+## Deletion vectors
+
+Tables written by Databricks delete rows by marking them in a deletion
+vector rather than rewriting the file. zulake never returns a marked
+row.
+[`lake_deletion_vectors()`](https://pedrobtz.github.io/zulake/reference/lake_deletion_vectors.md)
+shows each file’s vector and the rows it deletes; reading those rows
+needs the zuroar package, while the descriptors and
+[`lake_count()`](https://pedrobtz.github.io/zulake/reference/lake_files.md)
+come from the log alone.
+
+``` r
+
+lake_deletion_vectors(tbl, rows = FALSE)
+dv <- lake_deletion_vectors(tbl)
+dv$rows[[1]]
+```
+
 ## Unsupported features are refused
 
 A table that needs a reader feature zulake does not support is refused

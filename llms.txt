@@ -27,6 +27,8 @@ library(zulake)
 
 ## All functions
 
+- [`lake_deletion_vectors()`](https://pedrobtz.github.io/zulake/reference/lake_deletion_vectors.md)
+  : Deletion vectors
 - [`lake_files()`](https://pedrobtz.github.io/zulake/reference/lake_files.md)
   [`lake_partitions()`](https://pedrobtz.github.io/zulake/reference/lake_files.md)
   [`lake_removed()`](https://pedrobtz.github.io/zulake/reference/lake_files.md)

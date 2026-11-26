@@ -49,7 +49,7 @@
 </div>
 <div class="section level2">
 <h2 id="current-state">Current state<a class="anchor" aria-label="anchor" href="#current-state"></a></h2>
-<p>Scaffolded 2026-11-26 with <code>create-pkg.sh</code>. Stage 2 (log replay from commit 0, local disk only) is in: <code><a href="reference/lake_open.html">lake_open()</a></code>, <code><a href="reference/lake_is_table.html">lake_is_table()</a></code>, <code><a href="reference/lake_open.html">lake_load()</a></code>, <code><a href="reference/lake_open.html">lake_version()</a></code>. Stage 3 (inspection) adds the table, file and log functions of design §5, except <code>lake_deletion_vectors()</code>. Stage 4 (reading and pruning) adds <code><a href="reference/lake_read.html">lake_read()</a></code>, <code><a href="reference/lake_read.html">lake_walk()</a></code> and <code>lake_count(footers = TRUE)</code>; reads refuse deletion vectors and column mapping until Stage 5. The roadmap in <a href=".agents/roadmap.html"><code>.agents/roadmap.md</code></a> takes it to v0.1.0. 0.1.0 waits for <code>zuhttp</code> on CRAN and for <code>zuroar</code> 0.1.0 (design §9); local log replay, inspection and reading are built on local fixtures first.</p>
+<p>Scaffolded 2026-11-26 with <code>create-pkg.sh</code>. Stage 2 (log replay from commit 0, local disk only) is in: <code><a href="reference/lake_open.html">lake_open()</a></code>, <code><a href="reference/lake_is_table.html">lake_is_table()</a></code>, <code><a href="reference/lake_open.html">lake_load()</a></code>, <code><a href="reference/lake_open.html">lake_version()</a></code>. Stage 3 (inspection) adds the table, file and log functions of design §5, except <code><a href="reference/lake_deletion_vectors.html">lake_deletion_vectors()</a></code>. Stage 4 (reading and pruning) adds <code><a href="reference/lake_read.html">lake_read()</a></code>, <code><a href="reference/lake_read.html">lake_walk()</a></code> and <code>lake_count(footers = TRUE)</code>. Stage 5 adds deletion vectors (<code><a href="reference/lake_deletion_vectors.html">lake_deletion_vectors()</a></code>, rows dropped on read, <code>zuroar</code> suggested) and <code>name</code>-mode column mapping on reads, and makes filters row-wise by construction. The roadmap in <a href=".agents/roadmap.html"><code>.agents/roadmap.md</code></a> takes it to v0.1.0. 0.1.0 waits for <code>zuhttp</code> on CRAN and for <code>zuroar</code> 0.1.0 (design §9); local log replay, inspection and reading are built on local fixtures first.</p>
 </div>
 <div class="section level2">
 <h2 id="versions-and-dependents">Versions and dependents<a class="anchor" aria-label="anchor" href="#versions-and-dependents"></a></h2>
@@ -85,9 +85,11 @@
 <li>
 <code>R/values.R</code>: the schema, partition values and statistics typed by Delta type.</li>
 <li>
-<code>R/filter.R</code>: the filter plan (pruning subset, or row-only nodes), its outcomes per file from partition values and statistics, and the row filter.</li>
+<code>R/filter.R</code>: the filter plan (pruning subset, row-wise nodes, or a refusal), its outcomes per file from partition values and statistics, and the row filter.</li>
 <li>
 <code>R/compare.R</code>: the exact comparator (decimal text), byte-order string comparison, and filter values turned into comparison keys.</li>
+<li>
+<code>R/dv.R</code>: <code><a href="reference/lake_deletion_vectors.html">lake_deletion_vectors()</a></code>, a vector’s bytes from its descriptor (Z85, UUID paths, ranges, CRC-32, magic) and its rows through <code>zuroar</code>, which is suggested: <code>need_zuroar()</code> refuses by name.</li>
 <li>
 <code>R/read.R</code>: <code><a href="reference/lake_read.html">lake_read()</a></code>, <code><a href="reference/lake_read.html">lake_walk()</a></code>, the read pipeline (<code>read_scan()</code>, <code>read_piece()</code>, <code>bind_pieces()</code>), <code>fetch_file()</code> and the session cache.</li>
 <li>
@@ -105,6 +107,10 @@
 <strong>The bearer token never leaves the request.</strong> It is not stored in a snapshot, printed, or included in an error or a recorded cassette (D4, acceptance criterion 4). A leak here is a credential leak.</li>
 <li>
 <strong>Unknown or unsupported reader features are refused by name before any data is read</strong> (D7). Ignoring <code>columnMapping</code> in <code>id</code> mode or deletion vectors returns wrong rows silently.</li>
+<li>
+<strong>A filter is row-wise by construction</strong> (D8). A call that is neither in the pruning subset nor in <code>row_wise_functions</code> is refused, never evaluated per file: per file it would give other rows than on the table.</li>
+<li>
+<strong><code>zuroar</code> is only suggested.</strong> Call it as <code>zuroar::</code> after <code>need_zuroar()</code>; <code>tests/zuroar-absent.R</code> is the <code>nosuggests</code> check.</li>
 <li>
 <strong>Statistics only decide what is downloaded.</strong> A file is pruned only on “cannot match”; the whole filter is then applied to rows, so a read is exact whatever the statistics say (design §6).</li>
 <li>

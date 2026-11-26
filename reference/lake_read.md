@@ -67,10 +67,43 @@ Its pruning subset is comparisons (`==`, `!=`, `<`, `<=`, `>`, `>=`),
 `%in%` and [`is.na()`](https://rdrr.io/r/base/NA.html) between a column
 and values, joined by `!`, `&` and `|`. That subset rules files out by
 their partition values and their statistics (minimum, maximum, null
-count and record count); anything else in the expression is only applied
-to rows. Statistics only decide what is read: the rows returned are the
-rows `filter` is `TRUE` for whatever the statistics say, and a missing
-statistic only means a file is read.
+count and record count). Statistics only decide what is read: the rows
+returned are the rows `filter` is `TRUE` for whatever the statistics
+say, and a missing statistic only means a file is read.
+
+A filter may also apply these row-wise functions to columns: `+`, `-`,
+`*`, `/`, `%%`, `%/%`, `^`,
+[`abs()`](https://rdrr.io/r/base/MathFun.html),
+[`round()`](https://rdrr.io/r/base/Round.html),
+[`floor()`](https://rdrr.io/r/base/Round.html),
+[`ceiling()`](https://rdrr.io/r/base/Round.html),
+[`sqrt()`](https://rdrr.io/r/base/MathFun.html),
+[`exp()`](https://rdrr.io/r/base/Log.html),
+[`log()`](https://rdrr.io/r/base/Log.html),
+[`nchar()`](https://rdrr.io/r/base/nchar.html),
+[`toupper()`](https://rdrr.io/r/base/chartr.html),
+[`tolower()`](https://rdrr.io/r/base/chartr.html),
+[`substr()`](https://rdrr.io/r/base/substr.html),
+[`startsWith()`](https://rdrr.io/r/base/startsWith.html),
+[`endsWith()`](https://rdrr.io/r/base/startsWith.html),
+[`grepl()`](https://rdrr.io/r/base/grep.html),
+[`is.nan()`](https://rdrr.io/r/base/is.finite.html),
+[`is.finite()`](https://rdrr.io/r/base/is.finite.html),
+[`xor()`](https://rdrr.io/r/base/Logic.html),
+[`as.character()`](https://rdrr.io/r/base/character.html),
+[`as.numeric()`](https://rdrr.io/r/base/numeric.html) and
+[`as.integer()`](https://rdrr.io/r/base/integer.html); and compare two
+columns, or use a logical column alone. R evaluates those on the rows
+after reading (they never prune), with base R's functions whatever the
+caller defines, and each must give one `TRUE`, `FALSE` or `NA` per row.
+Any other call with a column inside it, such as `max(x)`, `mean(x)`,
+`rank(x)`, `cumsum(x)`, `duplicated(x)`, `x[1]`, `%in%` with a column on
+its right, or a function of your own, is an error of class
+`zulake_error_filter`: a filter is decided row by row, so the rows it
+keeps do not depend on how the table's rows are split into files, and
+`lake_read()` equals the pieces of `lake_walk()` bound together. A part
+of the filter that names no column is a value, evaluated once where
+`lake_read()` is called, and may be any R expression.
 
 Inside the pruning subset, comparisons are exact: a `long`, `integer`,
 `short`, `byte` or `decimal` column is compared with the value as
@@ -99,11 +132,16 @@ and decimals of precision above 15, until qio reads them. With
 Data files are read in place on local disk; other stores download each
 file once per session, to the session's temporary directory.
 
-This version cannot read a table whose live files have deletion vectors,
-or that maps column names: both are refused with a
-`zulake_error_unsupported_feature` error naming the feature, before any
-data file is read, so a read never returns deleted rows or wrong
-columns.
+Rows a deletion vector marks as deleted are never returned (see
+[`lake_deletion_vectors()`](https://pedrobtz.github.io/zulake/reference/lake_deletion_vectors.md));
+reading their vectors needs the zuroar package, and without it a read of
+a table with deletion vectors in the files it reads is an error of class
+`zulake_error_missing_package`. Every such vector is read and checked
+before any data file, so a corrupt one (`zulake_error_corrupt_log`)
+returns no rows. A table that maps column names (column mapping in
+`name` mode) is read by each column's physical name in the files and
+returned with its logical names; a `timestamp_ntz` column is a `POSIXct`
+in UTC.
 
 ## See also
 

@@ -149,7 +149,8 @@ environment. A file is kept when the filter can be <code>TRUE</code> for one of 
 rows: a comparison on a partition column is decided by the file's
 partition value, one on another column by the file's statistics, and a
 file without statistics for that column is kept. Values compare exactly,
-as <code><a href="lake_read.html">lake_read()</a></code> describes. Any other call is refused with a
+as <code><a href="lake_read.html">lake_read()</a></code> describes. Anything else, the row-wise functions
+<code><a href="lake_read.html">lake_read()</a></code> applies to rows included, is refused with a
 <code>zulake_error_filter</code> error, since there are no rows here to apply it
 to.</p>
     </div>
