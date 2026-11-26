@@ -38,12 +38,14 @@ holds, a whole number as a double.
 
 Every error is a condition of class \code{zulake_error}, with a subclass
 that says why: \code{zulake_error_not_table} (no Delta log at \code{uri}),
-\code{zulake_error_version} (no such version), \code{zulake_error_uri} (a URI
-zulake cannot open), \code{zulake_error_storage} (a file that cannot be
+\code{zulake_error_version} (no such version, or one no longer in the log),
+\code{zulake_error_uri} (a URI zulake cannot open), \code{zulake_error_storage} (a file that cannot be
 read; from Azure with the HTTP \code{status} and Azure's error \code{code}),
 \code{zulake_error_auth} (credentials refused), \code{zulake_error_corrupt_log}
 (a log that breaks the protocol, such as a commit that is not JSON or a
-partition value of the wrong type), \code{zulake_error_checkpoint_unreadable}
+partition value of the wrong type, or a \verb{_last_checkpoint} naming a
+checkpoint the log does not hold whole),
+\code{zulake_error_checkpoint_unreadable} (its \code{checkpoint} field gives the version, \code{parent} the read failure)
 and \code{zulake_error_unsupported_feature}, whose \code{feature} field names the
 feature.
 }
@@ -61,10 +63,15 @@ not support is refused with an error naming that feature, before any data
 file is read, because ignoring a feature returns wrong rows.
 
 zulake reads tables on local disk and on Azure (Blob Storage and Data
-Lake Storage Gen2), replaying the log from its first commit. A table whose
-log no longer reaches commit 0 needs a checkpoint, which zulake cannot
-read yet, and is refused with a \code{zulake_error_checkpoint_unreadable}
-error.
+Lake Storage Gen2), replaying the log from the latest checkpoint at or
+before the version (classic, multi-part or V2, with its sidecars), or
+from the first commit when there is none. A checkpoint that cannot be
+read is passed over for an earlier one or for the commits; a version
+that needs it, in a log that no longer reaches commit 0, is refused with
+a \code{zulake_error_checkpoint_unreadable} error. A version whose commits
+were cleaned up, older than the earliest checkpoint, is a
+\code{zulake_error_version} error. A file's \code{dataChange} from a checkpoint is
+the checkpoint's copy, which some writers set to \code{FALSE}.
 }
 \section{Azure}{
 
