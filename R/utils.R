@@ -42,8 +42,7 @@ check_timestamp <- function(timestamp) {
   if (is.null(timestamp)) {
     return(NULL)
   }
-  if (!inherits(timestamp, "POSIXct") || length(timestamp) != 1L || is.na(timestamp) ||
-    !is.finite(unclass(timestamp))) {
+  if (!inherits(timestamp, "POSIXct") || length(timestamp) != 1L || !is.finite(unclass(timestamp))) {
     zulake_abort("argument", "`timestamp` must be NULL or a single POSIXct date-time.")
   }
   timestamp
