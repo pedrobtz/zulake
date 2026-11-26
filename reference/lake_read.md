@@ -69,7 +69,11 @@ and values, joined by `!`, `&` and `|`. That subset rules files out by
 their partition values and their statistics (minimum, maximum, null
 count and record count). Statistics only decide what is read: the rows
 returned are the rows `filter` is `TRUE` for whatever the statistics
-say, and a missing statistic only means a file is read.
+say, and a missing statistic only means a file is read. On a column
+returned as a list (a `binary` column),
+[`is.na()`](https://rdrr.io/r/base/NA.html) is `TRUE` where the value is
+null (`NULL`), as Delta means it, where base R's
+[`is.na()`](https://rdrr.io/r/base/NA.html) on a list is `FALSE`.
 
 A filter may also apply these row-wise functions to columns: `+`, `-`,
 `*`, `/`, `%%`, `%/%`, `^`,

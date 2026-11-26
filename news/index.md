@@ -164,3 +164,6 @@
   the Get started vignette
   ([`vignette("zulake")`](https://pedrobtz.github.io/zulake/articles/zulake.md)),
   now evaluated, and every help page’s examples run on it.
+- zulake needs R 3.5.0 or later, as `qio` and `zuhttp` do; the test
+  cassettes are saved in R’s serialization format 3
+  ([\#37](https://github.com/pedrobtz/zulake/issues/37)).

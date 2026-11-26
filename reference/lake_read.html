@@ -115,7 +115,9 @@ Its pruning subset is comparisons (<code>==</code>, <code>!=</code>, <code>&lt;<
 statistics (minimum, maximum, null count and record count). Statistics
 only decide what is read: the rows returned are the rows <code>filter</code> is
 <code>TRUE</code> for whatever the statistics say, and a missing statistic only
-means a file is read.</p>
+means a file is read. On a column returned as a list (a <code>binary</code>
+column), <code><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na()</a></code> is <code>TRUE</code> where the value is null (<code>NULL</code>), as Delta
+means it, where base R's <code><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na()</a></code> on a list is <code>FALSE</code>.</p>
 <p>A filter may also apply these row-wise functions to columns: <code>+</code>, <code>-</code>,
 <code>*</code>, <code>/</code>, <code>%%</code>, <code>%/%</code>, <code>^</code>, <code><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs()</a></code>, <code><a href="https://rdrr.io/r/base/Round.html" class="external-link">round()</a></code>, <code><a href="https://rdrr.io/r/base/Round.html" class="external-link">floor()</a></code>, <code><a href="https://rdrr.io/r/base/Round.html" class="external-link">ceiling()</a></code>,
 <code><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">sqrt()</a></code>, <code><a href="https://rdrr.io/r/base/Log.html" class="external-link">exp()</a></code>, <code><a href="https://rdrr.io/r/base/Log.html" class="external-link">log()</a></code>, <code><a href="https://rdrr.io/r/base/nchar.html" class="external-link">nchar()</a></code>, <code><a href="https://rdrr.io/r/base/chartr.html" class="external-link">toupper()</a></code>, <code><a href="https://rdrr.io/r/base/chartr.html" class="external-link">tolower()</a></code>,
