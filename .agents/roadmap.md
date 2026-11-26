@@ -298,9 +298,10 @@ downloading only the files a filter cannot rule out.
 - Local values in filters looked up in the calling environment
   ([D8](design.md#10-decisions)).
 - `Imports: qio`.
-- A selected data column that `qio` cannot return is refused by name with
-  a classed error, from `qio::read_plan()`, never dropped
-  ([§7](design.md#7-types), [D14](design.md#10-decisions)).
+- Columns `qio` cannot return, found from `qio::read_plan()`
+  ([§7](design.md#7-types), [D14](design.md#10-decisions)): with
+  `columns = NULL`, left out with a `zulake_warning_column_skipped` naming
+  each; named in `columns`, a classed error.
 
 **Tests.**
 
@@ -318,8 +319,10 @@ downloading only the files a filter cannot rule out.
   `test-filter.R`.
 - `lake_walk()`: the pieces bound together equal `lake_read()`, in
   `test-read.R`.
-- A selected nested data column: a classed error naming it; the same table
-  read without it equals `deltalake`, in `test-read.R`.
+- A table with a nested data column, read with `columns = NULL`: the flat
+  columns equal `deltalake`'s, and one `zulake_warning_column_skipped`
+  names each nested column; the same column named in `columns`: a classed
+  error naming it, in `test-read.R`.
 
 **Exit criteria.**
 
