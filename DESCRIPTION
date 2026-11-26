@@ -1,17 +1,27 @@
 Package: zulake
-Title: What the Package Does (One Line, Title Case)
+Title: Inspect and Read 'Delta Lake' Tables
 Version: 0.0.0.9000
-Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
+Authors@R:
+    person("Pedro", "Baltazar", , "pedrobtz@gmail.com", role = c("aut", "cre", "cph"))
+Description: Opens a 'Delta Lake' table where it is stored, on 'Azure Data
+    Lake Storage Gen2', 'Azure Blob Storage' or local disk, and returns what
+    the table's own log records as data frames: its versions and commits,
+    the files of each version with their partition values, statistics and
+    deletion vectors, its schema, protocol and properties, and the changes
+    between two versions. Reads the table's data too, pruning files by
+    partition values and statistics before downloading any of them. The log
+    is replayed in R, following the 'Delta Lake' protocol
+    <https://github.com/delta-io/delta/blob/master/PROTOCOL.md>.
 License: MIT + file LICENSE
 Config/roxygen2/version: 8.1.1
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-Suggests: 
+Suggests:
     knitr,
     rmarkdown,
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    withr
 VignetteBuilder: knitr
 Config/testthat/edition: 3
-URL: https://pedrobtz.github.io/zulake/
+URL: https://pedrobtz.github.io/zulake/, https://github.com/pedrobtz/zulake
+BugReports: https://github.com/pedrobtz/zulake/issues
