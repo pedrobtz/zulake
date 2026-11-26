@@ -44,9 +44,13 @@ commit_time_ms <- function(entry, ict, read) {
 }
 
 # Milliseconds, truncated as Delta readers truncate file times, after
-# rounding to the microsecond so a time set to a whole millisecond stays it.
+# rounding to 10 microseconds. R reads file times exactly only to about
+# 1 us on Windows (file.info() computes ticks / 1e7 - 11644473600 in a
+# double), so a whole-millisecond time can arrive just below it; the
+# rounding keeps it in its millisecond. A time within 5 us below a
+# millisecond boundary counts as the next millisecond.
 mtime_ms <- function(x) {
-  floor(round(as.numeric(x) * 1e6) / 1000)
+  floor(round(as.numeric(x) * 1e5) / 100)
 }
 
 ms_to_posixct <- function(ms) {

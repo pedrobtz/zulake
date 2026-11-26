@@ -196,6 +196,11 @@ a choice:
   time otherwise. Why: the protocol's split at the enablement version
   gives the same answer under this rule, since in-commit timestamps only
   grow from there.
+- *File times* (settled 2026-11-26, Stage 5). File modification times
+  are read through R, which on Windows is exact only to about 1 µs;
+  zulake rounds to 10 µs and then truncates to milliseconds, so a file
+  time within 5 µs below a millisecond boundary counts as the next
+  millisecond. With inCommitTimestamp this does not apply.
 - *Partition values* of live files are checked against their column's
   type (the protocol's "Partition Value Serialization"; by physical name
   under column mapping) when the snapshot is built; a value that does

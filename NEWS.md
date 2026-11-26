@@ -82,3 +82,8 @@
   `zulake_error_filter` in every function, so a filter's rows never depend
   on how the table is split into files. The functions are base R's, whatever
   the caller defines.
+* Fixed: on Windows, time travel by timestamp could open the version before
+  a commit whose file time is a whole millisecond, at exactly that
+  millisecond, because R reads Windows file times up to about 1 µs low.
+  File times are now rounded to 10 µs before they are truncated to
+  milliseconds.

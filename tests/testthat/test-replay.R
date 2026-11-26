@@ -421,3 +421,17 @@ test_that("the snapshot is the same in a hostile session and under a non-ASCII p
   moved <- lake_open(file.path(dir, "zl-partitioned"), version = 1)
   expect_identical(moved$files, base$files)
 })
+
+test_that("a whole-millisecond file time read up to 1 us low (Windows' file.info()) keeps its millisecond", {
+  # R on Windows computes (double) ticks / 1e7 - 11644473600, whose double
+  # spacing near 1.8e9 s leaves a whole-millisecond time up to ~0.95 us low.
+  for (ts in c(1795690965401, 1754751126036)) {
+    for (low in c(0, 2e-7, 9.5e-7)) {
+      x <- as.POSIXct(ts / 1000 - low, origin = "1970-01-01", tz = "UTC")
+      expect_identical(mtime_ms(x), ts, label = paste(format_number(ts), low))
+    }
+    # Truncation is kept: 0.4015 ms past the millisecond is still in it.
+    expect_identical(mtime_ms(as.POSIXct((ts + 0.4015) / 1000, origin = "1970-01-01", tz = "UTC")), ts)
+    expect_identical(mtime_ms(as.POSIXct((ts + 0.98) / 1000, origin = "1970-01-01", tz = "UTC")), ts)
+  }
+})

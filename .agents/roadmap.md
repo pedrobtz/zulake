@@ -468,11 +468,15 @@ refusals on a multi-file fixture; shadowing of `nchar` by the caller, in
   quick only) found failures from earlier stages, fixed here because this
   stage merges on the full profile: a Windows drive path (`C:/...`) in an
   `add` action was taken as relative (`is_absolute_path()`, Stage 4); and
-  in the tests, commit times set through `Sys.setFileTime()`, which
-  truncates to milliseconds on Windows, a test-file path with backslashes
-  written into code, a `for ()` over Dates (R before 4.6 drops the
-  class), and `zujson`'s parse of `0.12345678901234567` on macOS, which
-  differs from R's in the last bit, compared with R's.
+  in the tests, a test-file path with backslashes written into code, a
+  `for ()` over Dates (R before 4.6 drops the class), and `zujson`'s
+  parse of `0.12345678901234567` on macOS, which differs from R's in the
+  last bit, compared with R's. Behind the Windows timestamp failures was a
+  product bug: `mtime_ms()` read whole-millisecond commit times 1 ms early
+  on Windows (R reads Windows file times up to about 1 µs low), fixed by
+  rounding to 10 µs before truncating (design §4.2); the tests set commit
+  times half a millisecond on, since `Sys.setFileTime()` truncates to
+  milliseconds there.
 
 **Design.** [§4.4](design.md#44-deletion-vectors),
 [D9](design.md#10-decisions).

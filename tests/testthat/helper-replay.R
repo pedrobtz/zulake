@@ -12,16 +12,11 @@ set_commit_mtimes <- function(path) {
     for (a in zujson::json_parse_ndjson(readBin(f, "raw", file.size(f)))) {
       ts <- a[["commitInfo"]][["timestamp"]]
       if (!is.null(ts)) {
-        # Set, read back as zulake reads it (mtime_ms()), and try later
-        # times within the millisecond and the next two until the two
-        # agree: Windows does not keep the time set to the millisecond (on
-        # the r-actions runners, ts + 0.5 ms read back 1 ms early and
-        # ts + 1.5 ms 1 ms late).
-        for (offset in c(0.5, seq(0, 3, by = 0.1))) {
-          stopifnot(Sys.setFileTime(f, as.POSIXct((ts + offset) / 1000, origin = "1970-01-01", tz = "UTC")))
-          got <- mtime_ms(file.mtime(f))
-          if (got == ts) break
-        }
+        # Half a millisecond on: R's Sys.setFileTime() on Windows truncates
+        # the fraction to whole milliseconds, so ts itself can be stored
+        # 1 ms low. Readers truncate to milliseconds, so this reads as ts.
+        stopifnot(Sys.setFileTime(f, as.POSIXct((ts + 0.5) / 1000, origin = "1970-01-01", tz = "UTC")))
+        got <- mtime_ms(file.mtime(f))
         if (got != ts) {
           stop(sprintf("cannot set %s to %.0f ms: it reads back as %.0f ms", f, ts, got), call. = FALSE)
         }
@@ -37,7 +32,7 @@ commit_mtimes_ms <- function(path) {
   log <- file.path(path, "_delta_log")
   names <- list.files(log, pattern = "^[0-9]{20}[.]json$")
   stats::setNames(
-    floor(round(as.numeric(file.mtime(file.path(log, names))) * 1e6) / 1000),
+    mtime_ms(file.mtime(file.path(log, names))),
     as.numeric(substr(names, 1L, 20L))
   )
 }
