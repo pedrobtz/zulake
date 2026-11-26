@@ -12,15 +12,15 @@ set_commit_mtimes <- function(path) {
     for (a in zujson::json_parse_ndjson(readBin(f, "raw", file.size(f)))) {
       ts <- a[["commitInfo"]][["timestamp"]]
       if (!is.null(ts)) {
-        # Set, read back as zulake reads it (mtime_ms()), and nudge until
-        # the two agree: Windows does not keep the time set to the
-        # millisecond (seen 1 to 2 ms early on the r-actions runners).
-        offset <- 0.5
-        for (k in 1:6) {
+        # Set, read back as zulake reads it (mtime_ms()), and try later
+        # times within the millisecond and the next two until the two
+        # agree: Windows does not keep the time set to the millisecond (on
+        # the r-actions runners, ts + 0.5 ms read back 1 ms early and
+        # ts + 1.5 ms 1 ms late).
+        for (offset in c(0.5, seq(0, 3, by = 0.1))) {
           stopifnot(Sys.setFileTime(f, as.POSIXct((ts + offset) / 1000, origin = "1970-01-01", tz = "UTC")))
           got <- mtime_ms(file.mtime(f))
           if (got == ts) break
-          offset <- offset + (ts - got)
         }
         if (got != ts) {
           stop(sprintf("cannot set %s to %.0f ms: it reads back as %.0f ms", f, ts, got), call. = FALSE)
