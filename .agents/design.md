@@ -315,9 +315,12 @@ Delta's types map to what `qio` returns for the Parquet column, so
 `timestamp` is `POSIXct` in UTC. `timestamp_ntz` is `POSIXct` with
 `tzone = "UTC"`, and `lake_schema()` marks the column as zone-less.
 `decimal` statistics stay as their JSON text, since a double would round
-them (D10). A selected data column that `qio` cannot return (nested, until
-D14's `qio` slice; anything beyond it after) is refused by name, never
-dropped (D7).
+them (D10). Data columns `qio` cannot return (nested, until D14's `qio`
+slice; anything beyond it after) are handled so that none is lost
+silently (D7): with `columns = NULL` the readable columns are returned and
+each unreadable one is named in a classed warning,
+`zulake_warning_column_skipped`; a column named in `columns` that cannot
+be returned is a classed error.
 
 ## 8. Testing and validation
 
@@ -427,8 +430,10 @@ The order of work, and what 0.1.0 waits for, are in
 - **D14 (2026-11-26).** Checkpoints and sidecars are read by `qio`, and
   0.1.0 waits for a `qio` that reads structs, maps and lists of
   repetition level 1 (pedrobtz/qio#73). Until then replay starts at
-  commit 0, a table that needs a checkpoint is refused with a classed
-  error, and a selected nested data column is refused by name (D7). Why:
+  commit 0, and a table that needs a checkpoint is refused with a classed
+  error. Data files are read meanwhile: flat columns as `qio` returns
+  them, nested ones left out with a classed warning naming each, or a
+  classed error when the caller named one in `columns` (§7, D7). Why:
   carquet already decodes the leaf streams and nested assembly is `qio`'s
   by its own design, while a commits-only 0.1.0 would refuse most
   Databricks tables, whose log cleanup removes old commits. D1 stands.
