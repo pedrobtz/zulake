@@ -6,7 +6,9 @@ Writes each table under tests/testthat/fixtures/tables/zl-<name>/, replacing
 what is there. deltalake names data files with random UUIDs and stamps
 commits with the clock, so a rerun gives different bytes: the tables are
 generated once and committed, and tools/oracle/answers.py then answers for
-the committed bytes. Where deltalake's writer cannot produce what a stage
+the committed bytes. zl-orders is the exception: its build fixes every name,
+id and time, so it is the same bytes on every run, and oracle.yaml rebuilds it.
+Where deltalake's writer cannot produce what a stage
 needs (a multi-part checkpoint, a domainMetadata action, an unknown reader
 feature), this script edits the log it wrote, and says so per table in
 tests/testthat/fixtures/tables/PROVENANCE.md.
@@ -333,13 +335,113 @@ def column_mapping_id():
         rewrite_commit(p, version, edit)
 
 
+ORDERS_DAYS = [dt.datetime(2025, 1, d, 9, 0, tzinfo=UTC) for d in range(6, 11)]
+
+
+def orders():
+    """The example table the package ships in inst/extdata/orders/ (pack.py copies it there).
+
+    Five versions: create, two appends, a row delete that rewrites one file, and an
+    append with an application transaction and custom commit metadata. Partitioned
+    by region. Unlike the other zl-* tables, the build is deterministic, because the
+    vignette and the examples print it: after deltalake writes it, every data file is
+    renamed to region=<r>/part-<n>.parquet, and every commit gets inCommitTimestamp
+    (enabled from version 0, writer feature, reader version 1) at 09:00 UTC on the
+    days 2025-01-06 to 2025-01-10, with the clock-dependent fields (modificationTime,
+    deletionTimestamp, txn lastUpdated, createdTime, timing metrics), the table id and
+    the txnIds fixed, and statistics written with sorted keys. An installed package
+    gives its files the install time, so commit times must come from the log.
+    """
+    p = fresh("zl-orders")
+    sch = pa.schema([("order_id", pa.int64()), ("customer", pa.string()), ("amount", pa.float64()),
+                     ("order_date", pa.date32()), ("region", pa.string())])
+
+    def batch(first, customers, amounts, day, regions):
+        n = len(customers)
+        return pa.table({"order_id": list(range(first, first + n)), "customer": customers, "amount": amounts,
+                         "order_date": [dt.date(2025, 1, day)] * n, "region": regions}, schema=sch)
+
+    write_deltalake(p, batch(1, ["Ana", "Ben", "Chen", "Dara", "Eli", "Fay", "Gus", "Hana", "Ivo"],
+                             [120.0, 35.5, 980.25, 12.0, 450.0, 75.75, 1500.0, 60.0, 230.4], 6,
+                             ["EU", "US", "APAC", "EU", "US", "APAC", "EU", "US", "APAC"]),
+                    partition_by=["region"], name="orders", description="zulake example: orders by region")
+    write_deltalake(p, batch(10, ["Ana", "Jon", "Kai", "Lea", "Ben", "Mia"],
+                             [88.0, 640.0, 19.99, 310.0, 1200.0, 45.0], 7,
+                             ["EU", "US", "APAC", "EU", "US", "APAC"]),
+                    mode="append", partition_by=["region"])
+    write_deltalake(p, batch(16, ["Chen", "Noa", "Oli", "Pia", "Dara", "Raj"],
+                             [70.0, 2500.0, 15.0, 99.9, 330.0, 820.0], 8,
+                             ["APAC", "EU", "US", "APAC", "EU", "US"]),
+                    mode="append", partition_by=["region"])
+    DeltaTable(p).delete("order_id = 5")
+    write_deltalake(p, batch(22, ["Sam", "Ana", "Tia"], [410.0, 55.0, 1999.0], 10, ["US", "EU", "APAC"]),
+                    mode="append", partition_by=["region"],
+                    commit_properties=CommitProperties(custom_metadata={"zulake.batch": "2025-01-10"},
+                                                       app_transactions=[Transaction("orders-loader", 4)]))
+
+    times = [int(t.timestamp() * 1000) for t in ORDERS_DAYS]
+    commits = []
+    for version in range(len(times)):
+        f = log_dir(p) / commit_name(version)
+        commits.append([json.loads(line) for line in f.read_text().splitlines() if line.strip()])
+    # deltalake orders a commit's files at random: number them by version, then region.
+    names = {}
+    for actions in commits:
+        for path in sorted((a["add"]["path"] for a in actions if "add" in a), key=lambda q: q.split("/", 1)[0]):
+            names[path] = f"{path.split('/', 1)[0]}/part-{len(names) + 1:04d}.parquet"
+
+    def sorted_keys(x):
+        return {k: sorted_keys(x[k]) for k in sorted(x)} if isinstance(x, dict) else x
+
+    def edit(action, version):
+        if "commitInfo" in action:
+            info = action["commitInfo"]
+            info["timestamp"] = times[version]
+            info["txnId"] = f"00000000-0000-4000-8000-{version + 1:012d}"
+            for k in info.get("operationMetrics", {}):
+                if k.endswith("_time_ms"):
+                    info["operationMetrics"][k] = 0
+            info.pop("inCommitTimestamp", None)
+            action = {"commitInfo": {"inCommitTimestamp": times[version], **sorted_keys(info)}}
+        if "protocol" in action:
+            action["protocol"] = {"minReaderVersion": 1, "minWriterVersion": 7,
+                                  "writerFeatures": ["inCommitTimestamp"]}
+        if "metaData" in action:
+            meta = action["metaData"]
+            meta["id"] = "3c2b1a09-8f7e-4d6c-9b5a-0123456789ab"
+            meta["createdTime"] = times[0]
+            meta["configuration"]["delta.enableInCommitTimestamps"] = "true"
+        if "add" in action:
+            add = action["add"]
+            add["path"] = names[add["path"]]
+            add["modificationTime"] = times[version]
+            add["stats"] = json.dumps(json.loads(add["stats"]), sort_keys=True, separators=(",", ":"))
+        if "remove" in action:
+            action["remove"]["path"] = names[action["remove"]["path"]]
+            action["remove"]["deletionTimestamp"] = times[version]
+        if "txn" in action:
+            action["txn"]["lastUpdated"] = times[version]
+        return action
+
+    rank = ["commitInfo", "protocol", "metaData", "add", "remove", "txn"]
+    for version, actions in enumerate(commits):
+        actions = [edit(a, version) for a in actions]
+        actions.sort(key=lambda a: (rank.index(next(iter(a))), json.dumps(a, sort_keys=True)))
+        lines = [json.dumps(a, separators=(",", ":")) for a in actions]
+        (log_dir(p) / commit_name(version)).write_text("\n".join(lines) + "\n")
+    for old, new in names.items():
+        (Path(p) / old).rename(Path(p) / new)
+    leftover = [f for f in Path(p).rglob("*.parquet") if f.relative_to(p).as_posix() not in names.values()]
+    assert not leftover, leftover
+
+
 def main():
     if len(sys.argv) > 1:
         wanted = set(sys.argv[1:])
     else:
         wanted = None
     for fn in (basic, types, partitioned, checkpointed, checkpoint_no_last, multipart_checkpoint, compacted, domains,
-               unknown_feature, catalog_managed, vacuum_protocol_check, inline_dv, column_mapping_id):
+               unknown_feature, catalog_managed, vacuum_protocol_check, inline_dv, column_mapping_id, orders):
         if wanted is None or fn.__name__ in wanted:
             fn()
             print("wrote", fn.__name__)

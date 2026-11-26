@@ -1,0 +1,437 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "clientVersion": "delta-rs.py-1.7.0",
+    "engineInfo": "delta-rs:py-1.7.0",
+    "inCommitTimestamp": 1736154000000,
+    "operation": "WRITE",
+    "operationMetrics": {
+     "execution_time_ms": 0,
+     "num_added_files": 3,
+     "num_added_rows": 9,
+     "num_partitions": 0,
+     "num_removed_files": 0,
+     "num_retries": 0
+    },
+    "operationParameters": {
+     "mode": "ErrorIfExists",
+     "partitionBy": "[\"region\"]"
+    },
+    "timestamp": 1736154000000,
+    "txnId": "00000000-0000-4000-8000-000000000001"
+   }
+  },
+  {
+   "protocol": {
+    "minReaderVersion": 1,
+    "minWriterVersion": 7,
+    "writerFeatures": [
+     "inCommitTimestamp"
+    ]
+   }
+  },
+  {
+   "metaData": {
+    "configuration": {
+     "delta.enableInCommitTimestamps": "true"
+    },
+    "createdTime": 1736154000000,
+    "description": "zulake example: orders by region",
+    "format": {
+     "options": {},
+     "provider": "parquet"
+    },
+    "id": "3c2b1a09-8f7e-4d6c-9b5a-0123456789ab",
+    "name": "orders",
+    "partitionColumns": [
+     "region"
+    ],
+    "schemaString": "{\"type\":\"struct\",\"fields\":[{\"name\":\"order_id\",\"type\":\"long\",\"nullable\":true,\"metadata\":{}},{\"name\":\"customer\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"amount\",\"type\":\"double\",\"nullable\":true,\"metadata\":{}},{\"name\":\"order_date\",\"type\":\"date\",\"nullable\":true,\"metadata\":{}},{\"name\":\"region\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}]}"
+   }
+  },
+  {
+   "add": {
+    "baseRowId": null,
+    "clusteringProvider": null,
+    "dataChange": true,
+    "defaultRowCommitVersion": null,
+    "modificationTime": 1736154000000,
+    "partitionValues": {
+     "region": "APAC"
+    },
+    "path": "region=APAC/part-0001.parquet",
+    "size": 1438,
+    "stats": "{\"maxValues\":{\"amount\":980.25,\"customer\":\"Ivo\",\"order_date\":\"2025-01-06\",\"order_id\":9},\"minValues\":{\"amount\":75.75,\"customer\":\"Chen\",\"order_date\":\"2025-01-06\",\"order_id\":3},\"nullCount\":{\"amount\":0,\"customer\":0,\"order_date\":0,\"order_id\":0},\"numRecords\":3}",
+    "tags": null
+   }
+  },
+  {
+   "add": {
+    "baseRowId": null,
+    "clusteringProvider": null,
+    "dataChange": true,
+    "defaultRowCommitVersion": null,
+    "modificationTime": 1736154000000,
+    "partitionValues": {
+     "region": "EU"
+    },
+    "path": "region=EU/part-0002.parquet",
+    "size": 1434,
+    "stats": "{\"maxValues\":{\"amount\":1500.0,\"customer\":\"Gus\",\"order_date\":\"2025-01-06\",\"order_id\":7},\"minValues\":{\"amount\":12.0,\"customer\":\"Ana\",\"order_date\":\"2025-01-06\",\"order_id\":1},\"nullCount\":{\"amount\":0,\"customer\":0,\"order_date\":0,\"order_id\":0},\"numRecords\":3}",
+    "tags": null
+   }
+  },
+  {
+   "add": {
+    "baseRowId": null,
+    "clusteringProvider": null,
+    "dataChange": true,
+    "defaultRowCommitVersion": null,
+    "modificationTime": 1736154000000,
+    "partitionValues": {
+     "region": "US"
+    },
+    "path": "region=US/part-0003.parquet",
+    "size": 1438,
+    "stats": "{\"maxValues\":{\"amount\":450.0,\"customer\":\"Hana\",\"order_date\":\"2025-01-06\",\"order_id\":8},\"minValues\":{\"amount\":35.5,\"customer\":\"Ben\",\"order_date\":\"2025-01-06\",\"order_id\":2},\"nullCount\":{\"amount\":0,\"customer\":0,\"order_date\":0,\"order_id\":0},\"numRecords\":3}",
+    "tags": null
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [
+    {
+     "amount": 980.25,
+     "customer": "Ivo",
+     "order_date": "2025-01-06",
+     "order_id": "9"
+    },
+    {
+     "amount": 1500.0,
+     "customer": "Gus",
+     "order_date": "2025-01-06",
+     "order_id": "7"
+    },
+    {
+     "amount": 450.0,
+     "customer": "Hana",
+     "order_date": "2025-01-06",
+     "order_id": "8"
+    }
+   ],
+   "min": [
+    {
+     "amount": 75.75,
+     "customer": "Chen",
+     "order_date": "2025-01-06",
+     "order_id": "3"
+    },
+    {
+     "amount": 12.0,
+     "customer": "Ana",
+     "order_date": "2025-01-06",
+     "order_id": "1"
+    },
+    {
+     "amount": 35.5,
+     "customer": "Ben",
+     "order_date": "2025-01-06",
+     "order_id": "2"
+    }
+   ],
+   "modification_time": [
+    "1736154000000",
+    "1736154000000",
+    "1736154000000"
+   ],
+   "null_count": [
+    {
+     "amount": "0",
+     "customer": "0",
+     "order_date": "0",
+     "order_id": "0"
+    },
+    {
+     "amount": "0",
+     "customer": "0",
+     "order_date": "0",
+     "order_id": "0"
+    },
+    {
+     "amount": "0",
+     "customer": "0",
+     "order_date": "0",
+     "order_id": "0"
+    }
+   ],
+   "num_records": [
+    "3",
+    "3",
+    "3"
+   ],
+   "partition": [
+    {
+     "region": "APAC"
+    },
+    {
+     "region": "EU"
+    },
+    {
+     "region": "US"
+    }
+   ],
+   "path": [
+    "region=APAC/part-0001.parquet",
+    "region=EU/part-0002.parquet",
+    "region=US/part-0003.parquet"
+   ],
+   "size_bytes": [
+    "1438",
+    "1434",
+    "1438"
+   ]
+  },
+  "num_rows": 3,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<order_id: int64, customer: int64, amount: int64, order_date: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<order_id: int64, customer: string, amount: double, order_date: date32[day]>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<order_id: int64, customer: string, amount: double, order_date: date32[day]>"
+   },
+   {
+    "name": "partition",
+    "nullable": true,
+    "type": "struct<region: string>"
+   }
+  ]
+ },
+ "count": 9,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "clientVersion": "delta-rs.py-1.7.0",
+   "engineInfo": "delta-rs:py-1.7.0",
+   "inCommitTimestamp": 1736154000000,
+   "operation": "WRITE",
+   "operationMetrics": {
+    "execution_time_ms": 0,
+    "num_added_files": 3,
+    "num_added_rows": 9,
+    "num_partitions": 0,
+    "num_removed_files": 0,
+    "num_retries": 0
+   },
+   "operationParameters": {
+    "mode": "ErrorIfExists",
+    "partitionBy": "[\"region\"]"
+   },
+   "timestamp": 1736154000000,
+   "txnId": "00000000-0000-4000-8000-000000000001",
+   "version": 0
+  }
+ ],
+ "loaded_version": 0,
+ "metadata": {
+  "configuration": {
+   "delta.enableInCommitTimestamps": "true"
+  },
+  "created_time": 1736154000000,
+  "description": "zulake example: orders by region",
+  "id": "3c2b1a09-8f7e-4d6c-9b5a-0123456789ab",
+  "name": "orders",
+  "partition_columns": [
+   "region"
+  ]
+ },
+ "partitions": [
+  {
+   "region": "APAC"
+  },
+  {
+   "region": "EU"
+  },
+  {
+   "region": "US"
+  }
+ ],
+ "protocol": {
+  "min_reader_version": 1,
+  "min_writer_version": 7,
+  "reader_features": null,
+  "writer_features": [
+   "inCommitTimestamp"
+  ]
+ },
+ "read": {
+  "columns": {
+   "amount": [
+    120.0,
+    35.5,
+    980.25,
+    12.0,
+    450.0,
+    75.75,
+    1500.0,
+    60.0,
+    230.4
+   ],
+   "customer": [
+    "Ana",
+    "Ben",
+    "Chen",
+    "Dara",
+    "Eli",
+    "Fay",
+    "Gus",
+    "Hana",
+    "Ivo"
+   ],
+   "order_date": [
+    "2025-01-06",
+    "2025-01-06",
+    "2025-01-06",
+    "2025-01-06",
+    "2025-01-06",
+    "2025-01-06",
+    "2025-01-06",
+    "2025-01-06",
+    "2025-01-06"
+   ],
+   "order_id": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9"
+   ],
+   "region": [
+    "EU",
+    "US",
+    "APAC",
+    "EU",
+    "US",
+    "APAC",
+    "EU",
+    "US",
+    "APAC"
+   ]
+  },
+  "num_rows": 9,
+  "schema": [
+   {
+    "name": "order_id",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "customer",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "name": "amount",
+    "nullable": true,
+    "type": "double"
+   },
+   {
+    "name": "order_date",
+    "nullable": true,
+    "type": "date32[day]"
+   },
+   {
+    "name": "region",
+    "nullable": true,
+    "type": "string"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {},
+    "name": "order_id",
+    "nullable": true,
+    "type": "long"
+   },
+   {
+    "metadata": {},
+    "name": "customer",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "metadata": {},
+    "name": "amount",
+    "nullable": true,
+    "type": "double"
+   },
+   {
+    "metadata": {},
+    "name": "order_date",
+    "nullable": true,
+    "type": "date"
+   },
+   {
+    "metadata": {},
+    "name": "region",
+    "nullable": true,
+    "type": "string"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "zl-orders",
+ "timestamp_lookup": [
+  {
+   "at": "2025-01-06T08:59:59.999Z",
+   "version": 0
+  },
+  {
+   "at": "2025-01-06T09:00:00.000Z",
+   "version": 0
+  }
+ ],
+ "transactions": {
+  "orders-loader": null
+ },
+ "version": 0
+}

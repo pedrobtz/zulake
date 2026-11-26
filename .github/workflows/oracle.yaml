@@ -1,8 +1,10 @@
-# zulake's own workflow: deltalake 1.7.0 answers again for every fixture
+# zulake's own workflow: the example table zl-orders is built again (its
+# build is deterministic), deltalake 1.7.0 answers again for every fixture
 # table, the hostile logs are made again from the tables, the shipped tar is
-# packed again, and any difference from what is committed fails the run. So
-# the answers the R tests compare against are deltalake's, for exactly the
-# tables the package ships.
+# packed again and zl-orders copied to inst/extdata/orders, and any
+# difference from what is committed fails the run. So the answers the R
+# tests compare against are deltalake's, for exactly the tables the package
+# ships.
 #
 # Gated by the `paths` filter (r-actions README, assurance.yml: a workflow
 # whose pull_request trigger lists `paths` is exempt from the changes gate):
@@ -15,6 +17,7 @@ on:
       - "tools/oracle/**"
       - "tools/fixtures/**"
       - "tests/testthat/fixtures/**"
+      - "inst/extdata/**"
       - ".github/workflows/oracle.yaml"
   workflow_dispatch:
 
@@ -52,6 +55,10 @@ jobs:
         with:
           r-version: release
 
+      - name: The example table (zl-orders, built deterministically)
+        working-directory: tools/oracle
+        run: uv run --frozen python ../fixtures/generate.py orders
+
       - name: deltalake answers
         working-directory: tools/oracle
         run: uv run --frozen python answers.py
@@ -65,8 +72,8 @@ jobs:
 
       - name: Regenerated equals committed
         run: |
-          git add --intent-to-add --all tests/testthat/fixtures
-          if ! git diff --exit-code --stat -- tests/testthat/fixtures; then
+          git add --intent-to-add --all tests/testthat/fixtures inst/extdata
+          if ! git diff --exit-code --stat -- tests/testthat/fixtures inst/extdata; then
             git diff -- tests/testthat/fixtures/answers | head -200
             echo "::error::regenerated fixtures differ from the committed ones"
             exit 1

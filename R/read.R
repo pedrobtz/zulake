@@ -88,45 +88,18 @@
 #'   for the number of rows from the log alone.
 #' @export
 #' @examples
-#' # A partitioned table of two files: the data written with qio, the log by
-#' # hand.
-#' path <- tempfile("table")
-#' dir.create(file.path(path, "_delta_log"), recursive = TRUE)
-#' add <- function(year, ids) {
-#'   file <- sprintf("year=%d/part-0.parquet", year)
-#'   dir.create(file.path(path, dirname(file)))
-#'   qio::write_parquet(data.frame(id = ids), file.path(path, file))
-#'   sprintf(
-#'     paste0(
-#'       '{"add":{"path":"%s","partitionValues":{"year":"%d"},"size":%.0f,',
-#'       '"modificationTime":0,"dataChange":true,"stats":"{\\"numRecords\\":%d,',
-#'       '\\"minValues\\":{\\"id\\":%g},\\"maxValues\\":{\\"id\\":%g},',
-#'       '\\"nullCount\\":{\\"id\\":0}}"}}'
-#'     ),
-#'     file, year, file.size(file.path(path, file)), length(ids), min(ids), max(ids)
-#'   )
-#' }
-#' writeLines(c(
-#'   '{"protocol":{"minReaderVersion":1,"minWriterVersion":2}}',
-#'   paste0(
-#'     '{"metaData":{"id":"example","format":{"provider":"parquet","options":{}},',
-#'     '"schemaString":"{\\"type\\":\\"struct\\",\\"fields\\":[',
-#'     '{\\"name\\":\\"id\\",\\"type\\":\\"double\\",\\"nullable\\":true,\\"metadata\\":{}},',
-#'     '{\\"name\\":\\"year\\",\\"type\\":\\"integer\\",\\"nullable\\":true,\\"metadata\\":{}}]}",',
-#'     '"partitionColumns":["year"],"configuration":{}}}'
-#'   ),
-#'   add(2025, c(1, 2, 3)),
-#'   add(2026, c(4, 5))
-#' ), file.path(path, "_delta_log", "00000000000000000000.json"))
-#'
+#' # The example table the package ships: orders partitioned by region, five versions.
+#' path <- system.file("extdata", "orders", package = "zulake")
 #' tbl <- lake_open(path)
-#' lake_read(tbl)
-#' lake_read(tbl, filter = id >= 3 & year == 2026)
-#' # The statistics alone rule out the 2025 file for this filter:
-#' lake_files(tbl, filter = id > 3)$path
-#' lake_walk(tbl, function(piece) print(nrow(piece)))
+#' head(lake_read(tbl))
+#' lake_read(tbl, columns = c("order_id", "amount"), filter = region == "EU" & amount > 100)
+#' # Row-wise functions filter rows; dates compare as dates.
+#' lake_read(tbl, filter = order_date >= as.Date("2025-01-08") & nchar(customer) == 3)
 #'
-#' unlink(path, recursive = TRUE)
+#' # One file at a time, for a table larger than memory:
+#' total <- 0
+#' lake_walk(tbl, function(piece) total <<- total + sum(piece$amount))
+#' total
 lake_read <- function(tbl, columns = NULL, filter = NULL, int64 = c("double", "integer64")) {
   check_table(tbl)
   int64 <- check_int64(int64)

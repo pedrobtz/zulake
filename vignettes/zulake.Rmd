@@ -9,9 +9,7 @@ vignette: >
 ---
 
 ```{r, include = FALSE}
-# Not evaluated: written from .agents/design.md before the API exists.
-# Switch eval on, and check the output, once the functions are in.
-knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 ```
 
 ```{r setup}
@@ -20,132 +18,165 @@ library(zulake)
 
 A Delta Lake table is a folder of Parquet files plus a log that says which
 files make up each version. Reading the files without the log returns
-deleted and superseded rows. zulake reads the log itself: this page opens a
-table, looks inside it, and then reads it.
+deleted and superseded rows. zulake reads the log itself: on this page we
+open a table, look inside its log, and then read it with a filter. Reading
+a table on Azure is the last section; everything before it runs on a table
+that ships with the package.
 
-Every section uses one table on Azure, and a function you supply that
-returns a Microsoft Entra ID token for Azure Storage. zulake calls it before
-its first request and again if Azure says the token has expired; it never
-stores, prints or saves the token. Here the token comes from the Azure CLI:
+## Open a table
+
+The example table holds a few orders, partitioned by `region`, written in
+five commits on five days. `lake_open()` builds a **snapshot** of one
+version, the latest unless you ask for another.
 
 ```{r}
-uri <- "abfss://lake@account.dfs.core.windows.net/sales/orders"
+path <- system.file("extdata", "orders", package = "zulake")
+tbl <- lake_open(path)
+tbl
+```
+
+A snapshot never changes. `lake_versions()` lists the versions the log
+still holds, with the time each was committed, and `lake_load()` gives you
+a snapshot of another one, by number or by time.
+
+```{r}
+lake_versions(tbl)
+old <- lake_load(tbl, timestamp = as.POSIXct("2025-01-08 12:00", tz = "UTC"))
+lake_version(old)
+```
+
+## The log as data frames
+
+Inspection is what zulake is for. Each function answers one question from
+the log alone, as a base data frame, with nested values in list columns.
+The history says what each commit did:
+
+```{r}
+lake_history(tbl)[c("version", "timestamp", "operation")]
+lake_schema(tbl)[c("name", "type", "partition")]
+```
+
+`lake_files()` lists the files of the snapshot with their partition values
+and statistics; `lake_count()` adds up the row counts the statistics
+record, without reading a file.
+
+```{r}
+files <- lake_files(tbl)
+files[c("path", "size_bytes", "num_records")]
+lake_count(tbl)
+```
+
+Version 3 deleted one order. `lake_actions()` shows that commit as the log
+holds it, and `lake_changes()` the files it took away and added: the file
+that held the order is replaced by one with its other rows.
+
+```{r}
+lake_actions(tbl, version = 3)[c("line", "type")]
+lake_changes(tbl, from = 2, to = 3)[c("change", "path")]
+```
+
+The last commit also recorded the version of the application that wrote
+it, which a loader uses to avoid writing the same batch twice:
+
+```{r}
+lake_transactions(tbl)
+```
+
+Counts, sizes and statistics are 64-bit in the log. They come back as
+doubles, exact up to 2^53 - 1, and an error beyond; ask for
+`int64 = "integer64"` to get `bit64` integers instead.
+
+## Filters prune files, then rows
+
+A **filter** is an R expression over column names. Partition values and
+statistics rule out files that cannot match before anything is read: of
+the twelve files, only two can hold an order from the EU over 1000.
+
+```{r}
+lake_files(tbl, filter = region == "EU" & amount > 1000)$path
+```
+
+`lake_read()` reads the files that remain and then filters their rows, so
+the result never depends on the statistics. Local values are looked up
+where you call, and dates compare as dates.
+
+```{r}
+since <- as.Date("2025-01-08")
+lake_read(tbl, columns = c("order_id", "customer", "amount"),
+          filter = order_date >= since & amount > 300)
+```
+
+Besides comparisons, a filter may use row-wise functions such as
+`nchar()`, `round()` or arithmetic, which filter rows but never rule out
+files. A call that looks at other rows is an error, because its answer
+would depend on how the table is split into files:
+
+```{r, error = TRUE}
+lake_read(tbl, filter = amount > mean(amount))
+```
+
+`lake_walk()` reads one file at a time and hands each piece to a function,
+for a table larger than memory:
+
+```{r}
+total <- 0
+lake_walk(tbl, function(piece) total <<- total + sum(piece$amount),
+          filter = region == "US")
+total
+```
+
+## Deletion vectors and other features
+
+Tables written by Databricks often delete rows by marking them in a
+**deletion vector** rather than rewriting the file as the delete above
+did. zulake never returns a marked row. `lake_deletion_vectors()` shows
+each file's vector and the rows it deletes; this table has none. Reading
+those rows needs the zuroar package, while the descriptors and
+`lake_count()` come from the log alone.
+
+```{r}
+lake_deletion_vectors(tbl, rows = FALSE)
+```
+
+A table that needs a reader feature zulake does not support is refused,
+with an error that names the feature, before any data is read, because
+ignoring the feature would return wrong rows. `lake_protocol()` shows the
+features a table uses, each marked supported; this one uses in-commit
+timestamps, which only writers must know about.
+
+```{r}
+lake_protocol(tbl)
+```
+
+## Tables on Azure
+
+The same functions read a table on Azure Data Lake Storage Gen2 or Blob
+Storage. You supply a function that returns a Microsoft Entra ID token for
+Azure Storage; zulake calls it before its first request and again if Azure
+says the token has expired, and never stores, prints or saves the token.
+Here the token comes from the Azure CLI (not run on this page):
+
+```{r, eval = FALSE}
 token <- function() {
   system2("az", c(
     "account", "get-access-token", "--resource", "https://storage.azure.com",
     "--query", "accessToken", "--output", "tsv"
   ), stdout = TRUE)
 }
+tbl <- lake_open("abfss://lake@account.dfs.core.windows.net/sales/orders",
+                 credentials = token)
+lake_files(tbl, filter = region == "EU")
 ```
 
 The same table is also
 `https://account.dfs.core.windows.net/lake/sales/orders` or
-`https://account.blob.core.windows.net/lake/sales/orders`; a local path
-works too, with no `credentials`.
-
-## Open a table
-
-`lake_open()` builds a snapshot of one version, the latest unless you ask
-for another. A snapshot never changes; `lake_load()` gives you a new one.
-
-```{r}
-tbl <- lake_open(uri, credentials = token)
-lake_version(tbl)
-lake_summary(tbl)
-old <- lake_load(tbl, version = 3)
-```
-
-## The log as data frames
-
-Inspection is what zulake is for. Every action in the log comes back as a
-base data frame, unchanged, with nested values in list columns.
-
-```{r}
-lake_history(tbl, limit = 10)
-lake_schema(tbl)
-lake_files(tbl)
-lake_count(tbl)
-lake_actions(tbl, version = lake_version(tbl))
-lake_changes(tbl, from = 3)
-```
-
-Counts, sizes and statistics are 64-bit in the log. They come back as
-doubles, exact up to 2^53 - 1, and an error beyond; ask for
-`int64 = "integer64"` to get `bit64` integers instead. A table whose files
-carry no statistics has an unknown row count: `lake_count()` says so with
-`NA` and a warning rather than counting only the files it can, and
-`lake_count(tbl, footers = TRUE)` reads those files' counts from their
-Parquet footers.
-
-## Filters prune files, then rows
-
-A filter is an R expression over column names. Partition values and
-statistics drop files that cannot match before anything is downloaded;
-the rows that remain are then filtered exactly, so the result never
-depends on the statistics. Local values are looked up where you call.
-Numbers in integer and decimal columns compare exactly, so a value a
-double cannot write exactly is given as text; strings compare in UTF-8
-byte order.
-
-```{r}
-lake_files(tbl, filter = year == 2026 & region %in% c("EU", "UK"))
-yr <- 2026
-lake_read(tbl, columns = c("id", "amount"), filter = year == yr & amount > "1000.10")
-```
-
-`lake_walk()` reads one file at a time and hands each piece to a function,
-for a table larger than memory. Columns qio cannot return yet (nested
-columns, decimals of more than 15 digits) are left out with a warning
-naming each.
-
-```{r}
-total <- 0
-lake_walk(tbl, function(piece) total <<- total + sum(piece$amount), filter = year == yr)
-```
-
-A filter is decided row by row. Besides comparisons it may use row-wise
-functions such as `nchar()`, `round()` or arithmetic, which filter rows
-but never rule out files; a call that looks at other rows, such as
-`amount > mean(amount)`, is an error, because its answer would depend on
-how the table is split into files.
-
-```{r}
-lake_read(tbl, filter = year == yr & nchar(region) == 2 & amount * 1.2 > 1000)
-```
-
-## Deletion vectors
-
-Tables written by Databricks delete rows by marking them in a deletion
-vector rather than rewriting the file. zulake never returns a marked row.
-`lake_deletion_vectors()` shows each file's vector and the rows it
-deletes; reading those rows needs the zuroar package, while the
-descriptors and `lake_count()` come from the log alone.
-
-```{r}
-lake_deletion_vectors(tbl, rows = FALSE)
-dv <- lake_deletion_vectors(tbl)
-dv$rows[[1]]
-```
-
-## Unsupported features are refused
-
-A table that needs a reader feature zulake does not support is refused
-with an error that names the feature, before any data is read, because
-ignoring it would return wrong rows. `lake_protocol()` shows which
-features a table uses, each marked supported; the error of a refused
-table carries the same data frame.
-
-```{r}
-lake_protocol(tbl)
-err <- tryCatch(
-  lake_open("abfss://lake@account.dfs.core.windows.net/sales/widened", credentials = token),
-  zulake_error_unsupported_feature = identity
-)
-err$feature
-err$protocol
-```
+`https://account.blob.core.windows.net/lake/sales/orders`.
 
 ## Where next
 
-Every function is listed in the
-[reference](https://pedrobtz.github.io/zulake/reference/index.html).
+- `?lake_read` lists every function a filter may use, and how values
+  compare.
+- `?lake_files` describes each column of the file list and the statistics.
+- `?lake_open` covers versions, timestamps, Azure URIs and credentials.
+- The [reference](https://pedrobtz.github.io/zulake/reference/index.html)
+  lists every function.

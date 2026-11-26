@@ -79,38 +79,15 @@
 #'   the files added and removed between two versions.
 #' @export
 #' @examples
-#' # A partitioned table of two files, written by hand.
-#' path <- tempfile("table")
-#' dir.create(file.path(path, "_delta_log"), recursive = TRUE)
-#' writeLines(c(
-#'   '{"protocol":{"minReaderVersion":1,"minWriterVersion":2}}',
-#'   paste0(
-#'     '{"metaData":{"id":"example","format":{"provider":"parquet","options":{}},',
-#'     '"schemaString":"{\\"type\\":\\"struct\\",\\"fields\\":[',
-#'     '{\\"name\\":\\"id\\",\\"type\\":\\"long\\",\\"nullable\\":true,\\"metadata\\":{}},',
-#'     '{\\"name\\":\\"year\\",\\"type\\":\\"integer\\",\\"nullable\\":true,\\"metadata\\":{}}]}",',
-#'     '"partitionColumns":["year"],"configuration":{}}}'
-#'   ),
-#'   paste0(
-#'     '{"add":{"path":"year=2025/part-0.parquet","partitionValues":{"year":"2025"},',
-#'     '"size":100,"modificationTime":0,"dataChange":true,',
-#'     '"stats":"{\\"numRecords\\":3,\\"minValues\\":{\\"id\\":1},\\"maxValues\\":{\\"id\\":3}}"}}'
-#'   ),
-#'   paste0(
-#'     '{"add":{"path":"year=2026/part-0.parquet","partitionValues":{"year":"2026"},',
-#'     '"size":100,"modificationTime":0,"dataChange":true,',
-#'     '"stats":"{\\"numRecords\\":2,\\"minValues\\":{\\"id\\":4},\\"maxValues\\":{\\"id\\":5}}"}}'
-#'   )
-#' ), file.path(path, "_delta_log", "00000000000000000000.json"))
-#'
+#' # The example table the package ships: orders partitioned by region, five versions.
+#' path <- system.file("extdata", "orders", package = "zulake")
 #' tbl <- lake_open(path)
 #' lake_files(tbl)[c("path", "size_bytes", "num_records")]
-#' lake_files(tbl, filter = year >= 2026)$path
+#' # Partition values and statistics decide which files a filter can match:
+#' lake_files(tbl, filter = region == "EU" & amount > 1000)$path
 #' lake_partitions(tbl)
+#' lake_removed(tbl)[c("path", "deletion_timestamp")]
 #' lake_count(tbl)
-#' lake_removed(tbl)
-#'
-#' unlink(path, recursive = TRUE)
 lake_files <- function(tbl, filter = NULL, stats = TRUE, int64 = c("double", "integer64")) {
   check_table(tbl)
   int64 <- check_int64(int64)

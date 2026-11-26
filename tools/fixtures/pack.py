@@ -13,10 +13,15 @@ The tar is deterministic: entries sorted, every mtime, owner and mode fixed,
 GNU long-name headers, no compression (R CMD build compresses the package).
 oracle.yaml repacks and fails on any diff, so the tar never drifts from the
 trees.
+
+It also copies tables/zl-orders to inst/extdata/orders, the example table the
+package ships for its README, vignette and examples, so that copy never drifts
+from the fixture either (tests/testthat/test-extdata.R checks the two agree).
 """
 
 import io
 import os
+import shutil
 import tarfile
 from pathlib import Path
 
@@ -25,6 +30,7 @@ FIXTURES = ROOT / "tests" / "testthat" / "fixtures"
 OUT = FIXTURES / "delta-fixtures.tar"
 MEMBERS = ("tables", "hostile")
 MTIME = 1767225600  # 2026-01-01T00:00:00Z
+EXAMPLE = ROOT / "inst" / "extdata" / "orders"
 
 
 def entries():
@@ -60,6 +66,10 @@ def main():
                 tar.addfile(info, io.BytesIO(data))
     OUT.write_bytes(buf.getvalue())
     print(f"{OUT.relative_to(ROOT)}: {len(items)} entries, {OUT.stat().st_size} bytes")
+    if EXAMPLE.exists():
+        shutil.rmtree(EXAMPLE)
+    shutil.copytree(FIXTURES / "tables" / "zl-orders", EXAMPLE)
+    print(f"{EXAMPLE.relative_to(ROOT)}: copied from tables/zl-orders")
 
 
 if __name__ == "__main__":

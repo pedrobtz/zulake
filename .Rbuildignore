@@ -17,3 +17,4 @@
 ^tools$
 ^tests/testthat/fixtures/tables$
 ^tests/testthat/fixtures/hostile$
+^README\.Rmd$
