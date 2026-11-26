@@ -26,6 +26,8 @@ test_that("an Azure table makes the same storage calls as a local one, as the fa
       expect_identical(r$headers[["x-ms-version"]], "2023-11-03")
       expect_identical(r$headers$authorization, "Bearer tok-1")
       expect_true(r$method %in% c("GET", "HEAD"))
+      # azure_timeout, as zuhttp received it: zuhttp enforces it.
+      expect_identical(r$timeout, 600)
     }
     # A blob path is percent-encoded byte by byte, and decodes to the file's
     # own name ("p_str=a%20b" is a directory of that name, from the log's
@@ -106,6 +108,14 @@ test_that("get_range() sends Range for the bytes it asks for, and refuses what A
     expect_error(storage$get_range(name, bad[1L], bad[2L]), class = "zulake_error_storage")
   }
   expect_length(log$requests, n)
+  # A range ends at 2^53 - 1 at most: 2^53 - 2 and 2^53 - 1 go to Azure,
+  # which has too few bytes; 2^53 (above) does not.
+  for (to in c(2^53 - 2, 2^53 - 1)) {
+    e <- expect_error(storage$get_range(name, 0, to), class = "zulake_error_storage")
+    expect_match(conditionMessage(e), sprintf("which has %.0f", size), fixed = TRUE)
+    expect_identical(log$requests[[length(log$requests)]]$headers$range, sprintf("bytes=0-%.0f", to))
+  }
+  expect_length(log$requests, n + 2L)
   expect_error(storage$get_range("_delta_log/nope.json", 0, 1), class = "zulake_error_storage")
 })
 

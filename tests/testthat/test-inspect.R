@@ -160,6 +160,10 @@ test_that("lake_history() equals deltalake's history, and limit cuts it", {
   expect_identical(lake_history(tbl, limit = 2)$version, c(4, 3))
   expect_identical(nrow(lake_history(tbl, limit = 0)), 0L)
   expect_identical(nrow(lake_history(tbl, limit = 100)), 5L)
+  # The table's 5 commits straddled.
+  expect_identical(lake_history(tbl, limit = 4)$version, c(4, 3, 2, 1))
+  expect_identical(lake_history(tbl, limit = 5)$version, c(4, 3, 2, 1, 0))
+  expect_identical(lake_history(tbl, limit = 6)$version, c(4, 3, 2, 1, 0))
   for (bad in list(-1, 1.5, NA, "2", c(1, 2))) {
     expect_error(lake_history(tbl, limit = bad), class = "zulake_error_argument")
   }

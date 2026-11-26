@@ -286,7 +286,8 @@ url_decode <- function(x) {
 # container `container` of every account, and records every request in
 # `log` (an environment; `log$requests` is a list of method, url, host,
 # path (the decoded blob path after the container), query (named list,
-# decoded) and headers (named, lower-case names)).
+# decoded), headers (named, lower-case names) and timeout (the seconds
+# zuhttp was given)).
 #
 #   page_size  blobs per List Blobs page; NextMarker is opaque ("page-<n>")
 #   auth       function(authorization header or NULL) returning NULL to
@@ -319,7 +320,7 @@ azure_fake <- function(root, log, container = "lake", page_size = 1000L, auth = 
       method = req$method, url = url, host = host,
       container = url_decode(segments[1L]),
       path = paste(url_decode(segments[-1L]), collapse = "/"),
-      query = query, headers = as.list(headers)
+      query = query, headers = as.list(headers), timeout = req$policy$timeout
     )
     log$requests[[length(log$requests) + 1L]] <- rec
     if (is.function(override)) {
