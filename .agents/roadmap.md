@@ -25,7 +25,7 @@ Stage 2b, checkpoints, waits for that `qio` and runs after Stage 7.
 | 1 | [Fixtures and oracle](#stage-1--fixtures-and-oracle) | quick | [#3](https://github.com/pedrobtz/zulake/issues/3) | [#23](https://github.com/pedrobtz/zulake/pull/23) | 2026-11-26 |
 | 2 | [Log replay](#stage-2--log-replay) | quick | [#4](https://github.com/pedrobtz/zulake/issues/4) | [#30](https://github.com/pedrobtz/zulake/pull/30) | 2026-11-26 |
 | 3 | [Inspection](#stage-3--inspection) | quick | [#5](https://github.com/pedrobtz/zulake/issues/5) | [#31](https://github.com/pedrobtz/zulake/pull/31) | 2026-11-26 |
-| 4 | [Reading and pruning](#stage-4--reading-and-pruning) | quick | [#6](https://github.com/pedrobtz/zulake/issues/6) | | |
+| 4 | [Reading and pruning](#stage-4--reading-and-pruning) | quick | [#6](https://github.com/pedrobtz/zulake/issues/6) | | 2026-11-26 |
 | 5 | [Deletion vectors and column mapping](#stage-5--deletion-vectors-and-column-mapping) | full | [#7](https://github.com/pedrobtz/zulake/issues/7) | | |
 | 6 | [Azure backend](#stage-6--azure-backend) | quick | [#8](https://github.com/pedrobtz/zulake/issues/8) | | |
 | 7 | [Documentation](#stage-7--documentation) | quick | [#9](https://github.com/pedrobtz/zulake/issues/9) | | |
@@ -364,6 +364,22 @@ downloading only the files a filter cannot rule out.
 - `.agents/assurance.md` has Boundaries rows for data reading and
   pruning, each naming its test.
 
+**Deviations (2026-11-26).**
+
+- `lake_read()` and `lake_walk()` refuse, until Stage 5, a snapshot with
+  live deletion vectors (decided for this stage) and one that maps column
+  names (`columnMapping`, the same rule: Stage 5 owns column mapping on
+  rows), with `zulake_error_unsupported_feature`. So the full-read test
+  covers every fixture version without either, and asserts the refusal on
+  the others.
+- `lake_read()` and `lake_walk()` take `int64`, as every function that
+  returns 64-bit values from the log does (design §5): a `long` partition
+  column is one.
+- Decisions from the 2026-11-26 review of this stage (nested columns,
+  decimals, the exact comparator, 64-bit statistics, `footers = TRUE`,
+  deletion vectors refused until Stage 5) are in design §4.3, §5, §6 and
+  §7.
+
 **Design.** [§4.3](design.md#43-reading),
 [§6](design.md#6-pruning-and-filtering), [D8](design.md#10-decisions).
 
@@ -383,8 +399,11 @@ downloading only the files a filter cannot rule out.
   Z85 inline vectors, UUID-relative and absolute paths, range reads, the
   file format with its CRC-32, `zuroar::roar64_unserialize()`.
 - `lake_deletion_vectors()` in the shape of
-  [D12](design.md#10-decisions); reads drop marked rows. (`lake_count()`
-  already subtracts each descriptor's `cardinality`, from Stage 3.)
+  [D12](design.md#10-decisions); reads drop marked rows, in
+  `read_piece()` between the read and the row filter, and Stage 4's
+  refusal of deletion vectors and column mapping in `read_refusals()`
+  goes. (`lake_count()` already subtracts each descriptor's
+  `cardinality`, from Stage 3.)
 - `columnMapping` in `name` mode and `timestampNtz`.
 - `Suggests: zuroar`, `Remotes: pedrobtz/zuroar`, and a classed error
   naming `zuroar` when a table needs it and it is absent.

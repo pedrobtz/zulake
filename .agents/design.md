@@ -209,8 +209,35 @@ physical name under column mapping, then renamed), drops the rows its
 deletion vector marks, adds partition columns from the `add` action,
 filters rows exactly, and binds the pieces. `lake_walk()` does the same
 one file at a time and calls a function on each piece, for tables
-larger than memory. Downloads are removed when the session ends unless
-the `cache` argument names a directory (Q4).
+larger than memory. Data files on local disk are read in place; a backend
+without local paths (Azure) downloads each file once per session, keyed by
+path, size and modification time, into the session's temporary
+directory, which R removes when the session ends. Caching across sessions
+is Q4, after 0.1.0 (settled 2026-11-26, Stage 4: no `cache` argument in
+0.1.0, since a per-session cache needs none).
+
+Settled in Stage 4 (2026-11-26):
+
+- *Order.* Refusals, then the filter plan, pruning, each surviving file's
+  `qio::read_plan()`, and the columns returned, all before a row is read;
+  then per file: read, partition columns added, a column the file lacks
+  filled with `NA` of its type, rows filtered. Stage 5 drops the rows a
+  deletion vector marks between the read and the row filter.
+- *Deletion vectors are applied only in Stage 5.* Until then `lake_read()`
+  and `lake_walk()` refuse a snapshot whose live files carry deletion
+  vectors with `zulake_error_unsupported_feature` (`feature =
+  "deletionVectors"`), and one that maps column names likewise (`feature =
+  "columnMapping"`), before any data file is read, so a read never returns
+  deleted rows or physical column names. Stage 5 removes both refusals.
+  Why: Stage 5's work and tests (the roadmap) own deletion vectors and
+  column mapping on rows; the column-mapping refusal follows the same rule
+  and is recorded as a Stage 4 deviation in the roadmap.
+- *`int64`.* `lake_read()` and `lake_walk()` take `int64` like the
+  inspection functions, since a `long` partition column holds 64-bit
+  values from the log (§5), and pass it to `qio` for data columns.
+- *Row filter.* The whole filter is evaluated on each file's rows on their
+  own, so an expression that looks at other rows (`x == max(x)`) sees one
+  file at a time, as `lake_walk()` does.
 
 ### 4.4 Deletion vectors
 
@@ -252,7 +279,7 @@ lake_files(tbl, filter = NULL, stats = TRUE, int64)  # live add actions
 lake_partitions(tbl, filter = NULL, int64)    # distinct partition values
 lake_removed(tbl, int64) # remove tombstones still in the log
 lake_deletion_vectors(tbl, files = NULL, rows = TRUE)  # descriptors, rows
-lake_count(tbl)          # records from stats, minus deleted rows
+lake_count(tbl, footers = FALSE)  # records from stats, minus deleted rows
 
 # The log itself
 lake_log(tbl)            # every _delta_log entry: version, kind, size
@@ -263,8 +290,8 @@ lake_domains(tbl)        # domainMetadata
 lake_checkpoints(tbl)    # checkpoints and _last_checkpoint
 
 # Data
-lake_read(tbl, columns = NULL, filter = NULL)
-lake_walk(tbl, FUN, columns = NULL, filter = NULL)
+lake_read(tbl, columns = NULL, filter = NULL, int64)
+lake_walk(tbl, FUN, columns = NULL, filter = NULL, int64)
 ```
 
 `filter` is an unevaluated R expression over column names: `==`, `!=`,
@@ -281,8 +308,8 @@ result is `NA_real_`, with a classed warning
 (`zulake_warning_count_unknown`) giving the number of such files, which
 `lake_summary()` also reports as `files_without_records`. It is never a
 partial sum (`deltalake` 1.7.0 returns 0 for `simple_table` at version 0,
-which has 5 rows). From Stage 4, `footers = TRUE` reads the row counts of
-those files from their Parquet footers. A file with a deletion vector and
+which has 5 rows). `footers = TRUE` reads the row counts of those files
+from their Parquet footers (Stage 4), with no warning. A file with a deletion vector and
 no `numRecords` is a corrupt log. The cardinality is the descriptor's,
 which the log holds, so the subtraction needs no `zuroar` and is done from
 Stage 3 on (settled 2026-11-26); Stage 5 adds the rows themselves.
@@ -320,7 +347,15 @@ Settled in Stage 3 (2026-11-26), the shapes the roxygen documents in full:
   2^53 - 1 are kept as text when the log is parsed (`zujson` rounds them
   otherwise) and become a `zulake_error_int64` as doubles or an exact
   `integer64`. `bit64` holds -2^63 + 1 to 2^63 - 1 (-2^63 is its `NA`), so
-  -2^63 is an error in both modes. Inside an action or `commitInfo` as the
+  -2^63 is an error in both modes. The exception is a `long` statistic in
+  `lake_files(stats = TRUE)`'s `min` and `max`: one the mode cannot hold
+  is `NA`, with a classed `zulake_warning_int64` (fields `value`, `column`,
+  `path`) once per column, in both modes, and its exact digits stay in
+  `action$stats` (settled 2026-11-26, Stage 4: a statistic is a bound, not
+  a count, so a table whose writer recorded -2^63 must still list its
+  files; `zl-types` does). Versions, counts and sizes keep the error.
+  Pruning never converts: it compares `long` statistics and partition
+  values as integer text (§6). Inside an action or `commitInfo` as the
   log writes it, only a value a double cannot hold becomes an
   `integer64`. `byte` and `short` values are integers, `integer` values
   doubles, because an R integer cannot hold -2^31. Why: D10, and `bit64`
@@ -332,11 +367,14 @@ Settled in Stage 3 (2026-11-26), the shapes the roxygen documents in full:
 - *Filters in Stage 3.* `lake_files()` and `lake_partitions()` take the
   pruning subset of D8. Each file gets the set of outcomes the filter can
   have on its rows (TRUE, FALSE, NA, combined by R's three-valued logic);
-  a comparison on partition columns has the one outcome R gives on the
-  file's typed partition values, and a comparison on any other column can
-  have any outcome until Stage 4 adds statistics. A file is kept when TRUE
-  is possible. A `decimal` partition value is compared as a double.
-  Anything outside the subset is a `zulake_error_filter`.
+  a comparison on partition columns has the one outcome the file's
+  partition values give, and one on any other column the outcomes its
+  statistics allow (Stage 4, §6). A file is kept when TRUE is possible.
+  Partition values compare by §6's rules: `long` and `decimal` ones exactly
+  at any precision (settled 2026-11-26, Stage 4, replacing Stage 3's
+  "compared as a double"). Anything outside the subset is a
+  `zulake_error_filter` in `lake_files()` and `lake_partitions()`, which
+  have no rows; `lake_read()` and `lake_walk()` apply it to rows only.
 
 `credentials` is a function of no arguments returning a bearer token as
 a single string. `zulake` calls it before the first request, and again
@@ -353,10 +391,16 @@ parser and a zone rule of its own). Every error is a condition of class
 `zulake_error_unsupported_feature`, whose `feature` field names the
 feature (D7) and `protocol` field holds the `lake_protocol()` frame,
 `zulake_error_int64` (a value a double cannot hold, D10; `value` gives its
-digits) and `zulake_error_filter` (a filter outside the pruning subset).
-The one warning is `zulake_warning_count_unknown` (class
-`zulake_warning`), from `lake_count()`. Built with base `stop()` on a classed condition: the
-package has no `rlang` or `cli` dependency.
+digits), `zulake_error_filter` (a filter outside the pruning subset, or
+a value it cannot compare exactly) and `zulake_error_column_unreadable` (a
+column named in `columns` or used in `filter` that `qio` cannot return,
+§7; fields `column`, `reason`). The warnings, each also of class
+`zulake_warning`, are `zulake_warning_count_unknown` from `lake_count()`,
+`zulake_warning_int64` from `lake_files()` (a `long` statistic shown as
+`NA`) and `zulake_warning_column_skipped` from `lake_read()` and
+`lake_walk()` (fields `column`, `reason`). Built with base `stop()` and
+`warning()` on classed conditions: the package has no `rlang` or `cli`
+dependency.
 
 ### 5.1 Against `deltalake` 1.7.0
 
@@ -418,6 +462,46 @@ surviving files are then filtered with the whole expression in R. The
 result is exact whatever the statistics say; statistics only decide how
 much is downloaded.
 
+Settled in Stage 4 (2026-11-26), how values compare. Each comparison of
+the pruning subset is made by one implementation on partition values, on
+statistics and on rows, so pruning and the row filter cannot disagree:
+
+- *Exact comparator.* `byte`, `short`, `integer`, `long` and `decimal`
+  columns compare as decimal text. A value is parsed from
+  `[+-]digits[.digits][e[+-]n]` (the exponent form is accepted: `zl-types`
+  has `"dec38":1.234567890123457e+19`) into a sign, its digits without
+  leading or trailing zeros and the position of the point (zero has sign
+  0), and two values compare by sign, then the position, then the digits
+  code point by code point, never by the locale's string `<`. Literals:
+  integer, `integer64` and character values are exact (a character value
+  that is not a number is a `zulake_error_filter`); a finite double `x` is
+  `sprintf("%.15g", x)` when `as.numeric()` of that equals `x`, otherwise
+  `sprintf("%.0f", x)` when `x` is whole, otherwise a
+  `zulake_error_filter` asking for the value as text (`0.1` and `12.3`
+  pass; `1/3` and `0.1 + 0.2` do not); `Inf` and `-Inf` compare as
+  infinities; `NA` and `NaN` give `NA`. Partition values compare exactly at
+  any precision. With `int64 = "integer64"` no non-whole double reaches
+  `bit64` (`bit64::as.integer64(3) < 3.5` is FALSE). Why: one rule for
+  decimal partition values, decimal statistics and 64-bit values, which a
+  double rounds.
+- *A decimal statistic of precision above 15 is never a bound*, nor one
+  that is missing or has more fraction digits than the scale (deltalake
+  writes decimal statistics through an f64); the file is kept.
+- *Other types* (`float`, `double`, `boolean`, `date`, `timestamp`,
+  `timestamp_ntz`) compare as doubles. A `float` statistic is widened by
+  one float step, since its shortest decimal sits up to half a step from
+  the float; a timestamp statistic by 1 ms each way, since writers
+  truncate it to milliseconds; and a `float` or `double` column may hold
+  NaN, which no statistic counts, so `is.na()` and `!(x %in% v)` keep its
+  files. A date or timestamp column takes text (`"2024-01-31"`, UTC unless
+  an offset is given) as well as a `Date` or `POSIXct`.
+- *Strings* compare in UTF-8 byte order on rows too, whatever the
+  session's collation; a string maximum is taken as a prefix the true
+  maximum may extend.
+- *Null counts.* A file whose `nullCount` equals `numRecords` holds only
+  nulls, and one with `numRecords` 0 nothing; a missing count is
+  unknown.
+
 ## 7. Types
 
 Delta's types map to what `qio` returns for the Parquet column, so
@@ -431,8 +515,22 @@ them (D10). Data columns `qio` cannot return (nested, until D14's `qio`
 slice; anything beyond it after) are handled so that none is lost
 silently (D7): with `columns = NULL` the readable columns are returned and
 each unreadable one is named in a classed warning,
-`zulake_warning_column_skipped`; a column named in `columns` that cannot
-be returned is a classed error.
+`zulake_warning_column_skipped` (fields `column`, `reason`); a column named
+in `columns` (or used in `filter`) that cannot be returned is a classed
+error, `zulake_error_column_unreadable`, with the same fields. They are
+found from each file's `qio::read_plan()` and from the schema, never by
+letting `qio` drop them (settled 2026-11-26, Stage 4, maintainer's
+direction).
+
+A `decimal(p, s)` data or partition column is a double when p <= 15,
+where a double holds it exactly; a wider one is a column `qio` cannot
+return (D10, D14) until `qio` 0.2.0 (`reason = "decimal precision <p> >
+15"`). zulake muffles `qio`'s unclassed decimal-as-double message only
+when every decimal column of the read was vetted that way;
+[pedrobtz/qio#74](https://github.com/pedrobtz/qio/issues/74) asks for a
+class. With `qio` 0.2.0 decimals become exact character, and the row
+filter must then use the exact comparator (§6) on them: a recorded future
+breaking type change for p <= 15 (settled 2026-11-26, Stage 4).
 
 ## 8. Testing and validation
 
@@ -463,7 +561,12 @@ be returned is a classed error.
   warning (§5); `get_add_actions()` keys statistics by physical name under
   column mapping, `lake_files()` by logical name; and it drops a
   `decimal(38, 18)` statistic written as a double (`zl-types`), which
-  `lake_files()` keeps as its text.
+  `lake_files()` keeps as its text. Since Stage 4, full reads differ only
+  where `qio` 0.1.1 documents a loss, each with `qio`'s own warning or
+  zulake's: an `int32` of -2^31 reads as `NA`, a 64-bit value past 2^53
+  (as a double) or -2^63 (as `integer64`) as `NA`, a decimal as the
+  nearest double, a `float` as the double of its float; and the nested
+  and `decimal(38, 18)` columns of `zl-types` are left out (§7).
 - **Hostile log.** Truncated and corrupt commits, a missing checkpoint
   part, a `_last_checkpoint` that points past the log, a deletion vector
   with a bad checksum, a magic number that differs, a partition value of
@@ -524,7 +627,8 @@ The order of work, and what 0.1.0 waits for, are in
   acknowledge the feature exists" (PROTOCOL.md at `483d55e`).
   `typeWidening`, `variantType`, `variantShredding` and their `-preview`
   names stay refused, because each obliges the reader to convert or
-  decode data. `writerFeatures` is never consulted.
+  decode data. `writerFeatures` is never a reason to refuse (replay reads
+  it for in-commit timestamps; reworded 2026-11-26, Stage 4).
 - **D8.** Filters are R expressions, not `deltalake`'s DNF tuples; the
   pruning subset is fixed and documented, and anything outside it only
   filters rows.
