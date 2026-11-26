@@ -229,6 +229,33 @@ test_that("a 401 calls credentials() once more and retries with the new token", 
   expect_length(log$requests, 1L)
 })
 
+test_that("a credentials() that fails on a refresh leaves the snapshot usable once it works again", {
+  state <- "ok"
+  calls <- 0
+  credentials <- function() {
+    calls <<- calls + 1
+    if (state == "fail") stop("expired login")
+    paste0("tok-", calls)
+  }
+  accept <- "Bearer tok-1"
+  log <- new.env()
+  local_azure_fake(azure_fake(fake_root(), log, auth = function(h) if (!identical(h, accept)) 401L))
+  tbl <- lake_open(fake_uri("zl-basic"), credentials = credentials)
+  # Azure stops taking the token, and credentials() fails: a classed error.
+  accept <- "none"
+  state <- "fail"
+  e <- expect_error(lake_load(tbl), class = "zulake_error_auth")
+  expect_match(conditionMessage(e), "expired login", fixed = TRUE)
+  expect_identical(calls, 2)
+  # It works again: the next request refreshes once and goes on.
+  state <- "ok"
+  accept <- "Bearer tok-3"
+  expect_identical(lake_version(lake_load(tbl)), lake_version(tbl))
+  expect_identical(calls, 3)
+  auth <- vapply(log$requests, function(r) r$headers$authorization, "")
+  expect_identical(auth[length(auth)], "Bearer tok-3")
+})
+
 test_that("credentials() must return one token, and its failure is a classed error", {
   local_azure_fake(azure_fake(fake_root(), new.env()))
   for (bad in list(NA_character_, "", c("a", "b"), 1, NULL, "tok\nen", character())) {
