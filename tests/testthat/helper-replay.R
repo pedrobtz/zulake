@@ -159,3 +159,30 @@ expect_no_snapshot <- function(expr, class) {
   expect_error(tbl <- expr, class = class)
   expect_identical(tbl, "untouched")
 }
+
+# `x` (a parsed JSON value) with one node, chosen at random, replaced by a
+# value of another JSON type. For the structural corruption test.
+mutate_json <- function(x) {
+  replacements <- list(NULL, 1L, -1, 2^60, "x", "", TRUE, list(), structure(list(), names = character()),
+                       list(a = 1L), I(c("a", "b")), I(1:2))
+  paths <- list()
+  walk <- function(v, path) {
+    paths[[length(paths) + 1L]] <<- path
+    if (is.list(v)) for (i in seq_along(v)) walk(v[[i]], c(path, i))
+  }
+  walk(x, integer())
+  path <- paths[[sample.int(length(paths), 1L)]]
+  value <- replacements[sample.int(length(replacements), 1L)]
+  if (!length(path)) {
+    return(value[[1L]])
+  }
+  last <- path[length(path)]
+  if (length(path) == 1L) {
+    x[last] <- value
+  } else {
+    parent <- x[[path[-length(path)]]]
+    parent[last] <- value
+    x[[path[-length(path)]]] <- parent
+  }
+  x
+}

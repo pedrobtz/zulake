@@ -76,9 +76,11 @@ test_that("each malformed action is a corrupt log, and no snapshot is returned",
     metadata_no_id = c(good_p, "{\"metaData\":{\"schemaString\":\"{}\",\"partitionColumns\":[]}}"),
     metadata_bad_schema = c(good_p, "{\"metaData\":{\"id\":\"x\",\"schemaString\":\"{nope\",\"partitionColumns\":[]}}"),
     metadata_schema_not_struct = c(good_p, "{\"metaData\":{\"id\":\"x\",\"schemaString\":\"[]\",\"partitionColumns\":[]}}"),
-    metadata_bad_partitions = c(good_p, "{\"metaData\":{\"id\":\"x\",\"schemaString\":\"{\\\"type\\\":\\\"struct\\\",\\\"fields\\\":[]}\",\"partitionColumns\":\"p\"}}"),
-    metadata_bad_configuration = c(good_p, "{\"metaData\":{\"id\":\"x\",\"schemaString\":\"{\\\"type\\\":\\\"struct\\\",\\\"fields\\\":[]}\",\"partitionColumns\":[],\"configuration\":{\"a\":true}}}"),
+    metadata_bad_partitions = c(good_p, sub("\"partitionColumns\":[]", "\"partitionColumns\":[1]", good_m, fixed = TRUE)),
+    metadata_bad_configuration = c(good_p, sub("\"configuration\":{}", "\"configuration\":{\"a\":true}", good_m, fixed = TRUE)),
+    metadata_schema_no_fields = c(good_p, "{\"metaData\":{\"id\":\"x\",\"schemaString\":\"{\\\"type\\\":\\\"struct\\\"}\",\"partitionColumns\":[]}}"),
     partition_not_in_schema = c(good_p, metadata_line(partition = "p"), add_line("a", list(p = "1"))),
+    schema_fields_not_objects = c(good_p, "{\"metaData\":{\"id\":\"x\",\"schemaString\":\"{\\\"type\\\":\\\"struct\\\",\\\"fields\\\":[1,\\\"p\\\"]}\",\"partitionColumns\":[\"p\"]}}", add_line("a", list(p = "1"))),
     txn_without_app = c(good_p, good_m, "{\"txn\":{\"version\":1}}"),
     txn_empty_app = c(good_p, good_m, "{\"txn\":{\"appId\":\"\",\"version\":1}}"),
     txn_text_version = c(good_p, good_m, "{\"txn\":{\"appId\":\"a\",\"version\":\"1\"}}"),
@@ -107,6 +109,12 @@ test_that("unknown actions and fields are ignored, and names match exactly", {
   tbl <- lake_open(path)
   expect_identical(tbl$files$path, "a.parquet")
   expect_identical(tbl$commit_info, list(anything = 1L))
+})
+
+test_that("a schema with no fields is a table with no columns", {
+  meta <- "{\"metaData\":{\"id\":\"x\",\"schemaString\":\"{\\\"type\\\":\\\"struct\\\",\\\"fields\\\":[]}\",\"partitionColumns\":[]}}"
+  tbl <- lake_open(hand_table(c(protocol_line(), meta)))
+  expect_identical(tbl$metadata$schema$fields, list())
 })
 
 test_that("an empty commit file changes nothing", {
@@ -151,6 +159,9 @@ test_that("partition values are checked against the column's Delta type", {
   for (type in names(bad)) {
     for (x in bad[[type]]) expect_false(zulake:::partition_value_ok(x, type), label = paste(type, x))
   }
+  # A type the protocol may add later is not guessed at here; reading it
+  # is what refuses it.
+  expect_true(zulake:::partition_value_ok("anything", "void"))
 })
 
 test_that("partition values are checked on the physical name under column mapping, and empty means null", {
@@ -167,6 +178,13 @@ test_that("partition values are checked on the physical name under column mappin
   expect_identical(lake_open(hand_table(lines))$files$path, c("a.parquet", "b.parquet", "c.parquet"))
   lines[5L] <- add_line("c.parquet", list("col-p" = "x"))
   expect_no_snapshot(lake_open(hand_table(lines)), "zulake_error_corrupt_log")
+  # Field metadata that is not an object has no physical name: the logical
+  # name is the key.
+  meta <- metadata_line(c(p = "integer"), partition = "p", configuration = list(delta.columnMapping.mode = "name"))
+  odd <- sub("\\\"metadata\\\":{}", "\\\"metadata\\\":\\\"x\\\"", meta, fixed = TRUE)
+  expect_false(identical(odd, meta))
+  lines <- c(protocol_line(2L, 5L), odd, add_line("a.parquet", list(p = "1")))
+  expect_identical(lake_open(hand_table(lines))$files$path, "a.parquet")
   # Without column mapping the logical name is the key, and "col-p" is not one.
   lines <- c(protocol_line(), metadata_line(c(id = "long", p = "integer"), partition = "p"), add_line("c.parquet", list(p = "x")))
   expect_no_snapshot(lake_open(hand_table(lines)), "zulake_error_corrupt_log")
@@ -178,4 +196,78 @@ test_that("a removed file's partition values are not checked", {
   write_commit(path, 1, remove_line("c.parquet"))
   expect_identical(nrow(lake_open(path)$files), 0L)
   expect_no_snapshot(lake_open(path, version = 0), "zulake_error_corrupt_log")
+})
+
+test_that("a compaction file that ends before it starts is a corrupt log", {
+  path <- hand_table()
+  write_commit(path, 1, add_line("b.parquet"))
+  writeLines(add_line("b.parquet"), file.path(path, "_delta_log", "00000000000000000001.00000000000000000001.compacted.json"))
+  expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
+})
+
+test_that("a partition column of a nested type is a corrupt log", {
+  schema <- "{\\\"type\\\":\\\"struct\\\",\\\"fields\\\":[{\\\"name\\\":\\\"p\\\",\\\"type\\\":{\\\"type\\\":\\\"struct\\\",\\\"fields\\\":[]},\\\"nullable\\\":true,\\\"metadata\\\":{}}]}"
+  meta <- sprintf("{\"metaData\":{\"id\":\"x\",\"schemaString\":\"%s\",\"partitionColumns\":[\"p\"],\"configuration\":{}}}", schema)
+  path <- hand_table(c(protocol_line(), meta, add_line("a.parquet", list(p = "1"))))
+  expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
+})
+
+test_that("an in-commit timestamp enablement version that is not a whole number is a corrupt log", {
+  path <- local_fixture_copy("zl-catalog-managed")
+  f1 <- file.path(path, "_delta_log", "00000000000000000001.json")
+  lines <- readLines(f1)
+  lines[2L] <- protocol_line(1L, 7L, writer_features = "inCommitTimestamp")
+  lines[3L] <- sub("\"delta.inCommitTimestampEnablementVersion\":\"1\"", "\"delta.inCommitTimestampEnablementVersion\":\"one\"", lines[3L], fixed = TRUE)
+  writeLines(lines, f1)
+  expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
+  expect_no_snapshot(lake_open(path, timestamp = Sys.time()), "zulake_error_corrupt_log")
+})
+
+test_that("a randomly corrupted commit gives a snapshot or a zulake_error, never another error", {
+  withr::local_seed(20261126)
+  src <- fixture_table("zl-partitioned")
+  for (version in c(0, 1)) {
+    original <- readBin(file.path(src, "_delta_log", sprintf("%020d.json", version)), "raw", 1e6)
+    for (i in 1:150) {
+      path <- local_fixture_copy("zl-partitioned")
+      bytes <- original
+      at <- sample.int(length(bytes), sample(1:3, 1L))
+      op <- sample(c("flip", "drop", "byte"), 1L)
+      bytes <- switch(op,
+        flip = {
+          bytes[at] <- xor(bytes[at], as.raw(sample(1:255, length(at), TRUE)))
+          bytes
+        },
+        drop = bytes[-at],
+        byte = {
+          bytes[at] <- charToRaw(paste(sample(strsplit("{}[]\":,0-9ne", "")[[1L]], length(at), TRUE), collapse = ""))[seq_along(at)]
+          bytes
+        }
+      )
+      writeBin(bytes, file.path(path, "_delta_log", sprintf("%020d.json", version)))
+      res <- tryCatch(lake_open(path), error = identity)
+      ok <- inherits(res, "zulake_table") || inherits(res, "zulake_error")
+      expect_true(ok, label = paste(version, i, op, if (inherits(res, "error")) conditionMessage(res) else ""))
+    }
+  }
+})
+
+test_that("a commit with one value changed to another JSON type gives a snapshot or a zulake_error", {
+  withr::local_seed(26112026)
+  for (table in c("zl-partitioned", "deletion_vectors", "zl-domains", "table_with_column_mapping")) {
+    src <- fixture_table(table)
+    last <- max(oracle_versions(table))
+    for (i in 1:120) {
+      path <- local_fixture_copy(table)
+      version <- sample(0:last, 1L)
+      f <- file.path(path, "_delta_log", sprintf("%020d.json", version))
+      lines <- readLines(f, warn = FALSE, encoding = "UTF-8")
+      j <- sample.int(length(lines), 1L)
+      lines[j] <- zujson::json_write(mutate_json(zujson::json_parse(lines[j])), auto_unbox = TRUE)
+      writeLines(lines, f, useBytes = TRUE)
+      res <- tryCatch(lake_open(path), error = identity)
+      ok <- inherits(res, "zulake_table") || inherits(res, "zulake_error")
+      expect_true(ok, label = paste(table, version, j, lines[j], if (inherits(res, "error")) conditionMessage(res) else ""))
+    }
+  }
 })

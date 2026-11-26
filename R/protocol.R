@@ -72,7 +72,9 @@ check_partition_values <- function(adds, metadata, mode) {
     return(invisible())
   }
   fields <- metadata[["schema"]][["fields"]]
-  field_names <- vapply(fields, function(f) as.character(f[["name"]])[1L], "")
+  field_names <- vapply(fields, function(f) {
+    if (is.list(f) && is_string(f[["name"]])) f[["name"]] else NA_character_
+  }, "")
   for (col in columns) {
     i <- match(col, field_names)
     if (is.na(i)) {
@@ -84,7 +86,8 @@ check_partition_values <- function(adds, metadata, mode) {
     field <- fields[[i]]
     key <- col
     if (mode != "none") {
-      physical <- field[["metadata"]][["delta.columnMapping.physicalName"]]
+      md <- field[["metadata"]]
+      physical <- if (is.list(md)) md[["delta.columnMapping.physicalName"]]
       if (is_string(physical)) key <- physical
     }
     type <- field[["type"]]

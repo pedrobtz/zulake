@@ -250,9 +250,12 @@ check_metadata <- function(x, name) {
     zujson::json_parse(x[["schemaString"]]),
     zujson_error = function(e) bad_action(name, "metaData", "whose `schemaString` is not valid JSON")
   )
-  if (!is.list(x[["schema"]]) || !identical(x[["schema"]][["type"]], "struct") || !is.list(x[["schema"]][["fields"]])) {
+  fields <- if (is.list(x[["schema"]])) x[["schema"]][["fields"]]
+  if (!is.list(x[["schema"]]) || !identical(x[["schema"]][["type"]], "struct") ||
+    !(is.list(fields) || (is.logical(fields) && !length(fields)))) {
     bad_action(name, "metaData", "whose `schemaString` is not a struct")
   }
+  x[["schema"]][["fields"]] <- as.list(fields)
   x
 }
 
