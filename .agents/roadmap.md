@@ -28,7 +28,7 @@ Stage 2b, checkpoints, waits for that `qio` and runs after Stage 7.
 | 4 | [Reading and pruning](#stage-4--reading-and-pruning) | quick | [#6](https://github.com/pedrobtz/zulake/issues/6) | [#32](https://github.com/pedrobtz/zulake/pull/32) | 2026-11-26 |
 | 5 | [Deletion vectors and column mapping](#stage-5--deletion-vectors-and-column-mapping) | full | [#7](https://github.com/pedrobtz/zulake/issues/7) | [#33](https://github.com/pedrobtz/zulake/pull/33) | 2026-11-26 |
 | 6 | [Azure backend](#stage-6--azure-backend) | quick | [#8](https://github.com/pedrobtz/zulake/issues/8) | [#35](https://github.com/pedrobtz/zulake/pull/35) | 2026-11-26 |
-| 7 | [Documentation](#stage-7--documentation) | quick | [#9](https://github.com/pedrobtz/zulake/issues/9) | | |
+| 7 | [Documentation](#stage-7--documentation) | quick | [#9](https://github.com/pedrobtz/zulake/issues/9) | | 2026-11-26 |
 | 2b | [Checkpoints](#stage-2b--checkpoints) | quick | [#26](https://github.com/pedrobtz/zulake/issues/26) | | |
 | 8 | [Assurance](#stage-8--assurance) | quick | [#10](https://github.com/pedrobtz/zulake/issues/10) | | |
 | 9 | [Full CI](#stage-9--full-ci) | full | [#11](https://github.com/pedrobtz/zulake/issues/11) | | |
@@ -578,6 +578,8 @@ package ships, so users and CRAN see real output.
 - A small example table in `inst/extdata/orders/`, built from one of the
   licence-compatible fixtures (a design decision to record before the
   stage starts).
+  *Settled (2026-11-26):* a new fixture `zl-orders`, zulake's own, built
+  for it ([§8](design.md#8-testing-and-validation)).
 - `vignettes/zulake.Rmd` switched to `eval = TRUE` on that table, through
   `pkg-docs`; the README's example the same.
 - Every exported function has an example that runs on it.

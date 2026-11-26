@@ -99,3 +99,7 @@
   `zulake_error_storage` with the HTTP `status` and Azure's error `code`.
   Other schemes, and an Azure URI with a query string such as a SAS, are a
   `zulake_error_uri`. Requests go through `zuhttp`, now imported.
+* The package ships a small example table, orders partitioned by region in
+  five versions, at `system.file("extdata", "orders", package = "zulake")`.
+  The README, the Get started vignette (`vignette("zulake")`), now
+  evaluated, and every help page's examples run on it.
