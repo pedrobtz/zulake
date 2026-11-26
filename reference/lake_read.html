@@ -144,9 +144,9 @@ error asking for the value as text. A date or timestamp column takes a
 <p>Columns are typed as qio returns them (see <code><a href="https://pedrobtz.github.io/qio/reference/read_parquet.html" class="external-link">qio::read_parquet()</a></code>), and
 partition columns as <code><a href="lake_files.html">lake_files()</a></code> types them, except that a <code>decimal</code>
 of precision 15 or less, data or partition, is a double, which holds it
-exactly. Columns qio cannot return are not lost silently: nested columns
-(<code>struct</code>, <code>array</code>, <code>map</code>) and decimals of precision above 15, until qio
-reads them. With <code>columns = NULL</code> they are left out, each named in a
+exactly. Columns zulake does not return are not lost silently: nested
+columns (<code>struct</code>, <code>array</code>, <code>map</code>), and decimals of precision above 15
+until qio reads them exactly. With <code>columns = NULL</code> they are left out, each named in a
 warning of class <code>zulake_warning_column_skipped</code> (fields <code>column</code> and
 <code>reason</code>); named in <code>columns</code> or used in <code>filter</code>, such a column is an
 error of class <code>zulake_error_column_unreadable</code> with the same fields.</p>

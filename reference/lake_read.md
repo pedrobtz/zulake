@@ -121,9 +121,9 @@ Columns are typed as qio returns them (see
 and partition columns as
 [`lake_files()`](https://pedrobtz.github.io/zulake/reference/lake_files.md)
 types them, except that a `decimal` of precision 15 or less, data or
-partition, is a double, which holds it exactly. Columns qio cannot
-return are not lost silently: nested columns (`struct`, `array`, `map`)
-and decimals of precision above 15, until qio reads them. With
+partition, is a double, which holds it exactly. Columns zulake does not
+return are not lost silently: nested columns (`struct`, `array`, `map`),
+and decimals of precision above 15 until qio reads them exactly. With
 `columns = NULL` they are left out, each named in a warning of class
 `zulake_warning_column_skipped` (fields `column` and `reason`); named in
 `columns` or used in `filter`, such a column is an error of class
