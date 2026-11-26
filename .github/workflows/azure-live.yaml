@@ -1,0 +1,83 @@
+# zulake's own workflow: the live layer of the Azure tests (design section
+# 8, acceptance criterion 4b). One table on a real ADLS Gen2 account, read
+# by zulake with a bearer token and by deltalake 1.7.0
+# (tools/oracle/live.py), compared in test-azure-live.R. It needs the
+# repository's secrets, so it runs only when dispatched:
+#
+#   gh workflow run azure-live.yaml --ref <branch>
+#
+# Secrets (pedrobtz/zulake#24): AZURE_CLIENT_ID, AZURE_TENANT_ID and
+# AZURE_SUBSCRIPTION_ID, for an app registration with a federated
+# credential for this repository and the "Storage Blob Data Reader" role on
+# the table's container, and ZULAKE_AZURE_URI, the table. The token is
+# masked in the log and passed to the suite in the environment only.
+#
+# Not on pull requests, so outside the changes gate (ci.md: a job not on
+# pull requests is exempt).
+on:
+  workflow_dispatch:
+
+name: azure-live
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ZULAKE_AZURE_URI: ${{ secrets.ZULAKE_AZURE_URI }}
+      NOT_CRAN: "true"
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.7.11"
+          enable-cache: false
+
+      - uses: r-lib/actions/setup-r@v2.14.0
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2.14.0
+        with:
+          extra-packages: any::testthat, any::withr
+
+      - uses: azure/login@v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Token for Azure Storage
+        run: |
+          token="$(az account get-access-token --resource https://storage.azure.com --query accessToken --output tsv)"
+          echo "::add-mask::$token"
+          echo "ZULAKE_AZURE_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - name: Install zulake
+        run: R CMD INSTALL .
+
+      - name: deltalake's answers
+        working-directory: tools/oracle
+        run: uv run --frozen python live.py "$RUNNER_TEMP/live-answers"
+
+      - name: The live suite, not skipped
+        env:
+          ZULAKE_AZURE_ANSWERS: ${{ runner.temp }}/live-answers
+        run: |
+          Rscript -e '
+            library(testthat)
+            r <- test_dir("tests/testthat", filter = "azure-live", package = "zulake",
+                          load_package = "installed", reporter = "summary", stop_on_failure = TRUE)
+            d <- as.data.frame(r)
+            if (!nrow(d) || any(d$skipped)) stop("the live suite skipped")
+          '
