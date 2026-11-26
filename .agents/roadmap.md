@@ -27,7 +27,7 @@ Stage 2b, checkpoints, waits for that `qio` and runs after Stage 7.
 | 3 | [Inspection](#stage-3--inspection) | quick | [#5](https://github.com/pedrobtz/zulake/issues/5) | [#31](https://github.com/pedrobtz/zulake/pull/31) | 2026-11-26 |
 | 4 | [Reading and pruning](#stage-4--reading-and-pruning) | quick | [#6](https://github.com/pedrobtz/zulake/issues/6) | [#32](https://github.com/pedrobtz/zulake/pull/32) | 2026-11-26 |
 | 5 | [Deletion vectors and column mapping](#stage-5--deletion-vectors-and-column-mapping) | full | [#7](https://github.com/pedrobtz/zulake/issues/7) | [#33](https://github.com/pedrobtz/zulake/pull/33) | 2026-11-26 |
-| 6 | [Azure backend](#stage-6--azure-backend) | quick | [#8](https://github.com/pedrobtz/zulake/issues/8) | | 2026-11-26 |
+| 6 | [Azure backend](#stage-6--azure-backend) | quick | [#8](https://github.com/pedrobtz/zulake/issues/8) | [#35](https://github.com/pedrobtz/zulake/pull/35) | 2026-11-26 |
 | 7 | [Documentation](#stage-7--documentation) | quick | [#9](https://github.com/pedrobtz/zulake/issues/9) | | |
 | 2b | [Checkpoints](#stage-2b--checkpoints) | quick | [#26](https://github.com/pedrobtz/zulake/issues/26) | | |
 | 8 | [Assurance](#stage-8--assurance) | quick | [#10](https://github.com/pedrobtz/zulake/issues/10) | | |
