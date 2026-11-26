@@ -353,6 +353,20 @@ test_that("data files at absolute paths and file: URIs are read; other schemes a
   expect_error(lake_read(lake_open(path)), class = "zulake_error_storage")
 })
 
+test_that("a Windows drive path is absolute, as are a root path and a URI; a table-relative path is not", {
+  for (p in c("C:/data/part-0.parquet", "c:\\data\\part-0.parquet", "/data/part-0.parquet", "file:///data/x.parquet",
+              "file:/data/x.parquet", "abfss://lake@account.dfs.core.windows.net/t/x.parquet")) {
+    expect_true(is_absolute_path(p), label = p)
+  }
+  for (p in c("part-0.parquet", "year=2024/part-0.parquet", "p%3A1/part-0.parquet")) {
+    expect_false(is_absolute_path(p), label = p)
+  }
+  expect_identical(absolute_local_path("C:/data/part-0.parquet"), "C:/data/part-0.parquet")
+  expect_identical(absolute_local_path("file:///C:/data/a%20b.parquet"), "C:/data/a b.parquet")
+  expect_identical(absolute_local_path("file:///data/a%20b.parquet"), "/data/a b.parquet")
+  expect_error(absolute_local_path("s3://bucket/x.parquet"), class = "zulake_error_uri")
+})
+
 test_that("a column two files store as different types is a corrupt log", {
   path <- local_fixture_copy("zl-basic")
   tbl <- lake_open(path)

@@ -146,7 +146,9 @@ test_that("partition values are compared as their Delta type, exactly as deltala
     if (!length(pcols)) next
     parts <- oracle_partition_frame(case$table, case$version)
     for (col in pcols) {
-      for (v in unique(parts[[col]])) {
+      values <- unique(parts[[col]])
+      # By index: for () drops a Date's class before R 4.6.
+      for (v in lapply(seq_along(values), function(j) values[j])) {
         expr <- if (is.na(v)) bquote(is.na(.(as.symbol(col)))) else bquote(.(as.symbol(col)) == .(v))
         got <- eval(bquote(lake_files(tbl, filter = .(expr), stats = FALSE)))$path
         want <- parts$path[if (is.na(v)) is.na(parts[[col]]) else parts[[col]] %in% v]

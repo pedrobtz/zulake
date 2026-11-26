@@ -7,9 +7,10 @@ run_order <- function(seed, shuffle = TRUE) {
   path <- file.path(dir, "test-order.R")
   writeLines(
     sprintf(
-      'test_that("t%1$02d", { cat("%1$d\\n", file = "%2$s", append = TRUE); succeed() })',
+      'test_that("t%1$02d", { cat("%1$d\\n", file = %2$s, append = TRUE); succeed() })',
       1:20,
-      log
+      # Quoted and escaped, since a Windows temporary path has backslashes.
+      encodeString(log, quote = "\"")
     ),
     path
   )

@@ -450,7 +450,7 @@ fetch_file <- function(tbl, i) {
 # Whether a path from the log (an `add` path, a deletion vector's absolute
 # path) is absolute: a URI with a scheme, or a path from the root.
 is_absolute_path <- function(path) {
-  grepl("^[A-Za-z][A-Za-z0-9+.-]*:", path) && !grepl("^[A-Za-z]:[/\\\\]", path) || startsWith(path, "/")
+  startsWith(path, "/") || grepl("^[A-Za-z]:[/\\\\]", path) || grepl("^[A-Za-z][A-Za-z0-9+.-]*:", path)
 }
 
 # The local path of an absolute path from the log: itself, or the path of a

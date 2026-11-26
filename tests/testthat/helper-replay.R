@@ -12,7 +12,10 @@ set_commit_mtimes <- function(path) {
     for (a in zujson::json_parse_ndjson(readBin(f, "raw", file.size(f)))) {
       ts <- a[["commitInfo"]][["timestamp"]]
       if (!is.null(ts)) {
-        stopifnot(Sys.setFileTime(f, as.POSIXct(ts / 1000, origin = "1970-01-01", tz = "UTC")))
+        # Half a millisecond on: Windows truncates the time set to whole
+        # milliseconds, where ts / 1000 as a double can sit just below one.
+        # Readers truncate to milliseconds, so the commit time is still ts.
+        stopifnot(Sys.setFileTime(f, as.POSIXct(ts / 1000 + 0.0005, origin = "1970-01-01", tz = "UTC")))
         break
       }
     }

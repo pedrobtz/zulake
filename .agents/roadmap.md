@@ -464,6 +464,15 @@ refusals on a multi-file fixture; shadowing of `nchar` by the caller, in
   the example's rows through a 32-bit bitmap.
 - Begins with the 2026-11-26 Stage 4 correction (filters row-wise by
   construction), recorded under Stage 4.
+- The first full-profile run (on this pull request; Stages 0 to 4 ran
+  quick only) found failures from earlier stages, fixed here because this
+  stage merges on the full profile: a Windows drive path (`C:/...`) in an
+  `add` action was taken as relative (`is_absolute_path()`, Stage 4); and
+  in the tests, commit times set through `Sys.setFileTime()`, which
+  truncates to milliseconds on Windows, a test-file path with backslashes
+  written into code, a `for ()` over Dates (R before 4.6 drops the
+  class), and `zujson`'s parse of `0.12345678901234567` on macOS, which
+  differs from R's in the last bit, compared with R's.
 
 **Design.** [§4.4](design.md#44-deletion-vectors),
 [D9](design.md#10-decisions).
