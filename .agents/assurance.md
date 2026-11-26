@@ -38,7 +38,9 @@ One row per boundary the package crosses. An oracle knows the answer:
 
 "No crash" is not an oracle. The reference implementation is `deltalake`
 1.7.0, whose answers Stage 1 commits under
-`tests/testthat/fixtures/answers/`.
+`tests/testthat/fixtures/answers/` and `oracle.yaml` (own) regenerates and
+diffs; `expect_oracle()` in `tests/testthat/helper-oracle.R` compares
+against them (its own tests: `tests/testthat/test-fixtures.R`).
 
 <!-- markdownlint-disable MD013 -->
 | Boundary                                                                                          | Oracle                                                                                                       | Carried by |

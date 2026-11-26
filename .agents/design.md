@@ -74,8 +74,8 @@ log, which returns deleted and superseded rows. `quak` (portfolio) wraps
 ### 1.3 The admission test
 
 1. **Specification.** The Delta protocol is one public document with
-   versioned, named reader features; the Delta Acceptance Testing (DAT)
-   tables and `delta-rs`'s test tables are corpora.
+   versioned, named reader features; `delta-rs`'s test tables are a
+   corpus (Apache-2.0; §8, Q3).
 2. **Implementation.** Pure R over the protocol. No C library exists to
    vendor: `delta-rs` and `delta-kernel-rs` are Rust.
 3. **Siblings.** `qio` (Parquet), `zujson` (commits), `zuhttp` (storage),
@@ -315,15 +315,29 @@ them (D10).
 
 ## 8. Testing and validation
 
-- **Corpora.** The DAT reader tables and `delta-rs`'s
-  `crates/test/tests/data` tables, both checked for licence before use
-  (Q3), copied as fixtures with their generating versions recorded.
+- **Corpora (2026-11-26, Q3).** A small subset of `delta-rs`'s
+  `crates/test/tests/data` tables (Apache-2.0), copied unchanged from
+  commit `40439ad6d37a9e99add5bd80796aa6179ebe339f`, plus tables zulake
+  writes itself with `deltalake` 1.7.0's writer (MIT) for what that subset
+  lacks, each with its source and writer in
+  `tests/testthat/fixtures/PROVENANCE.md`. They ship in the package,
+  packed in one tar (their paths are longer than a package tarball
+  allows), so the oracle tests run on CRAN too; the Apache notice is in
+  `inst/COPYRIGHTS` and "The delta-rs authors" are a `cph`. DAT is not
+  used: it has no licence. `COVID-19_NYT` is not copied (New York Times
+  terms).
 - **Oracle.** `deltalake` 1.7.0, installed with `uv` in a
   development-only workflow, answers the same questions on every
   fixture: version, history, schema, protocol, live file list, partition
   values, statistics, count, deletion vector row indexes and full reads.
   `zulake` must agree on every one. Fixtures it cannot read must be
-  refused by name.
+  refused by name. The answers are committed
+  (`tests/testthat/fixtures/answers/`, format in `tools/oracle/README.md`)
+  and the `oracle` workflow regenerates them. Deliberate differences:
+  `history()` is taken from the latest snapshot and cut at each version,
+  because on an older snapshot 1.7.0 reports negative versions; and
+  `deltalake` reads `columnMapping` in `id` mode, which `zulake` refuses
+  (D7, Q7).
 - **Hostile log.** Truncated and corrupt commits, a missing checkpoint
   part, a `_last_checkpoint` that points past the log, a deletion vector
   with a bad checksum, a magic number that differs, a partition value of
@@ -396,8 +410,10 @@ The order of work, and what 0.1.0 waits for, are in
 - **Q2.** Should a deletion vector come back as row indexes (doubles),
   a `zuroar64`, or a `zuroar_bits` keep mask once pedrobtz/zuroar#71
   lands? `deltalake` returns a keep mask (`selection_vector`).
-- **Q3.** The licences of the DAT tables and `delta-rs`'s test data
-  were not checked for this RFC.
+- **Q3.** Settled 2026-11-26 (maintainer): `delta-rs`'s test tables, a
+  small subset shipped in the package, under Apache-2.0; no DAT tables,
+  because DAT has no licence (no LICENSE file, nothing in its README or
+  packaging, checked 2026-11-26) and so cannot be redistributed (§8).
 - **Q4.** Should downloads be cached across sessions (for example
   through `dazcache`), keyed by path and the `add` action's size and
   modification time, which never change for a Delta data file?
