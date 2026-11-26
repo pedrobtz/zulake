@@ -89,9 +89,9 @@ error asking for the value as text. A date or timestamp column takes a
 Columns are typed as qio returns them (see \code{\link[qio:read_parquet]{qio::read_parquet()}}), and
 partition columns as \code{\link[=lake_files]{lake_files()}} types them, except that a \code{decimal}
 of precision 15 or less, data or partition, is a double, which holds it
-exactly. Columns qio cannot return are not lost silently: nested columns
-(\code{struct}, \code{array}, \code{map}) and decimals of precision above 15, until qio
-reads them. With \code{columns = NULL} they are left out, each named in a
+exactly. Columns zulake does not return are not lost silently: nested
+columns (\code{struct}, \code{array}, \code{map}), and decimals of precision above 15
+until qio reads them exactly. With \code{columns = NULL} they are left out, each named in a
 warning of class \code{zulake_warning_column_skipped} (fields \code{column} and
 \code{reason}); named in \code{columns} or used in \code{filter}, such a column is an
 error of class \code{zulake_error_column_unreadable} with the same fields.
