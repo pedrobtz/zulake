@@ -4,6 +4,9 @@
 
 - **Pedro Baltazar**. Author, maintainer, copyright holder.
 
+- **The delta-rs authors**. Copyright holder.  
+  Delta test tables in tests/testthat/fixtures
+
 ## Citation
 
 Source:

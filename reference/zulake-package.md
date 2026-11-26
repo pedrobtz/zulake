@@ -27,3 +27,8 @@ Useful links:
 Authors:
 
 - Pedro Baltazar <pedrobtz@gmail.com> \[copyright holder\]
+
+Other contributors:
+
+- The delta-rs authors (Delta test tables in tests/testthat/fixtures)
+  \[copyright holder\]
