@@ -307,6 +307,22 @@ test_that("null counts decide is.na() and comparisons; a file without statistics
   expect_identical(lake_files(tbl, filter = id %in% c(1, NA))$path, c("all-null.parquet", "no-null.parquet", "none.parquet"))
   expect_identical(lake_files(tbl, filter = id == NA)$path, character())
   expect_identical(lake_files(tbl, filter = !(id == NA))$path, character())
+  # Statistics of another column only: nothing is known of this one.
+  tbl <- lake_open(raw_table(c(raw_header(c(id = "long", x = "long")),
+                               raw_add("other.parquet", stats = '{\\"numRecords\\":2,\\"nullCount\\":{\\"x\\":2}}'))))
+  expect_identical(lake_files(tbl, filter = is.na(id))$path, "other.parquet")
+  expect_identical(lake_files(tbl, filter = !is.na(id))$path, "other.parquet")
+  expect_identical(lake_files(tbl, filter = !is.na(x))$path, character())
+})
+
+test_that("a logical column alone filters rows as R does", {
+  tbl <- lake_open(fixture_table("zl-types"))
+  full <- suppressWarnings(lake_read(tbl))
+  for (expr in list(quote(flag), quote(!flag), quote(flag | is.na(flag)), quote(xor(flag, i32 > 0)))) {
+    expect_identical(suppressWarnings(eval(bquote(lake_read(tbl, filter = .(expr))))), r_subset(full, expr),
+                     label = deparse(expr))
+  }
+  expect_error(lake_files(tbl, filter = flag), class = "zulake_error_filter")
 })
 
 test_that("the exact comparator agrees with a second implementation on random decimal text", {
@@ -428,6 +444,8 @@ test_that("row-wise functions and two-column comparisons only filter rows in lak
   expect_error(lake_read(tbl, filter = p_str), "is not logical", fixed = TRUE, class = "zulake_error_filter")
   expect_error(lake_read(tbl, filter = p_int == c(1, 2)), "must have length 1", fixed = TRUE, class = "zulake_error_filter")
   expect_error(lake_read(tbl, filter = 1 %in% p_int), "column on its left", fixed = TRUE, class = "zulake_error_filter")
+  expect_error(lake_read(tbl, filter = xor(1 %in% p_int, TRUE)), "column on its left", fixed = TRUE,
+               class = "zulake_error_filter")
   expect_error(lake_read(tbl, filter = abs(p_str) > 1), "evaluating it on rows failed", fixed = TRUE,
                class = "zulake_error_filter")
   # A value is a vector: a Date, a POSIXct or text for a date (?lake_read),

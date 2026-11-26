@@ -199,3 +199,12 @@ test_that("a checkpoint whose actions break the protocol is a corrupt log", {
   write_json_checkpoint(path, 1, c(protocol_line(3L, 7L, "v2Checkpoint", "v2Checkpoint"), metadata_line(), "{\"add\":{\"size\":1}}"))
   expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
 })
+
+test_that("a Parquet checkpoint with no action column has no protocol, and is a corrupt log", {
+  path <- hand_table()
+  write_commit(path, 1, add_line("part-1.parquet"))
+  name <- "_delta_log/00000000000000000001.checkpoint.parquet"
+  qio::write_parquet(data.frame(foo = 1), file.path(path, name))
+  expect_identical(zulake:::log_parquet_actions(storage_local(path), name), list())
+  expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
+})

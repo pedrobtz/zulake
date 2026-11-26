@@ -71,7 +71,7 @@ test_that("every 64-bit value from the log straddles 2^53: exact, then an error,
 
 test_that("an array in commitInfo holds its numbers past 2^53 - 1 as integer64, or is an error", {
   path <- hand_table(c(protocol_line(), metadata_line(), add_line("a.parquet"),
-    '{"commitInfo":{"timestamp":1,"all":[9007199254740993,-9007199254740994],"some":[9007199254740993,1],"none":[1,2]}}'))
+    '{"commitInfo":{"timestamp":1,"all":[9007199254740993,-9007199254740994],"some":[9007199254740993,1],"none":[1,2],"text":["a",9007199254740993]}}'))
   tbl <- lake_open(path)
   expect_error(lake_history(tbl), class = "zulake_error_int64")
   skip_if_not_installed("bit64")
@@ -80,6 +80,7 @@ test_that("an array in commitInfo holds its numbers past 2^53 - 1 as integer64, 
   expect_identical(info$all, bit64::as.integer64(c("9007199254740993", "-9007199254740994")))
   expect_identical(info$some, list(bit64::as.integer64("9007199254740993"), 1L))
   expect_identical(info$none, zujson::json_parse("[1,2]"))
+  expect_identical(info$text, list("a", bit64::as.integer64("9007199254740993")))
 })
 
 test_that("a sum of counts straddles 2^53 too", {
