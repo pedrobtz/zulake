@@ -4,7 +4,12 @@
 # (`==`, `!=`, `<`, `<=`, `>`, `>=`), `%in%` and `is.na()`, each between a
 # column and values, joined by `!`, `&` and `|` (and parentheses). A value is
 # any expression that names no column; it is evaluated once, in the caller's
-# environment. A symbol that names a column is the column.
+# environment. A symbol that names a column is the column. Outside the
+# subset, a filter may apply the row-wise functions of `row_wise_functions`
+# to columns, and compare two columns; R evaluates those on rows after
+# reading, and they never prune. Any other call with a column inside is
+# refused (D8): a filter is decided row by row, so it gives the same rows
+# however the table's rows are split into files.
 #
 # Each file gets the outcomes the filter can have on its rows (TRUE, FALSE or
 # NA, as the filter evaluates on rows). A comparison on a partition column
@@ -55,127 +60,242 @@ prune_files <- function(tbl, plan, int64) {
   which(filter_outcomes(plan, info)$t)
 }
 
-filter_error <- function(expr, problem) {
+filter_error <- function(expr, problem, strict = TRUE) {
+  hint <- if (strict) {
+    "A filter here is comparisons (==, !=, <, <=, >, >=), %in% and is.na() between a column and values, joined by !, & and |."
+  } else {
+    "A filter is comparisons (==, !=, <, <=, >, >=), %in% and is.na() between a column and values, and the row-wise functions listed in ?lake_read, joined by !, & and |."
+  }
   zulake_abort(
     "filter",
-    sprintf(
-      "`filter` cannot use %s: %s. A filter here is comparisons (==, !=, <, <=, >, >=), %%in%% and is.na() on columns, joined by !, & and |.",
-      paste(deparse(expr, width.cutoff = 60L), collapse = " "), problem
-    ),
+    sprintf("`filter` cannot use %s: %s. %s", deparse_one(expr), problem, hint),
     expr = expr
   )
 }
 
 # ---- the plan ----------------------------------------------------------------
 
-# The filter checked against the pruning subset, with every value evaluated,
-# as a tree of nodes:
+# Functions a filter may apply to columns, besides the pruning subset
+# (design section 5, D8). Each gives one value per row, from that row alone,
+# so a filter evaluated on each file's rows equals the filter evaluated on
+# the whole table. They filter rows after reading and never prune.
+row_wise_functions <- c(
+  "+", "-", "*", "/", "%%", "%/%", "^", "abs", "round", "floor", "ceiling", "sqrt", "exp", "log",
+  "nchar", "toupper", "tolower", "substr", "startsWith", "endsWith", "grepl", "is.nan", "is.finite",
+  "xor", "as.character", "as.numeric", "as.integer"
+)
+
+# Arguments of a row-wise function that are options, not data: they must be
+# values (no column inside), as R uses only their first element.
+row_wise_options <- list(
+  grepl = c("pattern", "ignore.case", "perl", "fixed", "useBytes"),
+  nchar = c("type", "allowNA", "keepNA")
+)
+
+# Row-wise functions R defines as primitives, whose arguments are matched by
+# position: for these, every argument after the first is an option.
+row_wise_first_only <- c("as.character", "as.numeric", "as.integer")
+
+# The filter checked against D8, with every value evaluated, as a tree of
+# nodes:
 #
 #   list(op = "and" | "or" | "not", args)
 #   list(op = "atom", fn, column, kind, type, keys, nan, has_na, has_nan,
 #        call, columns)                    a column compared with values
 #   list(op = "isna", column, columns)     is.na() of a column
-#   list(op = "r", call, columns)          evaluated by R: two columns
-#                                          compared, a column of no kind, or
-#                                          (unless `strict`) anything outside
-#                                          the subset
+#   list(op = "const", value)              a value: TRUE, FALSE or NA
+#   list(op = "r", call, columns)          evaluated by R on rows: two
+#                                          columns compared, a row-wise
+#                                          function of columns, a column of
+#                                          no kind compared, a logical
+#                                          column
 #
 # `columns` lists the columns a node uses. `types` are the Delta types of
-# the table's columns, by name.
+# the table's columns, by name. A call with a column inside it that is
+# neither in the pruning subset nor row-wise is refused, never evaluated
+# per file, since a per-file result would silently differ from the
+# table's. `strict` refuses "r" and "const" nodes too, for lake_files()
+# and lake_partitions(), which have no rows.
 filter_plan <- function(expr, types, env, strict = TRUE) {
   columns <- names(types)
-  r_node <- function(why) {
+  has_column <- function(x) length(intersect(all.vars(x), columns)) > 0L
+  row_node <- function(x, why) {
+    call <- row_expr(x, columns, env, expr, strict)
     if (strict) {
-      filter_error(expr, why)
+      filter_error(expr, sprintf("%s, which filters rows and cannot prune files", why), strict = TRUE)
     }
-    list(op = "r", call = expr, columns = intersect(all.vars(expr), columns))
+    list(op = "r", call = call, columns = intersect(all.vars(call), columns))
   }
-  if (is.call(expr)) {
-    fn <- expr[[1L]]
+  const_node <- function(x) {
+    if (strict) {
+      filter_error(expr, "it names no column", strict = TRUE)
+    }
+    value <- filter_value(x, env, expr)
+    if (!is.logical(value) || length(value) != 1L) {
+      filter_error(expr, sprintf("%s names no column, so it must be one TRUE, FALSE or NA", deparse_one(x)), strict)
+    }
+    list(op = "const", value = value)
+  }
+  walk <- function(x) {
+    if (!has_column(x)) {
+      return(const_node(x))
+    }
+    if (is.symbol(x)) {
+      col <- as.character(x)
+      if (!identical(types[[col]], "boolean")) {
+        filter_error(expr, sprintf("column %s is not logical; compare it with a value", format_string(col)), strict)
+      }
+      return(row_node(x, sprintf("the logical column %s alone", format_string(col))))
+    }
+    fn <- x[[1L]]
     name <- if (is.symbol(fn)) as.character(fn) else ""
-    nargs <- length(expr) - 1L
+    nargs <- length(x) - 1L
     if (name == "(" && nargs == 1L) {
-      return(filter_plan(expr[[2L]], types, env, strict))
+      return(walk(x[[2L]]))
     }
     if (name == "!" && nargs == 1L) {
-      return(list(op = "not", args = list(filter_plan(expr[[2L]], types, env, strict))))
+      return(list(op = "not", args = list(walk(x[[2L]]))))
     }
     if (name %in% c("&", "|") && nargs == 2L) {
-      return(list(
-        op = if (name == "&") "and" else "or",
-        args = list(filter_plan(expr[[2L]], types, env, strict), filter_plan(expr[[3L]], types, env, strict))
-      ))
+      return(list(op = if (name == "&") "and" else "or", args = list(walk(x[[2L]]), walk(x[[3L]]))))
+    }
+    if (name == "%in%" && nargs == 2L && has_column(x[[3L]])) {
+      filter_error(expr, "%in% takes a column on its left and values on its right", strict)
     }
     if (name %in% c(comparison_ops, "%in%") && nargs == 2L) {
-      lhs <- filter_operand(expr[[2L]], columns, env, expr, strict)
-      rhs <- filter_operand(expr[[3L]], columns, env, expr, strict)
-      if (is.null(lhs) || is.null(rhs)) {
-        return(r_node("a column is inside a value"))
+      lhs <- x[[2L]]
+      rhs <- x[[3L]]
+      bare <- function(s) is.symbol(s) && as.character(s) %in% columns
+      if (bare(lhs) && !has_column(rhs) || name != "%in%" && bare(rhs) && !has_column(lhs)) {
+        return(atom_node(x, name, types, env, expr))
       }
-      if (is.null(lhs$column) && is.null(rhs$column)) {
-        return(r_node("it compares no column"))
+      if (has_column(lhs) && has_column(rhs)) {
+        return(row_node(x, "it compares two columns"))
       }
-      if (name != "%in%") {
-        for (side in list(lhs, rhs)) {
-          if (is.null(side$column) && length(side$value) != 1L) {
-            return(r_node(sprintf("a value compared with %s must have length 1", name)))
-          }
-        }
-      }
-      call <- as.call(list(as.symbol(name), lhs$expr, rhs$expr))
-      used <- c(lhs$column, rhs$column)
-      if (length(used) == 2L || (name == "%in%" && is.null(lhs$column))) {
-        return(list(op = "r", call = call, columns = unique(used)))
-      }
-      col <- used
-      value <- if (is.null(lhs$column)) lhs$value else rhs$value
-      fn_name <- if (name != "%in%" && is.null(lhs$column)) flip_op[[name]] else name
-      kind <- type_kind(types[[col]])
-      if (is.na(kind)) {
-        return(list(op = "r", call = call, columns = col))
-      }
-      lit <- literal_keys(value, kind, types[[col]], expr)
-      keep <- !keys_na(lit$keys)
-      return(list(
-        op = "atom", fn = fn_name, column = col, kind = kind, type = types[[col]],
-        keys = keys_subset(lit$keys, keep),
-        has_na = any(!keep & !lit$nan), has_nan = any(lit$nan),
-        call = call, columns = col
-      ))
+      return(row_node(x, "it compares a function of a column"))
     }
     if (name == "is.na" && nargs == 1L) {
-      arg <- expr[[2L]]
-      if (!is.symbol(arg) || !as.character(arg) %in% columns) {
-        return(r_node("is.na() takes a column"))
+      arg <- x[[2L]]
+      if (is.symbol(arg)) {
+        return(list(op = "isna", column = as.character(arg), columns = as.character(arg)))
       }
-      return(list(op = "isna", column = as.character(arg), columns = as.character(arg)))
+      return(row_node(x, "is.na() of a function of a column"))
     }
-    return(r_node(sprintf("%s is not in the pruning subset", if (nzchar(name)) paste0(name, "()") else "that call")))
+    if (name %in% row_wise_functions) {
+      return(row_node(x, sprintf("%s() is row-wise", name)))
+    }
+    filter_error(expr, sprintf("%s is neither in the pruning subset nor row-wise", call_label(name)), strict)
   }
-  r_node("it is not a comparison")
+  walk(expr)
 }
 
-# A comparison operand: a column (its symbol), or a value with no column in
-# it, evaluated in `env` and put in the call as a constant. NULL, unless
-# `strict`, for a value with a column inside it.
-filter_operand <- function(x, columns, env, expr, strict) {
-  if (is.symbol(x) && as.character(x) %in% columns) {
-    return(list(column = as.character(x), expr = x))
+# An atom: column `x[[2]]` or `x[[3]]` (a bare column) compared with values.
+atom_node <- function(x, name, types, env, expr) {
+  columns <- names(types)
+  lhs_col <- is.symbol(x[[2L]]) && as.character(x[[2L]]) %in% columns
+  col <- as.character(if (lhs_col) x[[2L]] else x[[3L]])
+  value <- filter_value(if (lhs_col) x[[3L]] else x[[2L]], env, expr)
+  if (name != "%in%" && length(value) != 1L) {
+    filter_error(expr, sprintf("a value compared with %s must have length 1", name), strict = TRUE)
   }
-  used <- intersect(all.names(x), columns)
-  if (length(used)) {
-    if (!strict) {
-      return(NULL)
+  call <- if (lhs_col) as.call(list(as.symbol(name), as.symbol(col), value)) else as.call(list(as.symbol(name), value, as.symbol(col)))
+  fn_name <- if (lhs_col) name else flip_op[[name]]
+  kind <- type_kind(types[[col]])
+  if (is.na(kind)) {
+    return(list(op = "r", call = call, columns = col))
+  }
+  lit <- literal_keys(value, kind, types[[col]], expr)
+  keep <- !keys_na(lit$keys)
+  list(
+    op = "atom", fn = fn_name, column = col, kind = kind, type = types[[col]],
+    keys = keys_subset(lit$keys, keep),
+    has_na = any(!keep & !lit$nan), has_nan = any(lit$nan),
+    call = call, columns = col
+  )
+}
+
+# `x`, an expression R evaluates on rows, checked to be row-wise, with each
+# value in it evaluated once in `env` and put in as a constant. A value
+# there must have length 1, so that it means the same for every row, except
+# the values on the right of %in%.
+row_expr <- function(x, columns, env, expr, strict) {
+  has_column <- function(e) length(intersect(all.vars(e), columns)) > 0L
+  value_arg <- function(e, what) {
+    if (has_column(e)) {
+      filter_error(expr, sprintf("%s must be a value, with no column inside", what), strict)
     }
-    filter_error(expr, sprintf("column %s is inside a value", format_string(used[1L])))
+    v <- filter_value(e, env, expr)
+    if (length(v) != 1L) {
+      filter_error(expr, sprintf("%s has length %s; a value applied to rows must have length 1", deparse_one(e), format_number(length(v))), strict)
+    }
+    v
   }
+  walk <- function(e) {
+    if (!has_column(e)) {
+      return(value_arg(e, deparse_one(e)))
+    }
+    if (is.symbol(e)) {
+      return(e)
+    }
+    fn <- e[[1L]]
+    name <- if (is.symbol(fn)) as.character(fn) else ""
+    if (name == "%in%" && length(e) == 3L) {
+      if (has_column(e[[3L]])) {
+        filter_error(expr, "%in% takes a column on its left and values on its right", strict)
+      }
+      v <- filter_value(e[[3L]], env, expr)
+      return(as.call(list(fn, walk(e[[2L]]), v)))
+    }
+    if (name %in% names(row_wise_options)) {
+      e <- match.call(get(name, envir = baseenv()), e)
+      args <- as.list(e)[-1L]
+      for (a in seq_along(args)) {
+        arg <- names(args)[a]
+        e[[a + 1L]] <- if (arg %in% row_wise_options[[name]]) {
+          value_arg(args[[a]], sprintf("argument `%s` of %s()", arg, name))
+        } else {
+          walk(args[[a]])
+        }
+      }
+      e[[1L]] <- fn
+      return(e)
+    }
+    if (name %in% row_wise_first_only) {
+      for (a in seq_len(length(e) - 1L)) {
+        e[[a + 1L]] <- if (a == 1L) walk(e[[2L]]) else value_arg(e[[a + 1L]], sprintf("an option of %s()", name))
+      }
+      return(e)
+    }
+    if (name %in% c(row_wise_functions, comparison_ops, "(", "!", "&", "|", "is.na")) {
+      for (a in seq_len(length(e) - 1L)) {
+        if (!identical(e[[a + 1L]], quote(expr = ))) {
+          e[[a + 1L]] <- walk(e[[a + 1L]])
+        }
+      }
+      return(e)
+    }
+    filter_error(expr, sprintf("%s is applied to a column but is not row-wise", call_label(name)), strict)
+  }
+  walk(x)
+}
+
+# A value: an expression that names no column, evaluated once in `env`.
+filter_value <- function(x, env, expr) {
   value <- tryCatch(eval(x, env), error = function(e) {
-    filter_error(expr, sprintf("evaluating %s failed (%s)", paste(deparse(x), collapse = " "), conditionMessage(e)))
+    filter_error(expr, sprintf("evaluating %s failed (%s)", deparse_one(x), conditionMessage(e)), strict = FALSE)
   })
   if (!is.atomic(value) || is.null(value)) {
-    filter_error(expr, "a value must be a vector")
+    filter_error(expr, "a value must be a vector", strict = FALSE)
   }
-  list(column = NULL, expr = value, value = value)
+  value
+}
+
+call_label <- function(name) {
+  if (nzchar(name)) paste0(name, "()") else "that call"
+}
+
+deparse_one <- function(x) {
+  paste(deparse(x, width.cutoff = 60L), collapse = " ")
 }
 
 # Columns a plan uses.
@@ -238,14 +358,22 @@ filter_rows <- function(plan, data, env) {
     not = !filter_rows(plan$args[[1L]], data, env),
     and = filter_rows(plan$args[[1L]], data, env) & filter_rows(plan$args[[2L]], data, env),
     or = filter_rows(plan$args[[1L]], data, env) | filter_rows(plan$args[[2L]], data, env),
+    const = rep(plan$value, n),
     atom = ,
     isna = atom_values(plan, data[[plan$column]]),
     r = {
-      r <- eval(plan$call, as.list(data), env)
-      if (!is.logical(r) || !(length(r) %in% c(1L, n))) {
-        filter_error(plan$call, "it does not give one TRUE, FALSE or NA per row")
+      # Values are already in the call, so the only names left are columns
+      # and functions, which are base R's, whatever the caller defines.
+      r <- tryCatch(
+        eval(plan$call, as.list(data[plan$columns]), baseenv()),
+        error = function(e) {
+          filter_error(plan$call, sprintf("evaluating it on rows failed (%s)", conditionMessage(e)), strict = FALSE)
+        }
+      )
+      if (!is.logical(r) || length(r) != n || !is.null(dim(r))) {
+        filter_error(plan$call, "it does not give one TRUE, FALSE or NA per row", strict = FALSE)
       }
-      rep_len(r, n)
+      as.vector(r)
     }
   )
 }
@@ -254,9 +382,8 @@ filter_rows <- function(plan, data, env) {
 
 # What pruning needs to know about the live files, for the columns `plan`
 # uses: `n` files; `part`, the partition values as atoms compare them
-# (decimal text for long and decimal columns, typed otherwise); `part_rows`,
-# typed as a read returns them (or NULL when that fails), for the nodes R
-# evaluates; and `stats`, per data column, what the statistics allow.
+# (decimal text for long and decimal columns, typed otherwise); and `stats`,
+# per data column, what the statistics allow.
 prune_info <- function(tbl, plan, int64) {
   actions <- tbl$files$action
   n <- length(actions)
@@ -269,10 +396,6 @@ prune_info <- function(tbl, plan, int64) {
     kind <- type_kind(types[[col]])
     info$part[[col]] <- if (!is.na(kind) && kind == "exact") raw else parse_partition_values(raw, types[[col]], int64, col)
   }
-  info$part_rows <- tryCatch(
-    partition_read_table(actions, tbl, int64, intersect(used, pcols)),
-    error = function(e) NULL
-  )
   data_cols <- setdiff(used, pcols)
   if (length(data_cols)) {
     parsed <- parse_stats(file_stats_text(actions), tbl$files$path)
@@ -321,17 +444,9 @@ filter_outcomes <- function(plan, info) {
       bounds <- info$stats[[plan$column]]
       if (is.null(bounds)) any_outcome else stats_outcomes(plan, bounds)
     },
-    r = {
-      if (!all(plan$columns %in% info$partition) || is.null(info$part_rows)) {
-        return(any_outcome)
-      }
-      r <- tryCatch(eval(plan$call, as.list(info$part_rows), baseenv()), error = function(e) NULL)
-      if (!is.logical(r) || !(length(r) %in% c(1L, n))) {
-        return(any_outcome)
-      }
-      r <- rep_len(r, n)
-      list(t = r %in% TRUE, f = r %in% FALSE)
-    }
+    const = list(t = rep(plan$value %in% TRUE, n), f = rep(plan$value %in% FALSE, n)),
+    # A node R evaluates on rows never prunes, on partition columns too.
+    r = any_outcome
   )
 }
 

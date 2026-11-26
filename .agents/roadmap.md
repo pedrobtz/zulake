@@ -380,6 +380,21 @@ downloading only the files a filter cannot rule out.
   deletion vectors refused until Stage 5) are in design §4.3, §5, §6 and
   §7.
 
+**Correction (2026-11-26, after merge; made in Stage 5's pull request).**
+Settled by the coordinator on a design adviser's recommendation, under the
+maintainer's rule for open questions: a filter is row-wise by construction
+(design §5, §6, D8 reworded). Stage 4 let any call filter rows per file, so
+`x == max(x)` saw one file at a time while `year == max(year)` on a
+partition column pruned with the table's maximum, and a length-1 result
+(`any(x > 3)`) was accepted. Now the row-wise functions of §5 and two-column
+comparisons filter rows (never pruning, also on partition columns), and
+every other call with a column inside is a `zulake_error_filter` in
+`lake_read()`, `lake_walk()`, `lake_files()` and `lake_partitions()`.
+Unreleased, so no deprecation. Tests: the property test draws from the
+row-wise list; file-layout invariance (1 file against 2, 7 and 20);
+refusals on a multi-file fixture; shadowing of `nchar` by the caller, in
+`test-filter.R`.
+
 **Design.** [§4.3](design.md#43-reading),
 [§6](design.md#6-pruning-and-filtering), [D8](design.md#10-decisions).
 

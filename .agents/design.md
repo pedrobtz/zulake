@@ -235,9 +235,11 @@ Settled in Stage 4 (2026-11-26):
 - *`int64`.* `lake_read()` and `lake_walk()` take `int64` like the
   inspection functions, since a `long` partition column holds 64-bit
   values from the log (§5), and pass it to `qio` for data columns.
-- *Row filter.* The whole filter is evaluated on each file's rows on their
-  own, so an expression that looks at other rows (`x == max(x)`) sees one
-  file at a time, as `lake_walk()` does.
+- *Row filter* (settled 2026-11-26, replacing Stage 4's "an expression
+  that looks at other rows sees one file at a time"). A filter is row-wise
+  by construction (D8, §6), so evaluating it per file equals evaluating it
+  on the whole table, and `lake_read()` equals binding `lake_walk()`'s
+  pieces.
 
 ### 4.4 Deletion vectors
 
@@ -297,9 +299,19 @@ lake_walk(tbl, FUN, columns = NULL, filter = NULL, int64)
 `filter` is an unevaluated R expression over column names: `==`, `!=`,
 `<`, `<=`, `>`, `>=`, `%in%`, `is.na()`, `!`, `&` and `|`, with literals
 or values from the calling environment (`!!`-free; local values are
-looked up there). That subset prunes. Any other call is allowed but only
-filters rows after reading; `lake_files()` refuses it, since it has no
-rows to filter (D8).
+looked up there). That subset prunes. A filter may also apply these
+row-wise functions to columns: `+ - * / %% %/% ^`, `abs`, `round`,
+`floor`, `ceiling`, `sqrt`, `exp`, `log`, `nchar`, `toupper`, `tolower`,
+`substr`, `startsWith`, `endsWith`, `grepl`, `is.nan`, `is.finite`, `xor`,
+`as.character`, `as.numeric`, `as.integer`; and compare two columns. These
+filter rows after reading and never prune; `lake_files()` and
+`lake_partitions()` refuse them. Any other call with a column inside it
+(`max`, `mean`, `rank`, `cumsum`, `duplicated`, `%in%` with a column on the
+right, `[`, a user function) is a `zulake_error_filter` everywhere: a
+filter is decided row by row, so its result does not depend on how rows are
+split into files. A subexpression that names no column is a value,
+evaluated once in the caller's environment, and may be any R (settled
+2026-11-26, a correction to Stage 4, D8).
 
 `lake_count(tbl)` is the sum of `numRecords` over the live files minus
 the cardinality of their deletion vectors, from the log alone. `stats` is
@@ -374,7 +386,8 @@ Settled in Stage 3 (2026-11-26), the shapes the roxygen documents in full:
   at any precision (settled 2026-11-26, Stage 4, replacing Stage 3's
   "compared as a double"). Anything outside the subset is a
   `zulake_error_filter` in `lake_files()` and `lake_partitions()`, which
-  have no rows; `lake_read()` and `lake_walk()` apply it to rows only.
+  have no rows; `lake_read()` and `lake_walk()` apply the row-wise
+  functions to rows only and refuse every other call (settled 2026-11-26).
 
 `credentials` is a function of no arguments returning a bearer token as
 a single string. `zulake` calls it before the first request, and again
@@ -501,6 +514,20 @@ statistics and on rows, so pruning and the row filter cannot disagree:
 - *Null counts.* A file whose `nullCount` equals `numRecords` holds only
   nulls, and one with `numRecords` 0 nothing; a missing count is
   unknown.
+
+Settled 2026-11-26 (a correction to Stage 4, on a design adviser's
+recommendation): a filter is row-wise by construction (D8), so evaluating
+it per file equals evaluating it on the whole table, and `lake_read()`
+equals binding `lake_walk()`'s pieces. Values are evaluated once and
+inlined; the listed functions are then resolved in base, not the caller's
+environment, so a local `nchar` cannot change a filter. A row-evaluated
+node must return a logical of exactly one value per row. A row-evaluated
+node on partition columns is never used to prune. Two details the
+implementation fixes: a value inside a row-evaluated call must have length
+1, so it means the same for every row (the right of `%in%` excepted), and
+a logical column alone is a row-evaluated node. Row-evaluated comparisons
+are R's own (a string `<` there follows the session's collation); only the
+pruning subset uses the exact comparator above.
 
 ## 7. Types
 
@@ -629,9 +656,12 @@ The order of work, and what 0.1.0 waits for, are in
   names stay refused, because each obliges the reader to convert or
   decode data. `writerFeatures` is never a reason to refuse (replay reads
   it for in-commit timestamps; reworded 2026-11-26, Stage 4).
-- **D8.** Filters are R expressions, not `deltalake`'s DNF tuples; the
-  pruning subset is fixed and documented, and anything outside it only
-  filters rows.
+- **D8 (reworded 2026-11-26).** Filters are R expressions, not
+  `deltalake`'s DNF tuples. The pruning subset and the row-wise function
+  list are fixed and documented; a call outside both is refused, never
+  evaluated per file, because a per-file result would be silently
+  different from the table's (D7). Was: "anything outside it only filters
+  rows".
 - **D9.** Deletion vectors are in 0.1.0, because tables written by
   Databricks use them by default and refusing them would refuse most
   Azure tables. Their CRC-32 is verified.

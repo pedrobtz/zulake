@@ -88,6 +88,9 @@ random_row_filter <- function(data, depth = 0L) {
     }
     return(call(op, random_row_filter(data, depth + 1L), random_row_filter(data, depth + 1L)))
   }
+  if (stats::runif(1) < 0.3) {
+    return(random_row_wise(data))
+  }
   col <- sample(names(data), 1L)
   values <- data[[col]]
   sym <- as.symbol(col)
@@ -115,6 +118,107 @@ random_row_filter <- function(data, depth = 0L) {
   }
   v <- pick()
   if (stats::runif(1) < 0.2) call(op, v, sym) else call(op, sym, v)
+}
+
+# A random comparison outside the pruning subset, from the row-wise
+# functions of design section 5 (D8) applied to a column of `data`, or two
+# columns of one class compared. Values come from the data through the same
+# function, so that some rows match.
+random_row_wise <- function(data) {
+  cls <- vapply(data, function(x) class(x)[1L], "")
+  pick_col <- function(classes) {
+    ok <- names(data)[cls %in% classes]
+    if (length(ok)) ok[sample.int(length(ok), 1L)] else NA_character_
+  }
+  pick_value <- function(x) {
+    x <- x[!is.na(x)]
+    if (!length(x)) return(NA)
+    x[sample.int(length(x), 1L)]
+  }
+  op <- function() sample(c("==", "!=", "<", "<=", ">", ">="), 1L)
+  kind <- sample(c("number", "string", "time", "two", "logical"), 1L)
+  num <- pick_col(c("numeric", "integer"))
+  str <- pick_col("character")
+  if (kind == "number" && !is.na(num)) {
+    sym <- as.symbol(num)
+    f <- sample(list(
+      quote(abs(.x)), quote(.x + 1), quote(.x - 2.5), quote(.x * 2), quote(.x / 4), quote(.x %% 3),
+      quote(.x %/% 2), quote(.x^2), quote(round(.x)), quote(round(.x, 1)), quote(floor(.x)),
+      quote(ceiling(.x)), quote(sqrt(abs(.x))), quote(exp(.x / 1e6)), quote(log(abs(.x) + 1)),
+      quote(-.x), quote(as.integer(.x %% 1000)), quote(nchar(as.character(.x)))
+    ), 1L)[[1L]]
+    e <- do.call(substitute, list(f, list(.x = sym)))
+    if (stats::runif(1) < 0.15) {
+      return(sample(list(bquote(is.finite(.(e))), bquote(is.nan(.(e)))), 1L)[[1L]])
+    }
+    v <- pick_value(suppressWarnings(eval(e, as.list(data), baseenv())))
+    return(call(op(), e, v))
+  }
+  if (kind == "string" && !is.na(str)) {
+    sym <- as.symbol(str)
+    x <- pick_value(data[[str]])
+    if (is.na(x)) x <- "a"
+    pre <- substr(x, 1L, max(1L, nchar(x) %/% 2L))
+    return(sample(list(
+      bquote(nchar(.(sym)) > .(nchar(x) - 1L)),
+      bquote(toupper(.(sym)) == .(toupper(x))),
+      bquote(tolower(.(sym)) != .(tolower(x))),
+      bquote(substr(.(sym), 1, 2) == .(substr(x, 1L, 2L))),
+      bquote(startsWith(.(sym), .(pre))),
+      bquote(endsWith(.(sym), .(substring(x, nchar(x))))),
+      bquote(grepl(.(pre), .(sym), fixed = TRUE)),
+      bquote(as.character(.(sym)) %in% .(c(x, "zzz"))),
+      bquote(xor(is.na(.(sym)), nchar(.(sym)) > 1))
+    ), 1L)[[1L]])
+  }
+  if (kind == "time") {
+    tcol <- pick_col(c("Date", "POSIXct"))
+    if (!is.na(tcol)) {
+      sym <- as.symbol(tcol)
+      v <- pick_value(as.numeric(data[[tcol]]))
+      return(call(op(), bquote(as.numeric(.(sym))), v))
+    }
+  }
+  if (kind == "two") {
+    for (classes in sample(list(c("numeric", "integer"), "character", "Date", "POSIXct"))) {
+      both <- names(data)[cls %in% classes]
+      if (length(both) >= 2L) {
+        two <- sample(both, 2L)
+        return(call(op(), as.symbol(two[1L]), as.symbol(two[2L])))
+      }
+    }
+  }
+  if (kind == "logical") {
+    lcol <- pick_col("logical")
+    if (!is.na(lcol)) {
+      return(bquote(xor(.(as.symbol(lcol)), TRUE)))
+    }
+  }
+  col <- names(data)[sample.int(length(data), 1L)]
+  bquote(is.na(as.character(.(as.symbol(col)))))
+}
+
+# A table of the rows of `data` (a data frame of double, integer,
+# character, Date and logical columns) written as `k` Parquet files with qio,
+# the rows split in order at random points, and a log by hand with no
+# statistics. Partition columns are none.
+split_table <- function(data, k, env = parent.frame()) {
+  delta <- c(numeric = "double", integer = "integer", character = "string", Date = "date", logical = "boolean")
+  types <- delta[vapply(data, function(x) class(x)[1L], "")]
+  names(types) <- names(data)
+  path <- file.path(withr::local_tempdir(.local_envir = env), "table")
+  dir.create(path)
+  n <- nrow(data)
+  cuts <- sort(sample(seq_len(n - 1L), k - 1L))
+  group <- findInterval(seq_len(n), cuts + 1L)
+  adds <- character()
+  for (g in sort(unique(group))) {
+    file <- sprintf("part-%05d.parquet", g)
+    qio::write_parquet(data[group == g, , drop = FALSE], file.path(path, file))
+    adds <- c(adds, add_line(file, size = file.size(file.path(path, file))))
+  }
+  write_commit(path, 0, c(protocol_line(), metadata_line(types), adds))
+  path
 }
 
 # The rows of `data` for which R makes `expr` TRUE (in the C collation, so

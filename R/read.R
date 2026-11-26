@@ -12,10 +12,27 @@
 #' Its pruning subset is comparisons (`==`, `!=`, `<`, `<=`, `>`, `>=`),
 #' `%in%` and `is.na()` between a column and values, joined by `!`, `&` and
 #' `|`. That subset rules files out by their partition values and their
-#' statistics (minimum, maximum, null count and record count); anything else
-#' in the expression is only applied to rows. Statistics only decide what is
-#' read: the rows returned are the rows `filter` is `TRUE` for whatever the
-#' statistics say, and a missing statistic only means a file is read.
+#' statistics (minimum, maximum, null count and record count). Statistics
+#' only decide what is read: the rows returned are the rows `filter` is
+#' `TRUE` for whatever the statistics say, and a missing statistic only
+#' means a file is read.
+#'
+#' A filter may also apply these row-wise functions to columns: `+`, `-`,
+#' `*`, `/`, `%%`, `%/%`, `^`, `abs()`, `round()`, `floor()`, `ceiling()`,
+#' `sqrt()`, `exp()`, `log()`, `nchar()`, `toupper()`, `tolower()`,
+#' `substr()`, `startsWith()`, `endsWith()`, `grepl()`, `is.nan()`,
+#' `is.finite()`, `xor()`, `as.character()`, `as.numeric()` and
+#' `as.integer()`; and compare two columns, or use a logical column alone.
+#' R evaluates those on the rows after reading (they never prune), with base
+#' R's functions whatever the caller defines, and each must give one `TRUE`,
+#' `FALSE` or `NA` per row. Any other call with a column inside it, such as
+#' `max(x)`, `mean(x)`, `rank(x)`, `cumsum(x)`, `duplicated(x)`, `x[1]`,
+#' `%in%` with a column on its right, or a function of your own, is an error
+#' of class `zulake_error_filter`: a filter is decided row by row, so the
+#' rows it keeps do not depend on how the table's rows are split into files,
+#' and `lake_read()` equals the pieces of `lake_walk()` bound together. A
+#' part of the filter that names no column is a value, evaluated once where
+#' `lake_read()` is called, and may be any R expression.
 #'
 #' Inside the pruning subset, comparisons are exact: a `long`, `integer`,
 #' `short`, `byte` or `decimal` column is compared with the value as decimal

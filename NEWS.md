@@ -41,8 +41,7 @@
   function on each file's rows, reading the data files with qio (now
   imported) and adding partition columns from the log. A `filter` prunes
   files by partition values and statistics (minimum, maximum, null and
-  record counts) before any is read, then filters rows; anything outside
-  the pruning subset only filters rows. Comparisons in the subset are
+  record counts) before any is read, then filters rows. Comparisons in the subset are
   exact: `long`, integer and `decimal` columns digit by digit (a double
   with no exact 15-digit form is a `zulake_error_filter` asking for the
   value as text), strings in UTF-8 byte order whatever the collation.
@@ -61,3 +60,14 @@
 * A `long` statistic in `lake_files()` that the `int64` mode cannot hold
   (such as -2^63) is now `NA` with a `zulake_warning_int64` warning, once
   per column, instead of an error; its digits stay in `action`.
+* A filter is now row-wise by construction. Besides the pruning subset it
+  may apply a fixed list of row-wise functions to columns (arithmetic,
+  `abs()`, `round()`, `nchar()`, `substr()`, `grepl()`, `xor()`,
+  `as.numeric()` and others, listed in `?lake_read`) and compare two
+  columns; these filter rows after reading and never prune, and
+  `lake_files()` and `lake_partitions()` refuse them. Any other call with a
+  column inside it (`max(x)`, `mean(x)`, `rank(x)`, `duplicated(x)`, `%in%`
+  with a column on the right, a function of your own) is a
+  `zulake_error_filter` in every function, so a filter's rows never depend
+  on how the table is split into files. The functions are base R's, whatever
+  the caller defines.
