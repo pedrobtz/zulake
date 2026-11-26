@@ -50,8 +50,10 @@ test_that("credentials must be NULL or a function", {
   expect_identical(lake_version(tbl), 4)
 })
 
-test_that("URIs with a scheme are refused until their backend exists", {
-  for (uri in c("abfss://c@a.dfs.core.windows.net/t", "https://a.blob.core.windows.net/c/t", "s3://b/t", "gs://b/t", "file:///tmp/t")) {
+test_that("URIs with a scheme other than Azure's are refused, naming the scheme", {
+  # The Azure forms, and their refusals, are test-azure.R's.
+  for (uri in c("s3://b/t", "gs://b/t", "file:///tmp/t", "abfs://c@acct.dfs.core.windows.net/t",
+                "wasbs://c@acct.blob.core.windows.net/t", "http://acct.blob.core.windows.net/c/t")) {
     err <- tryCatch(lake_open(uri), error = identity)
     expect_s3_class(err, "zulake_error_uri")
     expect_identical(err$scheme, sub("://.*$", "", uri))
