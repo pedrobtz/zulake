@@ -168,6 +168,37 @@ The result is held in the snapshot object as data frames. The protocol's
 `(path, deletionVector.uniqueId)` key is what identifies a logical file,
 so a file rewritten with a new deletion vector is one live row, not two.
 
+Settled in Stage 2 (2026-11-26), each where the protocol leaves a reader
+a choice:
+
+- *Inside one commit*, removes are applied before adds, so a logical file
+  a commit both removes and re-adds is live afterwards. Why: actions in a
+  commit have no order, and "remove and add the same file" can only mean
+  "replace it" (new statistics, a metadata update).
+- *Log compaction files* replace the commits they cover whenever one
+  starts where replay stands and ends at or before the target version
+  (the one reaching furthest, of several). Why: the protocol makes them
+  equivalent to those commits; a log whose old commits were cleaned up
+  but compacted still opens.
+- *`_last_checkpoint`* is parsed and kept, but replay still starts at
+  commit 0. One that is not JSON, has no whole `version`, or names a
+  version past the last commit is a corrupt log. Why: a hint that
+  contradicts the log means the log is not what its writer left.
+- *Time travel by timestamp* opens the latest version whose commit time
+  is at or before the timestamp, and the first version for a timestamp
+  before every commit, as `deltalake` 1.7.0 does (its answers on every
+  fixture). The commit time is `commitInfo.inCommitTimestamp` from
+  `delta.inCommitTimestampEnablementVersion` on (version 0 without it)
+  when in-commit timestamps are enabled in the latest snapshot, which
+  must therefore pass the feature gate too, and the file's modification
+  time otherwise. Why: the protocol's split at the enablement version
+  gives the same answer under this rule, since in-commit timestamps only
+  grow from there.
+- *Partition values* of live files are checked against their column's
+  type (the protocol's "Partition Value Serialization"; by physical name
+  under column mapping) when the snapshot is built; a value that does
+  not parse is a corrupt log. An empty string or a missing key is null.
+
 ### 4.3 Reading
 
 `lake_read()` takes the live files, prunes them (§6), downloads each
@@ -245,6 +276,17 @@ rows to filter (D8).
 a single string. `zulake` calls it before the first request, and again
 once after a `401` before failing. It never stores the token in the
 snapshot, never prints it, and redacts it from errors (D4).
+
+`version` is a whole number from 0 to 2^53 - 1 and `timestamp` a single
+`POSIXct` (settled 2026-11-26, Stage 2: a character time would need a
+parser and a zone rule of its own). Every error is a condition of class
+`zulake_error` with one subclass per kind: `zulake_error_argument`,
+`zulake_error_uri` (a scheme with no backend yet), `zulake_error_storage`,
+`zulake_error_not_table`, `zulake_error_version`,
+`zulake_error_corrupt_log`, `zulake_error_checkpoint_unreadable` and
+`zulake_error_unsupported_feature`, whose `feature` field names the
+feature (D7). Built with base `stop()` on a classed condition: the
+package has no `rlang` or `cli` dependency.
 
 ### 5.1 Against `deltalake` 1.7.0
 
