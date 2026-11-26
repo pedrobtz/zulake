@@ -191,7 +191,13 @@ Settled in Stage 6 (2026-11-26):
   carries neither, even when the function's environment holds the token
   as a literal, and a snapshot restored in another session gets
   `zulake_error_auth` on its next request. Why: a `function() token`
-  closure in the snapshot would put the token in every `saveRDS()`.
+  closure in the snapshot would put the token in every `saveRDS()`. The
+  registry is made in `.onLoad()`, and the backend's functions carry no
+  srcref and its frame no argument promises: with the package's source
+  kept (covr, `R_KEEP_PKG_SOURCE=yes`), a srcref reached the lazy-load
+  loader's environments, which hold every environment the build made,
+  the registry included (found on CI in Stage 6); a test asserts the two
+  environments a snapshot serializes.
 - **Absolute paths in the log.** An `add` path or a deletion vector path
   that is one of the three Azure URI forms is read through the Blob
   endpoint of its own account and container with the table's credentials,

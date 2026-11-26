@@ -247,6 +247,11 @@ test_that("the token is in no print, condition, field, serialized snapshot or ca
     if (!identical(h, paste("Bearer", token))) 401L
   }))
   tbl <- lake_open(fake_uri("table-with-dv-small"), credentials = credentials)
+  # A saved snapshot writes two environments: its backend's frame and the
+  # credential handle, whether or not the package keeps its source (with
+  # it kept, srcrefs once reached the loader's environments and the
+  # credential registry: CI, Stage 6).
+  expect_identical(serialized_envs(tbl), "blob,get,get_range,handle,head,list_files,loc,name | id")
   expect_no_token(tbl, token, "the snapshot")
   expect_no_token(lake_load(tbl, version = 0), token, "a reloaded snapshot")
   expect_no_token(utils::capture.output(print(tbl), format(tbl), str(tbl)), token, "the print")

@@ -128,7 +128,15 @@ unreserved_bytes <- charToRaw("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvw
 
 # ---- credentials -----------------------------------------------------------
 
-credential_env <- new.env(parent = emptyenv())
+# Made in .onLoad(), not here: an environment made when the package is
+# built is stored in its lazy-load database, and the loader's own
+# environments keep a reference to it, which a srcref or a byte-code
+# constant in a snapshot can reach (seen with the source kept, Stage 6).
+credential_env <- NULL
+
+.onLoad <- function(libname, pkgname) {
+  assign("credential_env", new.env(parent = emptyenv()), envir = topenv())
+}
 
 # A handle on `credentials` (a function, or NULL for anonymous requests):
 # an environment holding only an id; the function and its token live in
@@ -277,7 +285,9 @@ azure_fail <- function(resp, what, path) {
 # The Azure backend for a parsed URI (parse_azure_uri()) and a credential
 # handle. Its functions hold the location and the handle, nothing else.
 storage_azure <- function(parts, handle) {
-  force(handle)
+  # Values, not the argument promises, whose code holds the caller's srcrefs.
+  parts <- parts
+  handle <- handle
   loc <- list(
     account = parts$account, container = parts$container, path = parts$path,
     endpoint = azure_endpoint(parts$account), handle = handle
@@ -396,6 +406,13 @@ storage_azure <- function(parts, handle) {
     list(size = size, modification_time = as_utc(.POSIXct(time, tz = "UTC")))
   }
 
+  # Every function of this frame without its srcref: in a package
+  # installed with its source kept (covr, R_KEEP_PKG_SOURCE=yes), a srcref
+  # reaches environments of the session, which serialize() then writes into
+  # a saved snapshot, the caller's token included (seen on CI, Stage 6).
+  for (name in c("blob", "list_files", "get", "get_range", "head")) {
+    assign(name, utils::removeSource(base::get(name, envir = environment(), inherits = FALSE)))
+  }
   list(
     kind = "azure", root = parts$uri, list = list_files, get = get, get_range = get_range, head = head,
     location = loc
