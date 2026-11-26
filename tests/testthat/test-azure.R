@@ -128,6 +128,12 @@ test_that("head() gives size and time, NULL for a missing blob or a directory", 
   expect_null(storage$head("_delta_log/nope.json"))
   expect_null(storage$head("dir"))
   expect_identical(vapply(log$requests, function(r) r$method, ""), rep("HEAD", 3L))
+  # Properties without a size or a time are not a file's.
+  for (h in list(c(`Last-Modified` = "Thu, 26 Nov 2026 16:04:00 GMT"), c(`Content-Length` = "3"),
+                 c(`Content-Length` = "3", `Last-Modified` = "yesterday"))) {
+    local_azure_fake(azure_fake(fake_root(), new.env(), override = function(r) zuhttp::zu_response(200L, h)))
+    expect_error(storage$head("x"), class = "zulake_error_storage")
+  }
 })
 
 test_that("statuses Azure answers become classed errors with status and code", {
@@ -482,6 +488,10 @@ test_that("the List Blobs parser reads Azure's documented answer and refuses oth
   page <- parse_blob_list(charToRaw(tricky), "p")
   expect_identical(page$blobs$name, "<NextMarker>x</NextMarker>")
   expect_identical(page$next_marker, NA_character_)
+  # Character references XML does not allow are left as they are.
+  expect_identical(xml_decode("a&#0;b&#99999999999;c&#xD800;d&#x10FFFF;e&#x110000;f&unknown;g"),
+                   paste0("a&#0;b&#99999999999;c&#xD800;d", intToUtf8(0x10FFFF), "e&#x110000;f&unknown;g"))
+  expect_identical(xml_decode("&#1;&#x7F;&amp;amp;"), paste0(intToUtf8(1), intToUtf8(0x7F), "&amp;"))
   bad <- list(
     "", "<html>no</html>", "<EnumerationResults><Blobs>",
     "<EnumerationResults><Blobs><Blob><Properties></Properties></Blob></Blobs></EnumerationResults>",
@@ -501,6 +511,11 @@ test_that("HTTP dates are read without the locale, and invalid ones are NA", {
   expect_identical(parse_http_date("Thu, 01 Jan 1970 00:00:00 GMT"), 0)
   expect_identical(parse_http_date("Sat, 29 Feb 2025 00:00:00 GMT"), NA_real_)
   expect_identical(parse_http_date("Thu, 29 Feb 2024 23:59:59 GMT"), as.numeric(as.POSIXct("2024-02-29 23:59:59", tz = "UTC")))
+  # Hours to 23, minutes to 59, seconds to 60 (a leap second).
+  expect_false(is.na(parse_http_date("Thu, 26 Nov 2026 23:59:60 GMT")))
+  expect_identical(parse_http_date("Thu, 26 Nov 2026 23:61:00 GMT"), NA_real_)
+  expect_identical(parse_http_date("Thu, 26 Nov 2026 23:60:00 GMT"), NA_real_)
+  expect_identical(parse_http_date("Thu, 26 Nov 2026 23:59:61 GMT"), NA_real_)
   for (x in list("Thu, 26 Nov 2026 24:00:00 GMT", "Thu, 26 Noe 2026 16:04:00 GMT", "26 Nov 2026 16:04:00 GMT",
                  "Thu, 26 Nov 2026 16:04:00 UTC", NA_character_, "", NULL, c("a", "b"))) {
     expect_identical(parse_http_date(x), NA_real_)

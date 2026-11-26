@@ -498,10 +498,11 @@ xml_decode <- function(x) {
   named <- c(amp = "&", lt = "<", gt = ">", quot = "\"", apos = "'")
   out <- vapply(refs, function(r) {
     body <- substr(r, 2L, nchar(r) - 1L)
-    if (startsWith(body, "#x")) {
-      intToUtf8(strtoi(substring(body, 3L), 16L))
-    } else if (startsWith(body, "#")) {
-      intToUtf8(as.integer(substring(body, 2L)))
+    if (startsWith(body, "#")) {
+      # A code point XML allows, or the reference left as it is.
+      code <- if (startsWith(body, "#x")) strtoi(substring(body, 3L), 16L) else suppressWarnings(as.numeric(substring(body, 2L)))
+      ok <- !is.na(code) && code >= 1 && code <= 0x10FFFF && !(code >= 0xD800 && code <= 0xDFFF)
+      if (ok) intToUtf8(code) else r
     } else if (body %in% names(named)) {
       named[[body]]
     } else {
