@@ -49,3 +49,6 @@ po/*~
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# testthat writes failing tests here after a failed run
+tests/testthat/_problems/
