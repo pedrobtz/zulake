@@ -50,12 +50,18 @@ jobs:
     timeout-minutes: 30
     env:
       ZULAKE_AZURITE_ENDPOINT: https://127.0.0.1:10000/devstoreaccount1
-      ZULAKE_AZURITE_CA: ${{ runner.temp }}/azurite/ca.pem
-      ZULAKE_AZURITE_ANSWERS: ${{ runner.temp }}/azurite/answers
-      ZULAKE_RECORD_CASSETTES: ${{ runner.temp }}/azurite/cassettes
       NOT_CRAN: "true"
     steps:
       - uses: actions/checkout@v7.0.1
+
+      # The runner context is not available in a job's env.
+      - name: Paths
+        run: |
+          {
+            echo "ZULAKE_AZURITE_CA=$RUNNER_TEMP/azurite/ca.pem"
+            echo "ZULAKE_AZURITE_ANSWERS=$RUNNER_TEMP/azurite/answers"
+            echo "ZULAKE_RECORD_CASSETTES=$RUNNER_TEMP/azurite/cassettes"
+          } >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@v7.1.0
         with:
