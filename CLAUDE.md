@@ -43,7 +43,13 @@ on this one: `zugodb`, through an extension that registers a `delta` format
 
 ## Commands
 
-Only the shared commands so far.
+The shared commands, plus the suite as CI runs it (shuffled, seed printed,
+against the installed package):
+
+```sh
+R CMD INSTALL . && Rscript tools/ci-run-tests.R
+ZULAKE_TEST_SEED=<seed> Rscript tools/ci-run-tests.R   # replay an order
+```
 
 ## Architecture
 
@@ -71,7 +77,11 @@ layer: no `src/`, by design (D1).
 
 ## Testing
 
-None yet: no conformance suite, helpers or runtime measured. The design (§8)
+`tests/testthat.R` runs every file with `shuffle = TRUE` after printing its
+seed, under R CMD check and covr alike; `tools/ci-run-tests.R` runs the same
+file from the source tree. The shuffle reorders every top-level expression of
+a test file, so shared functions go in `helper-*.R`, never at file scope.
+No conformance suite or fixtures yet. The design (§8)
 plans DAT and `delta-rs` fixtures, `deltalake` 1.7.0 as the oracle in a
 development-only workflow, and a live Azure suite gated on
 `ZULAKE_AZURE_URI`.
@@ -83,5 +93,8 @@ calls r-actions `coverage.yml@v1` (badge on `gh-pages`); `pkgdown.yaml`
 builds and deploys the site. `cran-release.yaml` calls r-actions
 `cran-release.yml@v1` when `CRAN-SUBMISSION` is pushed: it tags the submitted
 commit, creates the GitHub release and opens the `.9000` bump. So
-`CRAN-SUBMISSION` is committed, not ignored. No package-specific workflows
-yet.
+`CRAN-SUBMISSION` is committed, not ignored. `assurance.yaml` calls
+r-actions `assurance.yml@v1` with `ungated-jobs: fail` on
+`.agents/assurance.md`. The R-CMD-check caller adds Windows R-devel to the
+full profile's runners and runs no container on a quick run (no `src/`; the
+full profile runs them). No package-specific workflows yet.

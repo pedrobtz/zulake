@@ -18,7 +18,7 @@ both are released ([D5](design.md#10-decisions); `zuroar` 0.1.0 waits on
 <!-- markdownlint-disable MD013 -->
 | Stage | Title | CI | Issue | Pull request | Done |
 | --- | --- | --- | --- | --- | --- |
-| 0 | [Package identity](#stage-0--package-identity) | quick | [#2](https://github.com/pedrobtz/zulake/issues/2) | | |
+| 0 | [Package identity](#stage-0--package-identity) | quick | [#2](https://github.com/pedrobtz/zulake/issues/2) | [#21](https://github.com/pedrobtz/zulake/pull/21) | 2026-11-26 |
 | 1 | [Fixtures and oracle](#stage-1--fixtures-and-oracle) | quick | [#3](https://github.com/pedrobtz/zulake/issues/3) | | |
 | 2 | [Log replay](#stage-2--log-replay) | quick | [#4](https://github.com/pedrobtz/zulake/issues/4) | | |
 | 3 | [Inspection](#stage-3--inspection) | quick | [#5](https://github.com/pedrobtz/zulake/issues/5) | | |
@@ -52,6 +52,10 @@ whose quick run finishes in under five minutes.
   at scaffold).
 - `R-CMD-check.yaml`: add `{"os": "windows-latest", "r": "devel"}` to
   `runners`.
+  *Tuning (2026-11-26):* `quick-containers: '[]'`. The quick `clang23` leg
+  took 11m48s on #15, 10.5 minutes of it building Suggests from source in
+  the image; it checks C compiler diagnostics, and there is no `src/`. The
+  full profile keeps every container.
 - `.agents/assurance.md` from `templates/assurance.md`, kinds
   `untrusted-input` and `spec`. `fuzz` and `fuzz-reach` are
   `n/a: pure R; r-actions fuzz.yml fuzzes C through libFuzzer, and the
@@ -60,7 +64,16 @@ whose quick run finishes in under five minutes.
   below. `assurance.yaml` caller with `ungated-jobs: fail`.
 - Test runner: `tools/ci-run-tests.R` that runs the suite shuffled, prints
   its seed, and runs under coverage; the coverage caller uses it.
-- Labels `full-ci`, `ci:minimal` and `ci:docs` created.
+
+  *Deviation (2026-11-26):* r-actions `coverage.yml` takes no runner input
+  (`native-run` is for its native job only), and covr runs the installed
+  `tests/` directory, where `tools/` is absent. So the shuffle and the
+  printed seed live in `tests/testthat.R`, which R CMD check and coverage
+  both run, and `tools/ci-run-tests.R` runs that same file from the source
+  tree (`ZULAKE_TEST_SEED` replays an order). The seed reaches the CI log
+  through check-r-package's testthat output step.
+- Labels `full-ci`, `ci:minimal` and `ci:docs` created (and `assurance`,
+  for the gap issues #16 to #20).
 - No `gctorture`, `platforms.yml` or native callers: there is no `src/`
   ([D1](design.md#10-decisions)).
 
