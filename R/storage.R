@@ -14,6 +14,10 @@
 #                               an HTTP Range header counts them
 #   head(path)                  list(size, modification_time), or NULL when
 #                               there is no such file
+#   local_path(path)            (optional) the file's path on local disk;
+#                               a backend without it has its data files
+#                               downloaded through get() to the session
+#                               cache (read.R)
 #
 # plus `kind` ("local") and `root`. The interface stays internal, so a later
 # backend (Azure in Stage 6, a future zustore) changes no public function.
@@ -103,7 +107,20 @@ storage_local <- function(root) {
     list(size = as.numeric(info$size), modification_time = as_utc(info$mtime))
   }
 
-  list(kind = "local", root = root, list = list_files, get = get, get_range = get_range, head = head)
+  # A file's path on this disk, for a reader that needs one (qio reads
+  # paths): the same file `get()` would return, without a copy.
+  local_path <- function(path) {
+    f <- full(path)
+    if (!file.exists(f) || dir.exists(f)) {
+      zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path)
+    }
+    f
+  }
+
+  list(
+    kind = "local", root = root, list = list_files, get = get, get_range = get_range, head = head,
+    local_path = local_path
+  )
 }
 
 # `x > y` in byte order, whatever the session's collation.

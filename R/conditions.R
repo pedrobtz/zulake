@@ -16,11 +16,22 @@
 #                                      lake_protocol() frame
 #   zulake_error_int64                 a 64-bit value a double cannot hold
 #                                      exactly (D10); `value` is its digits
-#   zulake_error_filter                a filter outside the pruning subset
+#   zulake_error_filter                a filter outside the pruning subset,
+#                                      or a value it cannot compare
+#   zulake_error_column_unreadable     a column named in `columns` or used
+#                                      in `filter` that qio cannot return
+#                                      (design section 7); `column`,
+#                                      `reason`
 #
-# and one warning, `zulake_warning_count_unknown` (class
-# c("zulake_warning_count_unknown", "zulake_warning", "warning")), when
-# lake_count() meets a file without `numRecords`; `files` counts them.
+# and three warnings, each with parent class `zulake_warning`:
+#
+#   zulake_warning_count_unknown       lake_count() met a file without
+#                                      `numRecords`; `files` counts them
+#   zulake_warning_int64               a `long` statistic the `int64` mode
+#                                      cannot hold, shown as NA; `value`,
+#                                      `column`, `path`
+#   zulake_warning_column_skipped      a column qio cannot return, left out
+#                                      of a read; `column`, `reason`
 #
 # Base R only: the package has no rlang or cli dependency.
 
@@ -30,6 +41,14 @@ zulake_abort <- function(class, message, ..., call = NULL) {
     list(message = message, call = call, ...)
   )
   stop(cnd)
+}
+
+zulake_warn <- function(class, message, ...) {
+  cnd <- structure(
+    class = c(paste0("zulake_warning_", class), "zulake_warning", "warning", "condition"),
+    list(message = message, call = NULL, ...)
+  )
+  warning(cnd)
 }
 
 # A number for a message, written in full whatever the session's `scipen`,

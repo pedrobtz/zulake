@@ -136,7 +136,12 @@ int64_values <- function(x, int64, what) {
   out[past & !have_text] <- sprintf("%.0f", num[past & !have_text])
   res <- suppressWarnings(bit64::as.integer64(out))
   if (any(!is.na(out) & is.na(res))) {
-    zulake_abort("int64", sprintf("%s holds a value outside what an integer64 holds (-2^63 + 1 to 2^63 - 1; bit64 keeps -2^63 for NA).", what))
+    v <- out[!is.na(out) & is.na(res)][1L]
+    zulake_abort(
+      "int64",
+      sprintf("%s holds %s, outside what an integer64 holds (-2^63 + 1 to 2^63 - 1; bit64 keeps -2^63 for NA).", what, v),
+      value = v
+    )
   }
   res
 }
