@@ -1,0 +1,54 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "clientVersion": "zulake-fixtures",
+    "inCommitTimestamp": 1795693504838,
+    "operation": "UPGRADE PROTOCOL",
+    "operationParameters": {},
+    "timestamp": 1795693504838,
+    "txnId": "5b4d6a8e-7f0c-4d1e-9a2b-3c4d5e6f7a8b"
+   }
+  },
+  {
+   "protocol": {
+    "minReaderVersion": 3,
+    "minWriterVersion": 7,
+    "readerFeatures": [
+     "catalogManaged"
+    ],
+    "writerFeatures": [
+     "catalogManaged",
+     "inCommitTimestamp"
+    ]
+   }
+  },
+  {
+   "metaData": {
+    "configuration": {
+     "delta.enableInCommitTimestamps": "true",
+     "delta.inCommitTimestampEnablementTimestamp": "1795693504838",
+     "delta.inCommitTimestampEnablementVersion": "1"
+    },
+    "createdTime": 1795693504831,
+    "description": null,
+    "format": {
+     "options": {},
+     "provider": "parquet"
+    },
+    "id": "a8cc9eb8-f8d3-4232-ab8d-53d4c8a0bd46",
+    "name": null,
+    "partitionColumns": [],
+    "schemaString": "{\"type\":\"struct\",\"fields\":[{\"name\":\"id\",\"type\":\"long\",\"nullable\":true,\"metadata\":{}}]}"
+   }
+  }
+ ],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "refusal": {
+  "class": "DeltaError",
+  "message": "Kernel error: Max catalog version error: Max catalog version is required when loading a catalog-managed table. Use with_max_catalog_version()."
+ },
+ "table": "zl-catalog-managed",
+ "version": 1
+}
