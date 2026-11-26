@@ -32,7 +32,8 @@ RFC 0081. It outranks this file: `CLAUDE.md` orients, the design decides.
 
 Scaffolded 2026-11-26 with `create-pkg.sh`. Stage 2 (log replay from
 commit 0, local disk only) is in: `lake_open()`, `lake_is_table()`,
-`lake_load()`, `lake_version()`. The roadmap
+`lake_load()`, `lake_version()`. Stage 3 (inspection) adds the table, file
+and log functions of design §5, except `lake_deletion_vectors()`. The roadmap
 in [`.agents/roadmap.md`](.agents/roadmap.md) takes it to v0.1.0. 0.1.0 waits
 for `zuhttp` on CRAN and for `zuroar` 0.1.0 (design §9); local log replay,
 inspection and reading are built on local fixtures first.
@@ -77,6 +78,14 @@ by design (D1).
 - `R/timestamp.R`: commit times and time travel by timestamp.
 - `R/open.R`: the exported functions and `snapshot_build()`, which
   documents the snapshot's fields.
+- `R/int64.R`: integers past 2^53 - 1 kept as marked text through `zujson`
+  (`mark_numbers()`), and turned into doubles, errors or `integer64`
+  (`int64_values()`, `unmark_tree()`).
+- `R/values.R`: the schema, partition values and statistics typed by
+  Delta type.
+- `R/filter.R`: the pruning subset of a filter and its outcomes per file.
+- `R/table.R`, `R/files.R`, `R/log-inspect.R`, `R/print.R`: the inspection
+  functions and the print method.
 - `R/conditions.R`: `zulake_abort()` and the `zulake_error_*` classes.
 
 ## Invariants that are easy to break
@@ -104,8 +113,8 @@ by design (D1).
 seed, under R CMD check and covr alike; `tools/ci-run-tests.R` runs the same
 file from the source tree. The shuffle reorders every top-level expression of
 a test file, so shared functions go in `helper-*.R`, never at file scope.
-Fixtures (Stage 1, design §8): 26 Delta tables (14 copied from `delta-rs`,
-Apache-2.0; 2 changed from them; 10 `zl-*` written with `deltalake` 1.7.0)
+Fixtures (Stage 1, design §8): 27 Delta tables (14 copied from `delta-rs`,
+Apache-2.0; 2 changed from them; 11 `zl-*` written with `deltalake` 1.7.0)
 and 8 hostile logs, listed in `tests/testthat/fixtures/PROVENANCE.md`. They
 ship packed in `tests/testthat/fixtures/delta-fixtures.tar`, because Delta
 paths pass the 100 bytes a package tarball allows; the unpacked

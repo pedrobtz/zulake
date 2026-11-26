@@ -24,7 +24,7 @@ Stage 2b, checkpoints, waits for that `qio` and runs after Stage 7.
 | 0 | [Package identity](#stage-0--package-identity) | quick | [#2](https://github.com/pedrobtz/zulake/issues/2) | [#21](https://github.com/pedrobtz/zulake/pull/21) | 2026-11-26 |
 | 1 | [Fixtures and oracle](#stage-1--fixtures-and-oracle) | quick | [#3](https://github.com/pedrobtz/zulake/issues/3) | [#23](https://github.com/pedrobtz/zulake/pull/23) | 2026-11-26 |
 | 2 | [Log replay](#stage-2--log-replay) | quick | [#4](https://github.com/pedrobtz/zulake/issues/4) | [#30](https://github.com/pedrobtz/zulake/pull/30) | 2026-11-26 |
-| 3 | [Inspection](#stage-3--inspection) | quick | [#5](https://github.com/pedrobtz/zulake/issues/5) | | |
+| 3 | [Inspection](#stage-3--inspection) | quick | [#5](https://github.com/pedrobtz/zulake/issues/5) | | 2026-11-26 |
 | 4 | [Reading and pruning](#stage-4--reading-and-pruning) | quick | [#6](https://github.com/pedrobtz/zulake/issues/6) | | |
 | 5 | [Deletion vectors and column mapping](#stage-5--deletion-vectors-and-column-mapping) | full | [#7](https://github.com/pedrobtz/zulake/issues/7) | | |
 | 6 | [Azure backend](#stage-6--azure-backend) | quick | [#8](https://github.com/pedrobtz/zulake/issues/8) | | |
@@ -254,6 +254,14 @@ returns its base data frame, with the types of [§7](design.md#7-types).
 - Print methods that show no credentials (there are none yet; the test is
   set up here and kept).
 
+  *Added (2026-11-26):* the D7 amendment: `vacuumProtocolCheck` accepted
+  (fixture `zl-vacuum-protocol-check`), `typeWidening`, `variantType`,
+  `variantShredding` and their `-preview` names refused by name,
+  `writerFeatures` never a reason to refuse; and `lake_count()` without
+  statistics is `NA` with `zulake_warning_count_unknown`, never a partial
+  sum ([§5](design.md#5-public-r-api-proposed)). Deletion vector
+  cardinalities come from the log, so `lake_count()` subtracts them here.
+
 **Tests.**
 
 - `lake_history()`, `lake_schema()`, `lake_protocol()`,
@@ -272,6 +280,19 @@ returns its base data frame, with the types of [§7](design.md#7-types).
 - `decimal` statistics: the JSON text, byte for byte, in `test-types.R`.
 - `filter` refusals: an expression outside the pruning subset in
   `lake_files()` is a classed error, in `test-filter.R`.
+- *Added (2026-11-26):* `lake_count()` where a live file has no
+  `numRecords`: `NA` and a warning counting the files that `deltalake`'s
+  add actions give null `num_records`, and explicitly not `deltalake`'s 0
+  on `simple_table` at version 0; deletion-vector fixtures: `deltalake`'s
+  count, in `test-inspect.R`.
+- *Added (2026-11-26):* `vacuumProtocolCheck` opens (`deltalake` opens
+  `zl-vacuum-protocol-check` too); writer-only features never refuse, in
+  `test-protocol.R`.
+- *Added (2026-11-26):* partition filters: for seeded random filters, the
+  files kept equal R's evaluation of the filter on `deltalake`'s partition
+  values, in `test-filter.R`.
+- *Added (2026-11-26):* `print()`: format, uri, version, files and
+  records, and no credentials, in `test-inspect.R`.
 
 **Exit criteria.**
 
@@ -303,6 +324,9 @@ downloading only the files a filter cannot rule out.
 - Local values in filters looked up in the calling environment
   ([D8](design.md#10-decisions)).
 - `Imports: qio`.
+- `lake_count(tbl, footers = TRUE)` reads the row count of each live file
+  without `numRecords` from its Parquet footer (added 2026-11-26, design
+  [§5](design.md#5-public-r-api-proposed)).
 - Columns `qio` cannot return, found from `qio::read_plan()`
   ([§7](design.md#7-types), [D14](design.md#10-decisions)): with
   `columns = NULL`, left out with a `zulake_warning_column_skipped` naming
@@ -324,6 +348,9 @@ downloading only the files a filter cannot rule out.
   `test-filter.R`.
 - `lake_walk()`: the pieces bound together equal `lake_read()`, in
   `test-read.R`.
+- `lake_count(footers = TRUE)` on the fixtures without statistics
+  (`simple_table`, `delta-0.8.0-*`): the row count of `deltalake`'s
+  committed full read, in `test-read.R`.
 - A table with a nested data column, read with `columns = NULL`: the flat
   columns equal `deltalake`'s, and one `zulake_warning_column_skipped`
   names each nested column; the same column named in `columns`: a classed
@@ -356,8 +383,8 @@ downloading only the files a filter cannot rule out.
   Z85 inline vectors, UUID-relative and absolute paths, range reads, the
   file format with its CRC-32, `zuroar::roar64_unserialize()`.
 - `lake_deletion_vectors()` in the shape of
-  [D12](design.md#10-decisions); `lake_count()` minus
-  deleted rows; reads drop marked rows.
+  [D12](design.md#10-decisions); reads drop marked rows. (`lake_count()`
+  already subtracts each descriptor's `cardinality`, from Stage 3.)
 - `columnMapping` in `name` mode and `timestampNtz`.
 - `Suggests: zuroar`, `Remotes: pedrobtz/zuroar`, and a classed error
   naming `zuroar` when a table needs it and it is absent.
@@ -662,6 +689,10 @@ review, in that order.
   Delta tables on Azure.
 - [§12](design.md#12-open-questions) Q7: `id`-mode column mapping, once `qio`
   reads Parquet field IDs; refused by name until then.
+- The reader features `typeWidening`, `variantType` and
+  `variantShredding` (and their `-preview` names), refused by name until
+  then: each needs values converted or decoded on read
+  ([D7 amendment](design.md#10-decisions), 2026-11-26).
 - [§12](design.md#12-open-questions) Q4: caching downloads across sessions;
   0.1.0 caches per session.
 - [§12](design.md#12-open-questions) Q6: probing commit names instead of
