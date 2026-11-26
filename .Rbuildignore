@@ -11,3 +11,6 @@
 ^\.superpowers$
 ^\.worktrees$
 ^\.github$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
