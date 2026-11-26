@@ -162,7 +162,7 @@ dv_unique_id <- function(dv) {
   }
   id <- paste0(dv[["storageType"]], dv[["pathOrInlineDv"]])
   if (!is.null(dv[["offset"]])) {
-    id <- paste0(id, "@", format_number(dv[["offset"]]))
+    id <- paste0(id, "@", int_text(dv[["offset"]]))
   }
   id
 }
@@ -185,7 +185,7 @@ check_add <- function(x, name) {
   if (!is.list(x) || !is_string(x[["path"]]) || !nzchar(x[["path"]])) {
     bad_action(name, "add", "without a `path`")
   }
-  if (!is_whole(x[["size"]]) || x[["size"]] < 0) {
+  if (!is_whole_or_marked(x[["size"]]) || is_negative(x[["size"]])) {
     bad_action(name, "add", sprintf("for %s without a valid `size`", format_string(x[["path"]])))
   }
   if (!is.null(x[["partitionValues"]]) && !is_value_map(x[["partitionValues"]])) {
@@ -208,7 +208,7 @@ check_dv <- function(dv, name, action, path) {
     return(invisible())
   }
   ok <- is.list(dv) && is_string(dv[["storageType"]]) && dv[["storageType"]] %in% c("u", "i", "p") &&
-    is_string(dv[["pathOrInlineDv"]]) && (is.null(dv[["offset"]]) || is_whole(dv[["offset"]]))
+    is_string(dv[["pathOrInlineDv"]]) && (is.null(dv[["offset"]]) || is_whole_or_marked(dv[["offset"]]))
   if (!ok) {
     bad_action(name, action, sprintf("for %s with a malformed `deletionVector`", format_string(path)))
   }
@@ -260,7 +260,7 @@ check_metadata <- function(x, name) {
 }
 
 check_txn <- function(x, name) {
-  if (!is.list(x) || !is_string(x[["appId"]]) || !nzchar(x[["appId"]]) || !is_whole(x[["version"]])) {
+  if (!is.list(x) || !is_string(x[["appId"]]) || !nzchar(x[["appId"]]) || !is_whole_or_marked(x[["version"]])) {
     bad_action(name, "txn", "without an `appId` and a whole-number `version`")
   }
   x
