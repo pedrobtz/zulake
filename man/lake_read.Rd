@@ -57,7 +57,9 @@ Its pruning subset is comparisons (\code{==}, \code{!=}, \code{<}, \code{<=}, \c
 statistics (minimum, maximum, null count and record count). Statistics
 only decide what is read: the rows returned are the rows \code{filter} is
 \code{TRUE} for whatever the statistics say, and a missing statistic only
-means a file is read.
+means a file is read. On a column returned as a list (a \code{binary}
+column), \code{is.na()} is \code{TRUE} where the value is null (\code{NULL}), as Delta
+means it, where base R's \code{is.na()} on a list is \code{FALSE}.
 
 A filter may also apply these row-wise functions to columns: \code{+}, \code{-},
 \code{*}, \code{/}, \code{\%\%}, \code{\%/\%}, \code{^}, \code{abs()}, \code{round()}, \code{floor()}, \code{ceiling()},

@@ -424,6 +424,11 @@ test_that("row-wise functions and two-column comparisons only filter rows in lak
   expect_error(lake_read(tbl, filter = p_int + 1), class = "zulake_error_filter")
   expect_error(lake_read(tbl, filter = c(TRUE, FALSE)), class = "zulake_error_filter")
   expect_error(lake_read(tbl, filter = p_int), class = "zulake_error_filter")
+  expect_error(lake_read(tbl, filter = p_str), "is not logical", fixed = TRUE, class = "zulake_error_filter")
+  expect_error(lake_read(tbl, filter = p_int == c(1, 2)), "must have length 1", fixed = TRUE, class = "zulake_error_filter")
+  expect_error(lake_read(tbl, filter = 1 %in% p_int), "column on its left", fixed = TRUE, class = "zulake_error_filter")
+  expect_error(lake_read(tbl, filter = abs(p_str) > 1), "evaluating it on rows failed", fixed = TRUE,
+               class = "zulake_error_filter")
   # A value inside a row-wise call must mean the same for every row.
   expect_error(lake_read(tbl, filter = value + c(1, 2) > 3), class = "zulake_error_filter")
   expect_error(lake_read(tbl, filter = grepl(p_str, "a")), class = "zulake_error_filter")
@@ -528,4 +533,22 @@ test_that("the row-wise functions are base R's, whatever the caller defines", {
   got <- lake_read(tbl, filter = p_str == nchar("a"))
   expect_gt(nrow(got), 0L)
   expect_identical(got, full[full$p_str %in% "a", , drop = FALSE], ignore_attr = TRUE)
+})
+
+test_that("a binary column is filtered on rows; is.na() of it is TRUE for a null, unlike base R on a list", {
+  tbl <- lake_open(fixture_table("zl-types"))
+  full <- suppressWarnings(lake_read(tbl))
+  null <- vapply(full$b, is.null, NA)
+  expect_identical(sum(null), 1L)
+  read <- function(expr) suppressWarnings(eval(bquote(lake_read(tbl, filter = .(expr)))))
+  # A comparison has no statistics to use, and equals R's.
+  for (expr in list(quote(b == "x"), quote(b != "x"), quote(is.na(i32) | b == "x"))) {
+    expect_identical(read(expr), r_subset(full, expr), label = deparse(expr))
+  }
+  # is.na() is the Delta null (design section 6), as vapply(b, is.null, NA)
+  # finds it; base R's is.na() is FALSE for every element of a list.
+  expect_identical(read(quote(is.na(b))), r_subset(full, bquote(.(null))))
+  expect_identical(read(quote(!is.na(b))), r_subset(full, bquote(.(!null))))
+  expect_identical(nrow(r_subset(full, quote(is.na(b)))), 0L)
+  expect_identical(nrow(lake_files(tbl, filter = is.na(b))), 1L)
 })

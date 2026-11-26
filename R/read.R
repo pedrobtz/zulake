@@ -15,7 +15,9 @@
 #' statistics (minimum, maximum, null count and record count). Statistics
 #' only decide what is read: the rows returned are the rows `filter` is
 #' `TRUE` for whatever the statistics say, and a missing statistic only
-#' means a file is read.
+#' means a file is read. On a column returned as a list (a `binary`
+#' column), `is.na()` is `TRUE` where the value is null (`NULL`), as Delta
+#' means it, where base R's `is.na()` on a list is `FALSE`.
 #'
 #' A filter may also apply these row-wise functions to columns: `+`, `-`,
 #' `*`, `/`, `%%`, `%/%`, `^`, `abs()`, `round()`, `floor()`, `ceiling()`,
