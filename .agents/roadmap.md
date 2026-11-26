@@ -29,7 +29,7 @@ Stage 2b, checkpoints, waits for that `qio` and runs after Stage 7.
 | 5 | [Deletion vectors and column mapping](#stage-5--deletion-vectors-and-column-mapping) | full | [#7](https://github.com/pedrobtz/zulake/issues/7) | [#33](https://github.com/pedrobtz/zulake/pull/33) | 2026-11-26 |
 | 6 | [Azure backend](#stage-6--azure-backend) | quick | [#8](https://github.com/pedrobtz/zulake/issues/8) | [#35](https://github.com/pedrobtz/zulake/pull/35) | 2026-11-26 |
 | 7 | [Documentation](#stage-7--documentation) | quick | [#9](https://github.com/pedrobtz/zulake/issues/9) | [#36](https://github.com/pedrobtz/zulake/pull/36) | 2026-11-26 |
-| 2b | [Checkpoints](#stage-2b--checkpoints) | quick | [#26](https://github.com/pedrobtz/zulake/issues/26) | | |
+| 2b | [Checkpoints](#stage-2b--checkpoints) | quick | [#26](https://github.com/pedrobtz/zulake/issues/26) | | 2026-11-26 |
 | 8 | [Assurance](#stage-8--assurance) | quick | [#10](https://github.com/pedrobtz/zulake/issues/10) | | |
 | 9 | [Full CI](#stage-9--full-ci) | full | [#11](https://github.com/pedrobtz/zulake/issues/11) | | |
 | 10 | [v0.1.0 readiness](#stage-10--v010-readiness) | full | [#12](https://github.com/pedrobtz/zulake/issues/12) | | |
