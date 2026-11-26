@@ -246,6 +246,23 @@ test_that("lake_metadata(), lake_partition_columns() and lake_properties() equal
   expect_false(p$default[p$key == "delta.columnMapping.mode"])
 })
 
+test_that("a metaData without format options, configuration or field metadata gives empty objects", {
+  lines <- c(
+    '{"protocol":{"minReaderVersion":1,"minWriterVersion":2}}',
+    paste0('{"metaData":{"id":"t","format":{"provider":"parquet"},',
+           '"schemaString":"{\\"type\\":\\"struct\\",\\"fields\\":[{\\"name\\":\\"id\\",\\"type\\":\\"long\\",\\"nullable\\":true}]}",',
+           '"partitionColumns":[]}}')
+  )
+  tbl <- lake_open(raw_table(lines))
+  empty <- zujson::json_parse("{}")
+  m <- lake_metadata(tbl)
+  expect_identical(m$format_provider, "parquet")
+  expect_identical(m$format_options[[1L]], empty)
+  expect_identical(m$configuration[[1L]], empty)
+  expect_identical(lake_schema(tbl)$metadata[[1L]], empty)
+  expect_identical(nrow(lake_properties(tbl)[!lake_properties(tbl)$default, ]), 0L)
+})
+
 test_that("lake_transactions() equals deltalake's transaction versions", {
   for (case in inspect_cases()) {
     tx <- lake_transactions(case_snapshot(case))

@@ -412,6 +412,20 @@ test_that("account and container names are checked at their limits", {
   for (container in c("a--b", "-ab", "ab-", "Lake", "la_ke", "la.ke")) expect_false(ok("acct", container), label = container)
 })
 
+test_that("without zulake.azure_client, requests go out with one zuhttp client per session, named zulake", {
+  withr::local_options(zulake.azure_client = NULL)
+  old <- azure_env$client
+  azure_env$client <- NULL
+  withr::defer(azure_env$client <- old)
+  client <- azure_client()
+  expect_s3_class(client, "zu_client")
+  expect_s3_class(client$transport, "zu_native_transport")
+  expect_identical(client$user_agent, paste0("zulake/", utils::packageVersion("zulake")))
+  expect_identical(azure_client(), client)
+  withr::local_options(zulake.azure_client = "not a client")
+  expect_error(azure_client(), class = "zulake_error_argument")
+})
+
 test_that("zulake.azure_endpoint sends every request to a path-style endpoint", {
   log <- new.env()
   withr::local_options(

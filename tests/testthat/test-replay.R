@@ -118,6 +118,16 @@ test_that("the deletion vector id has the offset only when there is one", {
     remove_line("a.parquet", dv = list(storageType = "u", pathOrInlineDv = "abc", offset = 2L, sizeInBytes = 9L, cardinality = 1L))
   ))
   expect_identical(lake_open(path)$files$path, c("a.parquet", "b.parquet"))
+  # Offsets past 2^53 - 1 that one double would hold as one number.
+  add_big <- function(offset) {
+    sprintf(paste0(
+      '{"add":{"path":"a.parquet","partitionValues":{},"size":9,"modificationTime":0,"dataChange":true,',
+      '"deletionVector":{"storageType":"u","pathOrInlineDv":"abc","offset":%s,"sizeInBytes":9,"cardinality":1}}}'
+    ), offset)
+  }
+  path <- hand_table(c(protocol_line(3L, 7L, "deletionVectors", "deletionVectors"), metadata_line(),
+                       add_big("9007199254740992"), add_big("9007199254740993")))
+  expect_setequal(lake_open(path)$files$deletion_vector_id, c("uabc@9007199254740992", "uabc@9007199254740993"))
 })
 
 test_that("a commit that removes and re-adds one logical file leaves it live", {
