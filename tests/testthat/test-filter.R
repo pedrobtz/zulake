@@ -373,7 +373,8 @@ test_that("filter values arrive the same in a hostile session", {
     list(
       lake_files(tbl, filter = p_int > 1.5 & p_date < "2024-01-04", stats = FALSE)$path,
       lake_files(tbl, filter = value > 12345678.25, stats = FALSE)$path,
-      lake_read(tbl, filter = value %in% c(0.5, 2, 1e6) | p_str == "café")
+      lake_read(tbl, filter = value %in% c(0.5, 2, 1e6) | p_str == "café"),
+      lake_read(tbl, filter = round(value / 3, 1) > 0.5 & substr(p_str, 1, 1) %in% c("a", "c") | nchar(p_str) == 4)
     )
   }
   stats <- '{\\"numRecords\\":1,\\"minValues\\":{\\"t\\":\\"2024-01-05T10:00:00.123Z\\"},\\"maxValues\\":{\\"t\\":\\"2024-01-05T10:00:00.123Z\\"}}'

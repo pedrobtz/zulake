@@ -1,6 +1,6 @@
 # Hostile logs (design section 8): each is a classed zulake_error, and no
-# snapshot is returned. The checkpoint and deletion-vector ones are Stage 2b
-# and Stage 5's.
+# snapshot is returned, or for a deletion vector no rows. The checkpoint
+# ones are Stage 2b's.
 
 test_that("a truncated commit is a corrupt log, and no snapshot is returned", {
   path <- fixture_table("truncated-commit", "hostile")
@@ -270,4 +270,61 @@ test_that("a commit with one value changed to another JSON type gives a snapshot
       expect_true(ok, label = paste(table, version, j, lines[j], if (inherits(res, "error")) conditionMessage(res) else ""))
     }
   }
+})
+
+test_that("a deletion vector with a bad CRC-32, a wrong magic number or a size past its file is a corrupt log, and no rows are returned", {
+  skip_if_not_installed("zuroar")
+  for (name in c("dv-bad-checksum", "dv-bad-magic", "dv-size-past-file")) {
+    tbl <- lake_open(fixture_table(name, "hostile"))
+    # The log itself is whole: the snapshot opens and counts from the log.
+    expect_identical(lake_count(tbl), 8)
+    expect_identical(nrow(lake_deletion_vectors(tbl, rows = FALSE)), 1L)
+    called <- FALSE
+    for (f in list(function() lake_read(tbl), function() lake_deletion_vectors(tbl),
+                   function() lake_walk(tbl, function(p) called <<- TRUE),
+                   function() lake_read(tbl, columns = character()))) {
+      err <- tryCatch(f(), error = identity)
+      expect_s3_class(err, "zulake_error_corrupt_log")
+      expect_s3_class(err, "zulake_error")
+      expect_identical(err$file, lake_files(tbl, stats = FALSE)$path, label = name)
+    }
+    expect_false(called)
+  }
+  msg <- function(name) conditionMessage(tryCatch(lake_read(lake_open(fixture_table(name, "hostile"))), error = identity))
+  expect_match(msg("dv-bad-checksum"), "CRC-32", fixed = TRUE)
+  expect_match(msg("dv-size-past-file"), "past the end", fixed = TRUE)
+  # The wrong magic number is behind a checksum that no longer matches; with
+  # the checksum made right for it, the magic number is what refuses it.
+  path <- local_fixture_copy("dv-bad-magic", "hostile")
+  f <- list.files(path, pattern = "^deletion_vector_", full.names = TRUE)
+  b <- readBin(f, "raw", file.size(f))
+  b[42:45] <- be_bytes(test_crc32(b[6:41]))
+  writeBin(b, f)
+  err <- tryCatch(lake_read(lake_open(path)), error = identity)
+  expect_s3_class(err, "zulake_error_corrupt_log")
+  expect_match(conditionMessage(err), "magic number", fixed = TRUE)
+})
+
+test_that("any one byte of a deletion vector file changed, or the file cut short, is a corrupt log", {
+  skip_if_not_installed("zuroar")
+  path <- local_fixture_copy("table-with-dv-small")
+  f <- list.files(path, pattern = "^deletion_vector_", full.names = TRUE)
+  good <- readBin(f, "raw", file.size(f))
+  tbl <- lake_open(path)
+  want <- lake_read(tbl)
+  for (i in seq_along(good)) {
+    for (flip in c(0x01, 0x80)) {
+      b <- good
+      b[i] <- xor(b[i], as.raw(flip))
+      writeBin(b, f)
+      res <- tryCatch(lake_read(tbl), error = identity)
+      expect_s3_class(res, "zulake_error_corrupt_log")
+    }
+  }
+  for (n in seq_len(length(good) - 1L) - 1L) {
+    writeBin(good[seq_len(n)], f)
+    expect_error(lake_read(tbl), class = "zulake_error_corrupt_log", label = n)
+  }
+  writeBin(good, f)
+  expect_identical(lake_read(tbl), want)
 })

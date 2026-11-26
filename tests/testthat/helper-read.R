@@ -2,16 +2,16 @@
 # test file, because the suite shuffles every top-level expression of a test
 # file.
 
-# Every (table, version) of inspect_cases() whose rows this version reads:
-# no live deletion vector and no column mapping (Stage 5 reads those).
+# Every (table, version) of inspect_cases(), which this version reads; those
+# with live deletion vectors only when zuroar is installed (the nosuggests
+# check has none; test-dv.R tests the error).
 read_cases <- function() {
+  if (requireNamespace("zuroar", quietly = TRUE)) {
+    return(inspect_cases())
+  }
   Filter(function(case) {
     tbl <- case_snapshot(case)
-    ok <- tryCatch({
-      read_refusals(tbl)
-      TRUE
-    }, zulake_error_unsupported_feature = function(e) FALSE)
-    ok
+    all(vapply(tbl$files$action, function(a) is.null(a[["deletionVector"]]), NA))
   }, inspect_cases())
 }
 

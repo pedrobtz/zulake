@@ -22,6 +22,9 @@
 #                                      in `filter` that qio cannot return
 #                                      (design section 7); `column`,
 #                                      `reason`
+#   zulake_error_missing_package       a suggested package the call needs
+#                                      is not installed (zuroar, for the
+#                                      rows of deletion vectors); `package`
 #
 # and three warnings, each with parent class `zulake_warning`:
 #

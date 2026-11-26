@@ -99,10 +99,15 @@ error of class \code{zulake_error_column_unreadable} with the same fields.
 Data files are read in place on local disk; other stores download each
 file once per session, to the session's temporary directory.
 
-This version cannot read a table whose live files have deletion vectors,
-or that maps column names: both are refused with a
-\code{zulake_error_unsupported_feature} error naming the feature, before any
-data file is read, so a read never returns deleted rows or wrong columns.
+Rows a deletion vector marks as deleted are never returned (see
+\code{\link[=lake_deletion_vectors]{lake_deletion_vectors()}}); reading their vectors needs the zuroar
+package, and without it a read of a table with deletion vectors in the
+files it reads is an error of class \code{zulake_error_missing_package}. Every
+such vector is read and checked before any data file, so a corrupt one
+(\code{zulake_error_corrupt_log}) returns no rows. A table that maps column
+names (column mapping in \code{name} mode) is read by each column's physical
+name in the files and returned with its logical names; a
+\code{timestamp_ntz} column is a \code{POSIXct} in UTC.
 }
 \examples{
 # A partitioned table of two files: the data written with qio, the log by
