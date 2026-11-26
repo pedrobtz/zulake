@@ -154,13 +154,49 @@ test_that("decimal statistics are the log's JSON text, byte for byte", {
 
 test_that("mark_numbers() rewrites number tokens only, never digits inside strings", {
   mark <- zulake:::mark_numbers
-  x <- '{"a":9007199254740993,"s":"12345678901234567","t":"a\\"9999999999999999","b":[1.5,-9223372036854775808],"c":9007199254740991}'
+  x <- '{"a":9007199254740993,"s":"12345678901234567","t":"a\\"9999999999999999","b":[1.5,-9223372036854775808],"c":9007199254740991,"e":0.12345678901234567,"g":1e12345678901234567}'
   parsed <- zujson::json_parse(mark(x))
   expect_identical(parsed$a, "\0369007199254740993")
   expect_identical(parsed$s, "12345678901234567")
   expect_identical(parsed$t, "a\"9999999999999999")
   expect_identical(parsed$b, list(1.5, "\036-9223372036854775808"))
   expect_identical(parsed$c, 9007199254740991)
+  # Digits after a point or in an exponent are not an integer of their own.
+  expect_identical(parsed$e, 0.12345678901234567)
+  expect_identical(parsed$g, Inf)
   all <- zujson::json_parse(mark('{"v":1.50,"w":[1E+2,-0.0],"k":"1.50"}', all = TRUE))
   expect_identical(all, list(v = "\0361.50", w = c("\0361E+2", "\036-0.0"), k = "1.50"))
+})
+
+test_that("int64 = \"integer64\" without bit64 is a classed error naming it", {
+  local_mocked_bindings(has_bit64 = function() FALSE)
+  tbl <- lake_open(fixture_table("zl-basic"))
+  for (f in list(function() lake_files(tbl, int64 = "integer64"), function() lake_summary(tbl, int64 = "integer64"),
+                 function() lake_transactions(tbl, int64 = "integer64"))) {
+    err <- tryCatch(f(), error = identity)
+    expect_s3_class(err, "zulake_error_argument")
+    expect_match(conditionMessage(err), "bit64", fixed = TRUE)
+  }
+  expect_identical(nrow(lake_files(tbl)), 2L)
+})
+
+test_that("a 64-bit field that is not a whole number is a corrupt log", {
+  # (A one-element array is not here: zujson gives it as the number.)
+  for (value in c('\\"x\\"', "1.5", "true", "{}")) {
+    lines <- c(raw_header(), raw_add("a.parquet", stats = sprintf('{\\"numRecords\\":%s}', value)))
+    tbl <- lake_open(raw_table(lines))
+    expect_error(lake_files(tbl), class = "zulake_error_corrupt_log")
+    expect_error(lake_count(tbl), class = "zulake_error_corrupt_log")
+    expect_identical(nrow(lake_files(tbl, stats = FALSE)), 1L)
+  }
+  lines <- c(raw_header(), raw_add("a.parquet", stats = '{\\"nullCount\\":{\\"id\\":2.5}}'))
+  expect_error(lake_files(lake_open(raw_table(lines))), class = "zulake_error_corrupt_log")
+  lines <- c(raw_header(), raw_add("a.parquet", size = "100", extra = ',"modificationTime2":1'))
+  lines[3] <- sub('"modificationTime":0', '"modificationTime":"soon"', lines[3], fixed = TRUE)
+  expect_error(lake_files(lake_open(raw_table(lines))), class = "zulake_error_corrupt_log")
+})
+
+test_that("a time field that is not a whole number is a corrupt log", {
+  lines <- c(raw_header(), raw_add("a.parquet"), '{"txn":{"appId":"a","version":1,"lastUpdated":1.5}}')
+  expect_error(lake_transactions(lake_open(raw_table(lines))), class = "zulake_error_corrupt_log")
 })

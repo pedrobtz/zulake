@@ -167,8 +167,11 @@ test_that("lake_history() equals deltalake's history, and limit cuts it", {
 
 test_that("lake_versions() and lake_history() time each commit as deltalake's timestamp lookup does", {
   for (table in c("zl-basic", "simple_table", "table_with_ict", "zl-partitioned")) {
+    # The in-commit timestamp table keeps the unpacked files' times, which
+    # differ from its commits' timestamps: only the in-commit timestamps
+    # can agree with deltalake.
     path <- local_fixture_copy(table)
-    set_commit_mtimes(path)
+    if (table != "table_with_ict") set_commit_mtimes(path)
     tbl <- lake_open(path)
     v <- lake_versions(tbl)
     expect_identical(v$version, as.numeric(oracle_versions(table)))
@@ -373,4 +376,89 @@ test_that("print() summarises a snapshot and shows no credentials", {
   expect_identical(res, tbl)
   out <- capture.output(print(lake_open(fixture_table("simple_table"))))
   expect_true(any(grepl("records: +unknown \\(5 files without numRecords\\)", out)))
+})
+
+test_that("statistics that break the protocol are a corrupt log, and stats = FALSE still lists the files", {
+  bad <- c(
+    "not json",
+    "[1,2]",
+    '{\\"minValues\\":[1]}',
+    '{\\"minValues\\":{\\"d\\":\\"2024-13-45\\"}}',
+    '{\\"maxValues\\":{\\"ts\\":\\"yesterday\\"}}',
+    '{\\"minValues\\":{\\"id\\":\\"ten\\"}}',
+    '{\\"minValues\\":{\\"n\\":1.5}}'
+  )
+  for (stats in bad) {
+    lines <- c(raw_header(c(id = "long", d = "date", ts = "timestamp", n = "integer")),
+               raw_add("a.parquet", stats = stats))
+    tbl <- lake_open(raw_table(lines))
+    err <- tryCatch(lake_files(tbl), error = identity)
+    expect_s3_class(err, "zulake_error_corrupt_log")
+    expect_identical(nrow(lake_files(tbl, stats = FALSE)), 1L, label = stats)
+  }
+  # A statistic for a column the schema does not have is kept as it is.
+  lines <- c(raw_header(), raw_add("a.parquet", stats = '{\\"minValues\\":{\\"gone\\":12,\\"also\\":\\"x\\",\\"f\\":1.5}}'))
+  expect_identical(lake_files(lake_open(raw_table(lines)))$min[[1L]], list(gone = 12, also = "x", f = 1.5))
+})
+
+test_that("a partition value Stage 2's check lets through but no type holds is a corrupt log", {
+  for (case in list(c("date", "2024-02-31"), c("timestamp", "2024-02-30 10:00:00"))) {
+    path <- hand_table(c(protocol_line(), metadata_line(c(id = "long", p = case[1L]), partition = "p"),
+                         add_line("a.parquet", partition = list(p = case[2L]))))
+    tbl <- lake_open(path)
+    expect_error(lake_files(tbl), class = "zulake_error_corrupt_log")
+    expect_error(lake_partitions(tbl), class = "zulake_error_corrupt_log")
+  }
+})
+
+test_that("partition values of every type parse as the protocol serialises them", {
+  types <- c(b = "byte", s = "short", i = "integer", l = "long", f = "float", d = "double", t = "boolean",
+             dt = "date", ts = "timestamp", ntz = "timestamp_ntz", dec = "decimal(10,2)", str = "string")
+  values <- list(b = "-128", s = "32767", i = "-2147483648", l = "-9007199254740991", f = "-Infinity", d = "1.5e-300",
+                 t = "TRUE", dt = "0001-01-01", ts = "2024-01-02 03:04:05.123456", ntz = "2024-01-02T03:04:05",
+                 dec = "-0.10", str = "")
+  path <- hand_table(c(protocol_line(), metadata_line(types, partition = names(types)),
+                       add_line("a.parquet", partition = values)))
+  p <- lake_files(lake_open(path))$partition[[1L]]
+  expect_identical(p$b, -128L)
+  expect_identical(p$s, 32767L)
+  expect_identical(p$i, -2147483648)
+  expect_identical(p$l, -9007199254740991)
+  expect_identical(p$f, -Inf)
+  expect_identical(p$d, 1.5e-300)
+  expect_identical(p$t, TRUE)
+  expect_identical(format(p$dt), "0001-01-01")
+  expect_identical(oracle_canon(p$ts), "2024-01-02T03:04:05.123456")
+  expect_identical(oracle_canon(p$ntz), "2024-01-02T03:04:05.000000")
+  expect_identical(p$dec, "-0.10")
+  expect_identical(p$str, NA_character_)
+  # Offsets move a timestamp to UTC.
+  path <- hand_table(c(protocol_line(), metadata_line(c(ts = "timestamp"), partition = "ts"),
+                       add_line("a.parquet", partition = list(ts = "2024-01-02T03:04:05+01:30"))))
+  expect_identical(oracle_canon(lake_files(lake_open(path))$partition[[1L]]$ts), "2024-01-02T01:34:05.000000")
+})
+
+test_that("a deletion vector without a cardinality is a corrupt log", {
+  header <- raw_header()
+  header[1L] <- paste0('{"protocol":{"minReaderVersion":3,"minWriterVersion":7,',
+                       '"readerFeatures":["deletionVectors"],"writerFeatures":["deletionVectors"]}}')
+  dv <- ',"deletionVector":{"storageType":"u","pathOrInlineDv":"vBn[lx{q8@P<9BNH/isA","offset":1,"sizeInBytes":36}'
+  tbl <- lake_open(raw_table(c(header, raw_add("a.parquet", stats = '{\\"numRecords\\":10}', extra = dv))))
+  err <- tryCatch(lake_count(tbl), error = identity)
+  expect_s3_class(err, "zulake_error_corrupt_log")
+  expect_match(conditionMessage(err), "cardinality", fixed = TRUE)
+})
+
+test_that("results do not depend on the locale or on number formatting options", {
+  tbl <- lake_open(fixture_table("zl-partitioned"))
+  ref_files <- lake_files(tbl)
+  ref_parts <- lake_partitions(tbl)
+  ref_print <- capture.output(print(tbl))
+  withr::local_options(OutDec = ",", scipen = -5, digits = 3)
+  withr::local_collate("C")
+  expect_identical(lake_files(lake_open(fixture_table("zl-partitioned"))), ref_files)
+  expect_identical(lake_partitions(tbl), ref_parts)
+  expect_identical(capture.output(print(tbl)), ref_print)
+  expect_identical(lake_files(tbl, filter = p_str == factor("a"))$path, ref_files$path[2:3])
+  expect_identical(lake_files(tbl, filter = p_str %in% factor(c("a", "café")))$path, ref_files$path[2:4])
 })
