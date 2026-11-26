@@ -216,9 +216,7 @@ A snapshot at version `v` is built as the protocol prescribes:
    protocol requires.
 3. Read the checkpoint with `qio` (every part, and the sidecars of a V2
    checkpoint), then apply the commits in order. Checkpoints are nested
-   Parquet, which `qio` cannot read yet (D14): until it can, replay
-   starts at commit 0, and a table whose log no longer reaches commit 0
-   is refused with a classed `zulake_error_checkpoint_unreadable`.
+   Parquet, which `qio` reads from 0.1.2.9000 on (D14; Stage 2b).
 4. Reconcile: the latest `metaData` and `protocol` win; an `add` is live
    unless a later `remove` names the same path and deletion vector id;
    `txn` keeps the latest version per `appId`; `domainMetadata` keeps the
@@ -240,10 +238,10 @@ a choice:
   (the one reaching furthest, of several). Why: the protocol makes them
   equivalent to those commits; a log whose old commits were cleaned up
   but compacted still opens.
-- *`_last_checkpoint`* is parsed and kept, but replay still starts at
-  commit 0. One that is not JSON, has no whole `version`, or names a
-  version past the last commit is a corrupt log. Why: a hint that
-  contradicts the log means the log is not what its writer left.
+- *`_last_checkpoint`* is parsed and kept. One that is not JSON, has no
+  whole `version`, or names a version past the last commit is a corrupt
+  log. Why: a hint that contradicts the log means the log is not what its
+  writer left.
 - *Time travel by timestamp* opens the latest version whose commit time
   is at or before the timestamp, and the first version for a timestamp
   before every commit, as `deltalake` 1.7.0 does (its answers on every
@@ -259,6 +257,62 @@ a choice:
   zulake rounds to 10 µs and then truncates to milliseconds, so a file
   time within 5 µs below a millisecond boundary counts as the next
   millisecond. With inCommitTimestamp this does not apply.
+- *Checkpoints* (settled 2026-11-26, Stage 2b). Replay starts from the
+  latest whole checkpoint at or before the version, found in the listing
+  (which zulake reads whole anyway), so a stale `_last_checkpoint` changes
+  nothing; then the commits after it. Whole means a classic or V2 file, or
+  every part of a multi-part set; a set with a part missing is passed
+  over. Why: the protocol makes a checkpoint equal to the commits it
+  stands for, and the latest one reads least.
+  - A `_last_checkpoint` naming a version with no whole checkpoint (a part
+    missing) is a corrupt log at every version, like one past the log.
+    `deltalake` 1.7.0 refuses the versions from the hint on and opens the
+    earlier ones; zulake refuses the log, so that its answer does not
+    depend on the version asked (on the advice of a design review agent).
+  - A checkpoint that cannot be read (a file gone, bytes `qio` refuses, a
+    sidecar outside `_delta_log/_sidecars/`, an integer past 2^53 without
+    `bit64`) is passed over for an earlier one or for commit 0, which hold
+    the same state. `zulake_error_checkpoint_unreadable` is left for a
+    version whose replay needs commit 0, when commit 0 is gone and the
+    checkpoint at or before the version is not whole or cannot be read; it
+    carries the `checkpoint` version and the read failure as `parent`. A
+    checkpoint that reads but whose actions break the protocol is a corrupt
+    log, like a commit. An authentication failure is never passed over.
+  - A version older than the earliest checkpoint whose commits were
+    cleaned up is a `zulake_error_version`: it is no longer in the log
+    (a fact about the table, not a reading failure).
+  - A log of checkpoints alone (or one whose commit at the snapshot's
+    version is gone) opens, with `timestamp` `NA` and no `commit_info`:
+    the checkpoint determines the state, and log cleanup can leave this.
+  - *What is read.* The `protocol`, `metaData`, `txn`, `domainMetadata`,
+    `remove`, `add` and `sidecar` columns, selected by group path; not
+    `commitInfo`, `cdc`, `checkpointMetadata`, nor `stats_parsed` and
+    `partitionValues_parsed`. Statistics come from the `stats` JSON string
+    and partition values from `partitionValues`, as in a commit, so one
+    parser serves both and any user type in `stats_parsed` is never a
+    reason to fail. A file whose checkpoint has `stats_parsed` but no
+    `stats` (`delta.checkpoint.writeStatsAsJson = false`) shows no
+    statistics and is never pruned on them (design §6: statistics only
+    decide what is downloaded).
+  - *One representation.* A checkpoint row becomes the list zujson gives
+    the same action as JSON: an optional struct qio marks null is no
+    action or field, a struct of nulls an object without those fields; a
+    `LIST` a vector (an empty one `logical(0)`); a `MAP` a named list with
+    `NULL` for a null value (an empty one an empty named list); a whole
+    number an R integer holds an integer, one past 2^53 - 1 the marked
+    digits of `R/int64.R` (qio's `integer64` read, when a double read
+    warns), another a double. Tombstones in a checkpoint are tombstones.
+    So the gate, the partition checks and every inspection function see
+    what they see from commits. What differs is what checkpoint writers
+    rewrite in their copy of an `add`: `dataChange` (Spark and Databricks
+    write `false`), an empty `tags` map for a null one, field order, and
+    null fields left out where a commit may write them. `lake_files()`
+    reports that copy, the action as the log now holds it (D2), so
+    `data_change` describes the commit only when the add came from a
+    commit; `a[["x"]]` reads an absent and a null field alike. A
+    checkpoint also holds only the tombstones its writer had not expired.
+    Tested against replay from commit 0 on every checkpoint fixture, at
+    every version, and against `deltalake` 1.7.0's answers.
 - *Partition values* of live files are checked against their column's
   type (the protocol's "Partition Value Serialization"; by physical name
   under column mapping) when the snapshot is built; a value that does
@@ -635,8 +689,7 @@ Delta's types map to what `qio` returns for the Parquet column, so
 `timestamp` is `POSIXct` in UTC. `timestamp_ntz` is `POSIXct` with
 `tzone = "UTC"`, and `lake_schema()` marks the column as zone-less.
 `decimal` statistics stay as their JSON text, since a double would round
-them (D10). Data columns `qio` cannot return (nested, until D14's `qio`
-slice; anything beyond it after) are handled so that none is lost
+them (D10). Data columns zulake does not return (nested ones, D14) are handled so that none is lost
 silently (D7): with `columns = NULL` the readable columns are returned and
 each unreadable one is named in a classed warning,
 `zulake_warning_column_skipped` (fields `column`, `reason`); a column named
@@ -827,16 +880,21 @@ The order of work, and what 0.1.0 waits for, are in
   print, compare or be saved without `zuroar`, which is only suggested
   (D2), and the 32-bit `zuroar_bits` of pedrobtz/zuroar#71 does not hold
   64-bit vectors. The oracle comparison is `which(!selection_vector) - 1`.
-- **D14 (2026-11-26).** Checkpoints and sidecars are read by `qio`, and
-  0.1.0 waits for a `qio` that reads structs, maps and lists of
-  repetition level 1 (pedrobtz/qio#73). Until then replay starts at
-  commit 0, and a table that needs a checkpoint is refused with a classed
-  error. Data files are read meanwhile: flat columns as `qio` returns
-  them, nested ones left out with a classed warning naming each, or a
-  classed error when the caller named one in `columns` (§7, D7). Why:
-  carquet already decodes the leaf streams and nested assembly is `qio`'s
-  by its own design, while a commits-only 0.1.0 would refuse most
-  Databricks tables, whose log cleanup removes old commits. D1 stands.
+- **D14 (2026-11-26; checkpoints done 2026-11-26, Stage 2b).** Checkpoints
+  and sidecars are read by `qio`, and 0.1.0 waits for a `qio` that reads
+  structs, maps and lists of repetition level 1 (pedrobtz/qio#73). That
+  `qio` is 0.1.2.9000 (pedrobtz/qio#76, heading to 0.2.0): `Imports: qio
+  (>= 0.1.2.9000)` with `Remotes:` until it is on CRAN, and replay starts
+  from the latest checkpoint (§4.2). Data files are still read flat:
+  nested data columns are left out with a classed warning naming each, or
+  a classed error when the caller named one in `columns` (§7, D7). Kept
+  for 0.1.0 (Stage 2b): the stage is about the log, a nested data column
+  returned as qio's shapes is an API of its own (struct masks, map data
+  frames) that `lake_read()` should not take on unreviewed, and leaving
+  them out is never silent. Why: carquet already decodes the leaf streams
+  and nested assembly is `qio`'s by its own design, while a commits-only
+  0.1.0 would refuse most Databricks tables, whose log cleanup removes old
+  commits. D1 stands.
 - **D13 (2026-11-26; settled 2026-11-26 by the Stage 6 spike).** Azurite
   over HTTPS with `--oauth basic` is the CI stand-in for Azure; a live ADLS
   Gen2 run is the release gate (§11, criterion 4b). Why: no storage account
