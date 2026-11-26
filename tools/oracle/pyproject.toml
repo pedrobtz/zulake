@@ -5,7 +5,7 @@ description = "deltalake 1.7.0 answers for zulake's fixture tables"
 requires-python = "==3.12.*"
 dependencies = [
     "deltalake==1.7.0",
-    "pyarrow==22.0.0",
+    "pyarrow==23.0.1",
 ]
 
 [tool.uv]
