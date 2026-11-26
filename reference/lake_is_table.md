@@ -14,13 +14,14 @@ lake_is_table(uri, credentials = NULL)
 
 - uri:
 
-  Location of the table: the path of its directory, the one that holds
-  `_delta_log/`.
+  Location of the table, the directory that holds `_delta_log/`: a local
+  path, or an Azure URI in one of the forms of the Azure section.
 
 - credentials:
 
-  A function of no arguments returning a bearer token, for tables on
-  Azure. Not used for local paths.
+  A function of no arguments returning a bearer token for Azure Storage,
+  as a string (see the Azure section), or `NULL` for anonymous requests.
+  Not used for local paths.
 
 ## Value
 

@@ -48,7 +48,10 @@ Stage 4 (reading and pruning) adds
 and `lake_count(footers = TRUE)`. Stage 5 adds deletion vectors
 ([`lake_deletion_vectors()`](https://pedrobtz.github.io/zulake/reference/lake_deletion_vectors.md),
 rows dropped on read, `zuroar` suggested) and `name`-mode column mapping
-on reads, and makes filters row-wise by construction. The roadmap in
+on reads, and makes filters row-wise by construction. Stage 6 adds the
+Azure backend (`R/azure.R`, over `zuhttp`): the three URI forms, a
+bearer token from `credentials()`, and the request, emulator and live
+test layers. The roadmap in
 [`.agents/roadmap.md`](https://pedrobtz.github.io/zulake/.agents/roadmap.md)
 takes it to v0.1.0. 0.1.0 waits for `zuhttp` on CRAN and for `zuroar`
 0.1.0 (design §9); local log replay, inspection and reading are built on
@@ -87,6 +90,11 @@ See `.agents/design.md` for the why. There is no native layer: no
 - `R/storage.R`: the internal storage interface (`list`, `get`,
   `get_range`, `head` over paths relative to the table root) and its
   local backend; `storage_for()` picks one from the URI.
+- `R/azure.R`: the Azure backend (Blob REST through `zuhttp`), the URI
+  forms (`parse_azure_uri()`), the credential registry that keeps the
+  token out of the snapshot, the List Blobs parser, and the internal
+  options `zulake.azure_endpoint` and `zulake.azure_client` (tests
+  only).
 - `R/log.R`: what a `_delta_log/` listing holds (`log_entries()`), JSON
   log files through `zujson`, `_last_checkpoint`.
 - `R/replay.R`: the replay plan (commits, log compaction files) and the
@@ -165,8 +173,16 @@ edit. `deltalake` 1.7.0’s answers for every table and version are in
 `fixture_table(name)`, `local_fixture_copy(name)`,
 `oracle_field(table, version, field)`, `oracle_refusal()` and
 `expect_oracle(actual, table, version, field)`. Never edit an answer by
-hand, and never edit a tree without repacking (see Commands). A live
-Azure suite gated on `ZULAKE_AZURE_URI` comes in Stage 6.
+hand, and never edit a tree without repacking (see Commands).
+
+Azure (`helper-azure.R`, `tools/azurite/README.md`): `test-azure.R` runs
+everywhere against `azure_fake()`, a `zu_mock_transport()` over the
+fixtures that records every request, and replays the cassettes in
+`tests/testthat/fixtures/cassettes/`, recorded from Azurite, never by
+hand. `test-azure-emulator.R` needs Azurite (`ZULAKE_AZURITE_ENDPOINT`)
+and skips without it; `test-azure-live.R` needs `ZULAKE_AZURE_URI` and
+`ZULAKE_AZURE_TOKEN`. No test may reach the network: a fake or a
+replaying cassette goes in `zulake.azure_client`.
 
 ## Continuous integration
 
@@ -184,3 +200,9 @@ workflow: it regenerates the `deltalake` answers, the hostile logs and
 the fixture tar, and fails on any diff. It runs on dispatch and on pull
 requests touching `tools/oracle/`, `tools/fixtures/` or the fixtures (a
 `paths` filter, which `assurance.yml` counts as gated).
+`azure-emulator.yaml` (own, gated by `changes.yml`) starts Azurite over
+HTTPS with `--oauth basic`, uploads the fixtures, has `deltalake` read
+them (`tools/oracle/azurite.py`) and runs `test-azure.R` and
+`test-azure-emulator.R` with no skip allowed; it uploads the cassettes
+it records. `azure-live.yaml` (own, dispatch only, repository secrets)
+runs `test-azure-live.R` against ADLS Gen2 (#24).

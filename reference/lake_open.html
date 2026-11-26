@@ -61,8 +61,8 @@ table, at another version or at the version the log now ends at.</p>
 
 
 <dl><dt id="arg-uri">uri<a class="anchor" aria-label="anchor" href="#arg-uri"></a></dt>
-<dd><p>Location of the table: the path of its directory, the one that
-holds <code>_delta_log/</code>.</p></dd>
+<dd><p>Location of the table, the directory that holds <code>_delta_log/</code>:
+a local path, or an Azure URI in one of the forms of the Azure section.</p></dd>
 
 
 <dt id="arg-version">version<a class="anchor" aria-label="anchor" href="#arg-version"></a></dt>
@@ -79,8 +79,9 @@ otherwise. A time before the first commit opens the first version. Give
 
 
 <dt id="arg-credentials">credentials<a class="anchor" aria-label="anchor" href="#arg-credentials"></a></dt>
-<dd><p>A function of no arguments returning a bearer token,
-for tables on Azure. Not used for local paths.</p></dd>
+<dd><p>A function of no arguments returning a bearer token
+for Azure Storage, as a string (see the Azure section), or <code>NULL</code> for
+anonymous requests. Not used for local paths.</p></dd>
 
 
 <dt id="arg-tbl">tbl<a class="anchor" aria-label="anchor" href="#arg-tbl"></a></dt>
@@ -94,7 +95,10 @@ class <code>zulake_table</code>. <code>lake_version()</code> returns the version
 holds, a whole number as a double.</p>
 <p>Every error is a condition of class <code>zulake_error</code>, with a subclass
 that says why: <code>zulake_error_not_table</code> (no Delta log at <code>uri</code>),
-<code>zulake_error_version</code> (no such version), <code>zulake_error_corrupt_log</code>
+<code>zulake_error_version</code> (no such version), <code>zulake_error_uri</code> (a URI
+zulake cannot open), <code>zulake_error_storage</code> (a file that cannot be
+read; from Azure with the HTTP <code>status</code> and Azure's error <code>code</code>),
+<code>zulake_error_auth</code> (credentials refused), <code>zulake_error_corrupt_log</code>
 (a log that breaks the protocol, such as a commit that is not JSON or a
 partition value of the wrong type), <code>zulake_error_checkpoint_unreadable</code>
 and <code>zulake_error_unsupported_feature</code>, whose <code>feature</code> field names the
@@ -107,10 +111,36 @@ tombstones, application transactions and metadata domains. It is checked
 before it is returned: a table that needs a reader feature zulake does
 not support is refused with an error naming that feature, before any data
 file is read, because ignoring a feature returns wrong rows.</p>
-<p>In this version zulake reads tables on local disk, replaying the log from
-its first commit. A table whose log no longer reaches commit 0 needs a
-checkpoint, which zulake cannot read yet, and is refused with a
-<code>zulake_error_checkpoint_unreadable</code> error.</p>
+<p>zulake reads tables on local disk and on Azure (Blob Storage and Data
+Lake Storage Gen2), replaying the log from its first commit. A table whose
+log no longer reaches commit 0 needs a checkpoint, which zulake cannot
+read yet, and is refused with a <code>zulake_error_checkpoint_unreadable</code>
+error.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="azure">Azure<a class="anchor" aria-label="anchor" href="#azure"></a></h2>
+
+
+<p>A table on Azure is given by one of three URI forms, which all reach the
+same blobs through the Blob service API:</p><ul><li><p><code>abfss://&lt;container&gt;@&lt;account&gt;.dfs.core.windows.net/&lt;path&gt;</code></p></li>
+<li><p><code>https://&lt;account&gt;.dfs.core.windows.net/&lt;container&gt;/&lt;path&gt;</code></p></li>
+<li><p><code>https://&lt;account&gt;.blob.core.windows.net/&lt;container&gt;/&lt;path&gt;</code></p></li>
+</ul><p>Other schemes (<code>s3://</code>, <code>gs://</code>, <code>abfs://</code>, <code>http://</code>, ...) are refused
+with a <code>zulake_error_uri</code> error, and so is a URI with a query string,
+such as a SAS: zulake authenticates with a bearer token only.</p>
+<p><code>credentials</code> is a function you write, which zulake calls with no
+arguments to get a Microsoft Entra ID access token for Azure Storage
+(audience <code>https://storage.azure.com</code>), as a string. zulake does not
+obtain tokens itself: return one from the Azure CLI, a managed identity
+or a package such as AzureAuth. It is called before the first request,
+and once more when Azure answers <code>401</code> (an expired token); a second
+<code>401</code>, or a <code>403</code>, is a <code>zulake_error_auth</code> error. The token is sent only
+in the <code>Authorization</code> header: it is not kept in the snapshot, printed,
+or put in any error. Without <code>credentials</code>, requests are anonymous, which
+only a public container answers.</p>
+<p>The snapshot does not keep <code>credentials</code> either; later calls on it, such
+as <code><a href="lake_read.html">lake_read()</a></code>, use it through the R session. A snapshot saved with
+<code><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">saveRDS()</a></code> and read in another session has none: open the table again.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
@@ -144,6 +174,19 @@ checkpoint, which zulake cannot read yet, and is refused with a
 <span class="r-in"><span><span class="va">tbl0</span> <span class="op">&lt;-</span> <span class="fu">lake_load</span><span class="op">(</span><span class="va">tbl</span>, version <span class="op">=</span> <span class="fl">0</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/unlink.html" class="external-link">unlink</a></span><span class="op">(</span><span class="va">path</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># On Azure: a token for Azure Storage from the Azure CLI. Not run, because</span></span></span>
+<span class="r-in"><span><span class="co"># it needs an Azure account and a signed-in CLI.</span></span></span>
+<span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
+<span class="r-in"><span><span class="va">token</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="op">)</span> <span class="op">{</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/system2.html" class="external-link">system2</a></span><span class="op">(</span><span class="st">"az"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>    <span class="st">"account"</span>, <span class="st">"get-access-token"</span>, <span class="st">"--resource"</span>, <span class="st">"https://storage.azure.com"</span>,</span></span>
+<span class="r-in"><span>    <span class="st">"--query"</span>, <span class="st">"accessToken"</span>, <span class="st">"--output"</span>, <span class="st">"tsv"</span></span></span>
+<span class="r-in"><span>  <span class="op">)</span>, stdout <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="op">}</span></span></span>
+<span class="r-in"><span><span class="va">tbl</span> <span class="op">&lt;-</span> <span class="fu">lake_open</span><span class="op">(</span><span class="st">"abfss://lake@myaccount.dfs.core.windows.net/sales"</span>, credentials <span class="op">=</span> <span class="va">token</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="lake_files.html">lake_files</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

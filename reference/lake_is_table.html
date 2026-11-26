@@ -54,13 +54,14 @@ reads no log file, so a table it finds can still fail to open.</p>
 
 
 <dl><dt id="arg-uri">uri<a class="anchor" aria-label="anchor" href="#arg-uri"></a></dt>
-<dd><p>Location of the table: the path of its directory, the one that
-holds <code>_delta_log/</code>.</p></dd>
+<dd><p>Location of the table, the directory that holds <code>_delta_log/</code>:
+a local path, or an Azure URI in one of the forms of the Azure section.</p></dd>
 
 
 <dt id="arg-credentials">credentials<a class="anchor" aria-label="anchor" href="#arg-credentials"></a></dt>
-<dd><p>A function of no arguments returning a bearer token,
-for tables on Azure. Not used for local paths.</p></dd>
+<dd><p>A function of no arguments returning a bearer token
+for Azure Storage, as a string (see the Azure section), or <code>NULL</code> for
+anonymous requests. Not used for local paths.</p></dd>
 
 </dl></div>
     <div class="section level2">

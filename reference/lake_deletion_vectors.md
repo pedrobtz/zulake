@@ -106,7 +106,7 @@ writeLines(c(
 tbl <- lake_open(path)
 lake_deletion_vectors(tbl, rows = FALSE)
 #>                                                uri storage_type
-#> 1 /tmp/Rtmp7vOe4R/table1b2a4036f1b7/part-0.parquet            i
+#> 1 /tmp/RtmpbOyseX/table1a7a3816b8e3/part-0.parquet            i
 #>                               path_or_inline_dv offset size_in_bytes
 #> 1 ^Bg9^0rr910000000000iXQKl0rr91000315c8Xg000r9     NA            36
 #>   cardinality
