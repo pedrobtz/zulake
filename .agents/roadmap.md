@@ -18,7 +18,7 @@ both are released ([D5](design.md#10-decisions); `zuroar` 0.1.0 waits on
 <!-- markdownlint-disable MD013 -->
 | Stage | Title | CI | Issue | Pull request | Done |
 | --- | --- | --- | --- | --- | --- |
-| 0 | [Package identity](#stage-0--package-identity) | quick | [#2](https://github.com/pedrobtz/zulake/issues/2) | | 2026-11-26 |
+| 0 | [Package identity](#stage-0--package-identity) | quick | [#2](https://github.com/pedrobtz/zulake/issues/2) | [#21](https://github.com/pedrobtz/zulake/pull/21) | 2026-11-26 |
 | 1 | [Fixtures and oracle](#stage-1--fixtures-and-oracle) | quick | [#3](https://github.com/pedrobtz/zulake/issues/3) | | |
 | 2 | [Log replay](#stage-2--log-replay) | quick | [#4](https://github.com/pedrobtz/zulake/issues/4) | | |
 | 3 | [Inspection](#stage-3--inspection) | quick | [#5](https://github.com/pedrobtz/zulake/issues/5) | | |
