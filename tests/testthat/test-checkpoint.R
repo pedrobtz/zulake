@@ -40,6 +40,22 @@ test_that("lists and maps become what zujson parses from JSON arrays and objects
   for (case in cases) {
     expect_identical(zulake:::nested_value(case[[1L]]), case[[2L]])
   }
+  # A LIST of longs from qio's integer64 mode: what zujson parses from the
+  # JSON array, numbers past 2^53 - 1 marked as in a commit (int64.R).
+  skip_if_not_installed("bit64")
+  longs <- list(
+    "[1,2]" = c("1", "2"),
+    "[3000000000,1]" = c("3000000000", "1"),
+    "[9007199254740993,1]" = c("9007199254740993", "1"),
+    "[9007199254740993,-9223372036854775807]" = c("9007199254740993", "-9223372036854775807"),
+    "[9007199254740993,null]" = c("9007199254740993", NA),
+    "[null,5]" = c(NA, "5"),
+    "[]" = character()
+  )
+  for (json in names(longs)) {
+    expected <- zujson::json_parse(zulake:::mark_numbers(paste0("{\"v\":", json, "}")))$v
+    expect_identical(zulake:::nested_value(bit64::as.integer64(longs[[json]])), expected, label = json)
+  }
 })
 
 test_that("a null struct is NULL, and a struct of nulls an object without its null fields", {
@@ -181,5 +197,14 @@ test_that("a checkpoint whose actions break the protocol is a corrupt log", {
   path <- hand_table()
   write_commit(path, 1, add_line("part-1.parquet"))
   write_json_checkpoint(path, 1, c(protocol_line(3L, 7L, "v2Checkpoint", "v2Checkpoint"), metadata_line(), "{\"add\":{\"size\":1}}"))
+  expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
+})
+
+test_that("a Parquet checkpoint with no action column has no protocol, and is a corrupt log", {
+  path <- hand_table()
+  write_commit(path, 1, add_line("part-1.parquet"))
+  name <- "_delta_log/00000000000000000001.checkpoint.parquet"
+  qio::write_parquet(data.frame(foo = 1), file.path(path, name))
+  expect_identical(zulake:::log_parquet_actions(storage_local(path), name), list())
   expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
 })

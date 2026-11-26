@@ -664,7 +664,11 @@ statistics and on rows, so pruning and the row filter cannot disagree:
   maximum may extend.
 - *Null counts.* A file whose `nullCount` equals `numRecords` holds only
   nulls, and one with `numRecords` 0 nothing; a missing count is
-  unknown.
+  unknown. On a column read as a list (`binary`), `is.na()` is `TRUE`
+  for a null value (`NULL`), as the null count means it, where base R's
+  `is.na()` on a list is `FALSE` (settled 2026-11-26, Stage 8, on a
+  design adviser's recommendation: R's answer would contradict the
+  null-count pruning and leave no way to select a null binary value).
 
 Settled 2026-11-26 (a correction to Stage 4, on a design adviser's
 recommendation): a filter is row-wise by construction (D8), so evaluating
@@ -811,6 +815,9 @@ breaking type change for p <= 15 (settled 2026-11-26, Stage 4).
   it.
 - **Filters.** A property test: for random filters over the fixtures,
   `lake_read(filter = f)` equals reading everything and subsetting in R.
+  One deliberate difference: `is.na()` of a list column (§6, *Null
+  counts*), which the property test does not draw and `test-filter.R`
+  checks against `vapply(x, is.null, NA)`.
 
 ## 9. Roadmap
 

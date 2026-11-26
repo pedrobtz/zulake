@@ -307,6 +307,22 @@ test_that("null counts decide is.na() and comparisons; a file without statistics
   expect_identical(lake_files(tbl, filter = id %in% c(1, NA))$path, c("all-null.parquet", "no-null.parquet", "none.parquet"))
   expect_identical(lake_files(tbl, filter = id == NA)$path, character())
   expect_identical(lake_files(tbl, filter = !(id == NA))$path, character())
+  # Statistics of another column only: nothing is known of this one.
+  tbl <- lake_open(raw_table(c(raw_header(c(id = "long", x = "long")),
+                               raw_add("other.parquet", stats = '{\\"numRecords\\":2,\\"nullCount\\":{\\"x\\":2}}'))))
+  expect_identical(lake_files(tbl, filter = is.na(id))$path, "other.parquet")
+  expect_identical(lake_files(tbl, filter = !is.na(id))$path, "other.parquet")
+  expect_identical(lake_files(tbl, filter = !is.na(x))$path, character())
+})
+
+test_that("a logical column alone filters rows as R does", {
+  tbl <- lake_open(fixture_table("zl-types"))
+  full <- suppressWarnings(lake_read(tbl))
+  for (expr in list(quote(flag), quote(!flag), quote(flag | is.na(flag)), quote(xor(flag, i32 > 0)))) {
+    expect_identical(suppressWarnings(eval(bquote(lake_read(tbl, filter = .(expr))))), r_subset(full, expr),
+                     label = deparse(expr))
+  }
+  expect_error(lake_files(tbl, filter = flag), class = "zulake_error_filter")
 })
 
 test_that("the exact comparator agrees with a second implementation on random decimal text", {
@@ -347,7 +363,7 @@ test_that("filter values become exact text by the documented rules", {
   same_as(factor("7.5"), "7.5")
   expect_identical(literal_keys(c(NA, NaN, 1), "exact", "long", expr)$nan, c(FALSE, TRUE, FALSE))
   expect_true(all(is.na(literal_keys(c(NA, NaN), "exact", "long", expr)$keys$sign)))
-  for (bad in list(1 / 3, 0.1 + 0.2, "1.2.3", " 1", "1e", "0x10", "Inf")) {
+  for (bad in list(1 / 3, 0.1 + 0.2, "1.2.3", " 1", "1e", "0x10", "Inf", as.raw(1), 1i)) {
     expect_error(literal_keys(bad, "exact", "long", expr), class = "zulake_error_filter", label = deparse(bad))
   }
   expect_match(conditionMessage(tryCatch(literal_keys(1 / 3, "exact", "long", expr), error = identity)),
@@ -361,7 +377,8 @@ test_that("filter values become exact text by the documented rules", {
   expect_identical(num("1970-01-01T01:00:00+01:00", "timestamp"), 0)
   expect_identical(num(TRUE, "boolean"), 1)
   for (bad in list(list("TRUE", "boolean"), list("tomorrow", "date"), list(Sys.time(), "date"),
-                   list(Sys.Date(), "timestamp"), list("1,5", "double"))) {
+                   list(Sys.Date(), "timestamp"), list("1,5", "double"), list(as.raw(1), "double"),
+                   list(as.raw(1), "date"), list(1i, "timestamp"))) {
     expect_error(literal_keys(bad[[1L]], "number", bad[[2L]], expr), class = "zulake_error_filter")
   }
   skip_if_not_installed("bit64")
@@ -424,6 +441,17 @@ test_that("row-wise functions and two-column comparisons only filter rows in lak
   expect_error(lake_read(tbl, filter = p_int + 1), class = "zulake_error_filter")
   expect_error(lake_read(tbl, filter = c(TRUE, FALSE)), class = "zulake_error_filter")
   expect_error(lake_read(tbl, filter = p_int), class = "zulake_error_filter")
+  expect_error(lake_read(tbl, filter = p_str), "is not logical", fixed = TRUE, class = "zulake_error_filter")
+  expect_error(lake_read(tbl, filter = p_int == c(1, 2)), "must have length 1", fixed = TRUE, class = "zulake_error_filter")
+  expect_error(lake_read(tbl, filter = 1 %in% p_int), "column on its left", fixed = TRUE, class = "zulake_error_filter")
+  expect_error(lake_read(tbl, filter = xor(1 %in% p_int, TRUE)), "column on its left", fixed = TRUE,
+               class = "zulake_error_filter")
+  expect_error(lake_read(tbl, filter = abs(p_str) > 1), "evaluating it on rows failed", fixed = TRUE,
+               class = "zulake_error_filter")
+  # A value is a vector: a Date, a POSIXct or text for a date (?lake_read),
+  # not a POSIXlt, which is a list.
+  expect_error(lake_read(tbl, filter = p_date > as.POSIXlt("2024-01-01", tz = "UTC")), "a value must be a vector",
+               fixed = TRUE, class = "zulake_error_filter")
   # A value inside a row-wise call must mean the same for every row.
   expect_error(lake_read(tbl, filter = value + c(1, 2) > 3), class = "zulake_error_filter")
   expect_error(lake_read(tbl, filter = grepl(p_str, "a")), class = "zulake_error_filter")
@@ -528,4 +556,22 @@ test_that("the row-wise functions are base R's, whatever the caller defines", {
   got <- lake_read(tbl, filter = p_str == nchar("a"))
   expect_gt(nrow(got), 0L)
   expect_identical(got, full[full$p_str %in% "a", , drop = FALSE], ignore_attr = TRUE)
+})
+
+test_that("a binary column is filtered on rows; is.na() of it is TRUE for a null, unlike base R on a list", {
+  tbl <- lake_open(fixture_table("zl-types"))
+  full <- suppressWarnings(lake_read(tbl))
+  null <- vapply(full$b, is.null, NA)
+  expect_identical(sum(null), 1L)
+  read <- function(expr) suppressWarnings(eval(bquote(lake_read(tbl, filter = .(expr)))))
+  # A comparison has no statistics to use, and equals R's.
+  for (expr in list(quote(b == "x"), quote(b != "x"), quote(is.na(i32) | b == "x"))) {
+    expect_identical(read(expr), r_subset(full, expr), label = deparse(expr))
+  }
+  # is.na() is the Delta null (design section 6), as vapply(b, is.null, NA)
+  # finds it; base R's is.na() is FALSE for every element of a list.
+  expect_identical(read(quote(is.na(b))), r_subset(full, bquote(.(null))))
+  expect_identical(read(quote(!is.na(b))), r_subset(full, bquote(.(!null))))
+  expect_identical(nrow(r_subset(full, quote(is.na(b)))), 0L)
+  expect_identical(nrow(suppressWarnings(lake_files(tbl, filter = is.na(b)))), 1L)
 })

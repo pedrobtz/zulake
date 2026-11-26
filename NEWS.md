@@ -112,3 +112,5 @@
   five versions, at `system.file("extdata", "orders", package = "zulake")`.
   The README, the Get started vignette (`vignette("zulake")`), now
   evaluated, and every help page's examples run on it.
+* zulake needs R 3.5.0 or later, as `qio` and `zuhttp` do; the test
+  cassettes are saved in R's serialization format 3 (#37).

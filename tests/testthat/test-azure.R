@@ -26,6 +26,8 @@ test_that("an Azure table makes the same storage calls as a local one, as the fa
       expect_identical(r$headers[["x-ms-version"]], "2023-11-03")
       expect_identical(r$headers$authorization, "Bearer tok-1")
       expect_true(r$method %in% c("GET", "HEAD"))
+      # azure_timeout, as zuhttp received it: zuhttp enforces it.
+      expect_identical(r$timeout, 600)
     }
     # A blob path is percent-encoded byte by byte, and decodes to the file's
     # own name ("p_str=a%20b" is a directory of that name, from the log's
@@ -106,6 +108,14 @@ test_that("get_range() sends Range for the bytes it asks for, and refuses what A
     expect_error(storage$get_range(name, bad[1L], bad[2L]), class = "zulake_error_storage")
   }
   expect_length(log$requests, n)
+  # A range ends at 2^53 - 1 at most: 2^53 - 2 and 2^53 - 1 go to Azure,
+  # which has too few bytes; 2^53 (above) does not.
+  for (to in c(2^53 - 2, 2^53 - 1)) {
+    e <- expect_error(storage$get_range(name, 0, to), class = "zulake_error_storage")
+    expect_match(conditionMessage(e), sprintf("which has %.0f", size), fixed = TRUE)
+    expect_identical(log$requests[[length(log$requests)]]$headers$range, sprintf("bytes=0-%.0f", to))
+  }
+  expect_length(log$requests, n + 2L)
   expect_error(storage$get_range("_delta_log/nope.json", 0, 1), class = "zulake_error_storage")
 })
 
@@ -217,6 +227,33 @@ test_that("a 401 calls credentials() once more and retries with the new token", 
   local_azure_fake(azure_fake(fake_root(), log, auth = function(h) 401L))
   expect_error(lake_open(fake_uri("zl-basic")), class = "zulake_error_auth")
   expect_length(log$requests, 1L)
+})
+
+test_that("a credentials() that fails on a refresh leaves the snapshot usable once it works again", {
+  state <- "ok"
+  calls <- 0
+  credentials <- function() {
+    calls <<- calls + 1
+    if (state == "fail") stop("expired login")
+    paste0("tok-", calls)
+  }
+  accept <- "Bearer tok-1"
+  log <- new.env()
+  local_azure_fake(azure_fake(fake_root(), log, auth = function(h) if (!identical(h, accept)) 401L))
+  tbl <- lake_open(fake_uri("zl-basic"), credentials = credentials)
+  # Azure stops taking the token, and credentials() fails: a classed error.
+  accept <- "none"
+  state <- "fail"
+  e <- expect_error(lake_load(tbl), class = "zulake_error_auth")
+  expect_match(conditionMessage(e), "expired login", fixed = TRUE)
+  expect_identical(calls, 2)
+  # It works again: the next request refreshes once and goes on.
+  state <- "ok"
+  accept <- "Bearer tok-3"
+  expect_identical(lake_version(lake_load(tbl)), lake_version(tbl))
+  expect_identical(calls, 3)
+  auth <- vapply(log$requests, function(r) r$headers$authorization, "")
+  expect_identical(auth[length(auth)], "Bearer tok-3")
 })
 
 test_that("credentials() must return one token, and its failure is a classed error", {
@@ -402,6 +439,20 @@ test_that("account and container names are checked at their limits", {
   for (container in c("a--b", "-ab", "ab-", "Lake", "la_ke", "la.ke")) expect_false(ok("acct", container), label = container)
 })
 
+test_that("without zulake.azure_client, requests go out with one zuhttp client per session, named zulake", {
+  withr::local_options(zulake.azure_client = NULL)
+  old <- azure_env$client
+  azure_env$client <- NULL
+  withr::defer(azure_env$client <- old)
+  client <- azure_client()
+  expect_s3_class(client, "zu_client")
+  expect_s3_class(client$transport, "zu_native_transport")
+  expect_identical(client$user_agent, paste0("zulake/", utils::packageVersion("zulake")))
+  expect_identical(azure_client(), client)
+  withr::local_options(zulake.azure_client = "not a client")
+  expect_error(azure_client(), class = "zulake_error_argument")
+})
+
 test_that("zulake.azure_endpoint sends every request to a path-style endpoint", {
   log <- new.env()
   withr::local_options(
@@ -561,4 +612,26 @@ test_that("cassettes recorded from Azurite replay zulake's local answers", {
     expect_identical(got$read, lake_read(local), label = table)
     if (!is.null(got$rows)) expect_identical(got$rows, lake_deletion_vectors(local)$rows, label = table)
   }
+})
+
+test_that("a deletion vector at an absolute Azure path is read with the table's credentials", {
+  skip_if_not_installed("zuroar")
+  rows <- c(1, 4, 5)
+  vec <- dv_bytes(rows)
+  dv <- list(storageType = "p", pathOrInlineDv = "abfss://lake@acct.dfs.core.windows.net/elsewhere/dv.bin",
+             offset = 1L, sizeInBytes = length(vec), cardinality = length(rows))
+  path <- dv_table(dv)
+  expect_identical(write_dv_file(file.path(dirname(path), "elsewhere", "dv.bin"), list(vec)), 1)
+  log <- new.env()
+  local_azure_fake(azure_fake(dirname(path), log, auth = function(h) if (!identical(h, "Bearer tok")) 401L))
+  tbl <- lake_open(fake_uri(basename(path)), credentials = function() "tok")
+  expect_identical(lake_deletion_vectors(tbl)$rows[[1L]], rows)
+  expect_identical(lake_read(tbl)$id, setdiff(0:9, rows) + 0)
+  # The vector's bytes, as the fake served them: a range of its blob, with
+  # the table's token.
+  got <- Filter(function(r) r$path == "elsewhere/dv.bin", log$requests)
+  expect_gt(length(got), 0L)
+  for (r in got) expect_identical(r$headers$authorization, "Bearer tok")
+  ranges <- unlist(lapply(got, function(r) r$headers$range))
+  expect_true(sprintf("bytes=1-%.0f", 1 + 4 + length(vec) + 4 - 1) %in% ranges)
 })

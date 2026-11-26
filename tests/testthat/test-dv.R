@@ -266,8 +266,12 @@ test_that("a vector that disagrees with its descriptor or its data file is a cor
     invisible(tbl)
   }
   vec <- dv_bytes(c(0, 9))
-  # The cardinality is not the bitmap's.
+  # The cardinality is not the bitmap's, or not a count at all.
   check(inline_dv(vec, 3L))
+  for (card in list(-1L, NA)) {
+    tbl <- check(inline_dv(vec, card))
+    expect_error(lake_read(tbl), "no valid `cardinality`", fixed = TRUE, class = "zulake_error_corrupt_log")
+  }
   # A row past the end of the data file.
   check(inline_dv(dv_bytes(c(0, 10)), 2L))
   # A magic number that differs, inline, where no checksum catches it first.
@@ -286,15 +290,19 @@ test_that("a vector that disagrees with its descriptor or its data file is a cor
   check(bad_size)
   # In a file: format version 2, a stored size that is not the log's, a UUID
   # too short, a file that does not exist.
-  for (case in c("version", "size", "short", "missing")) {
+  for (case in c("version", "size", "short", "not_z85", "missing")) {
     uuid <- random_uuid()
     rel <- dv_relative_path("", uuid)
     dv <- list(storageType = "u", pathOrInlineDv = test_z85_encode(uuid), offset = 1L,
                sizeInBytes = length(vec), cardinality = 2L)
     # 19 characters, one short of a UUID's 20 (20 and 22 read, above).
     if (case == "short") dv$pathOrInlineDv <- substring(test_z85_encode(uuid), 2L)
+    if (case == "not_z85") dv$pathOrInlineDv <- paste0("ab", strrep("~", 20L))
     if (case == "size") dv$sizeInBytes <- length(vec) - 4L
     tbl <- check(dv)
+    if (case == "not_z85") {
+      expect_error(lake_read(tbl), "a UUID that is not valid Z85", fixed = TRUE, class = "zulake_error_corrupt_log")
+    }
     if (case != "missing") {
       write_dv_file(file.path(tbl$storage$root, rel), list(vec), version = if (case == "version") 2L else 1L)
       expect_error(lake_read(tbl), class = "zulake_error_corrupt_log", label = case)
@@ -323,4 +331,12 @@ test_that("a deletion vector of a file that pruning drops is never read", {
   expect_false(any(grepl("deletion_vector", env$calls)))
   expect_identical(nrow(lake_read(tbl)), 13L)
   expect_true(any(grepl("deletion_vector", env$calls)))
+})
+
+test_that("a deletion vector of cardinality 0 deletes no row", {
+  skip_if_not_installed("zuroar")
+  tbl <- lake_open(dv_table(inline_dv(dv_bytes(numeric()), 0L)))
+  expect_identical(lake_deletion_vectors(tbl)$rows, list(numeric()))
+  expect_identical(lake_read(tbl), qio::read_parquet(fetch_file(tbl, 1L)))
+  expect_identical(lake_count(tbl), 10)
 })
