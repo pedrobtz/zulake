@@ -427,7 +427,7 @@ test_that("partition values of every type parse as the protocol serialises them"
   expect_identical(p$f, -Inf)
   expect_identical(p$d, 1.5e-300)
   expect_identical(p$t, TRUE)
-  expect_identical(format(p$dt), "0001-01-01")
+  expect_identical(oracle_canon(p$dt), "0001-01-01")
   expect_identical(oracle_canon(p$ts), "2024-01-02T03:04:05.123456")
   expect_identical(oracle_canon(p$ntz), "2024-01-02T03:04:05.000000")
   expect_identical(p$dec, "-0.10")
