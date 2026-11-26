@@ -310,6 +310,9 @@ test_that("data files at absolute paths and file: URIs are read; other schemes a
                           add_line("no-such-file.parquet")))
   expect_error(lake_read(lake_open(path)), class = "zulake_error_storage")
   expect_error(lake_count(lake_open(path), footers = TRUE), class = "zulake_error_storage")
+  gone <- file.path(normalizePath(withr::local_tempdir(), winslash = "/"), "gone.parquet")
+  write_commit(path, 8, c(remove_line("no-such-file.parquet"), add_line(gone)))
+  expect_error(lake_read(lake_open(path)), class = "zulake_error_storage")
 })
 
 test_that("a column two files store as different types is a corrupt log", {
