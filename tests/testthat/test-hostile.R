@@ -14,6 +14,14 @@ test_that("a truncated commit is a corrupt log, and no snapshot is returned", {
   expect_oracle(replay_files_frame(tbl, "path"), "zl-basic", 3, "add_actions")
 })
 
+test_that("a commit with a NUL byte is a corrupt log, and no snapshot is returned", {
+  path <- hand_table()
+  f <- file.path(path, "_delta_log", "00000000000000000000.json")
+  bytes <- readBin(f, "raw", file.size(f))
+  writeBin(c(bytes[1:10], as.raw(0L), bytes[-(1:10)]), f)
+  expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
+})
+
 test_that("a commit with a line that is not JSON is a corrupt log, and no snapshot is returned", {
   path <- fixture_table("corrupt-commit", "hostile")
   expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")

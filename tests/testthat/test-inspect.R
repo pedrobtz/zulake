@@ -127,6 +127,12 @@ test_that("lake_summary() totals the live files", {
                      sum(!answer_is_null(aa$columns$deletion_vector)))
     if (!s$files_without_records) expect_oracle(s$records, case$table, case$version, "count")
   }
+  # Records unknown (design section 5), in either int64 mode.
+  tbl <- lake_open(fixture_table("simple_table"))
+  expect_identical(lake_summary(tbl)$records, NA_real_)
+  skip_if_not_installed("bit64")
+  records <- lake_summary(tbl, int64 = "integer64")$records
+  expect_true(bit64::is.integer64(records) && is.na(records))
 })
 
 test_that("lake_partitions() equals deltalake's partitions", {
@@ -380,6 +386,11 @@ test_that("print() summarises a snapshot and shows no credentials", {
   expect_identical(res, tbl)
   out <- capture.output(print(lake_open(fixture_table("simple_table"))))
   expect_true(any(grepl("records: +unknown \\(5 files without numRecords\\)", out)))
+  # Statistics lake_files() refuses as a corrupt log: print still works.
+  tbl <- lake_open(raw_table(c(raw_header(), raw_add("a.parquet", stats = "not json"))))
+  expect_error(lake_files(tbl), class = "zulake_error_corrupt_log")
+  out <- capture.output(print(tbl))
+  expect_true(any(grepl("records: +unknown \\(the statistics cannot be read\\)", out)))
 })
 
 test_that("statistics that break the protocol are a corrupt log, and stats = FALSE still lists the files", {
@@ -400,6 +411,15 @@ test_that("statistics that break the protocol are a corrupt log, and stats = FAL
     expect_s3_class(err, "zulake_error_corrupt_log")
     expect_identical(nrow(lake_files(tbl, stats = FALSE)), 1L, label = stats)
   }
+  # Empty statistics are no statistics.
+  none <- lake_files(lake_open(raw_table(c(raw_header(), raw_add("a.parquet")))))
+  empty <- lake_files(lake_open(raw_table(c(raw_header(), raw_add("a.parquet", stats = "{}")))))
+  expect_identical(empty[c("num_records", "min", "max", "null_count")], none[c("num_records", "min", "max", "null_count")])
+  # An empty statistics object is an empty object, as zujson parses one.
+  stats <- '{\\"numRecords\\":1,\\"minValues\\":{}}'
+  files <- lake_files(lake_open(raw_table(c(raw_header(), raw_add("a.parquet", stats = stats)))))
+  expect_identical(files$min[[1L]], zujson::json_parse("{}"))
+  expect_identical(files$num_records, 1)
   # A statistic for a column the schema does not have is kept as it is.
   lines <- c(raw_header(), raw_add("a.parquet", stats = '{\\"minValues\\":{\\"gone\\":12,\\"also\\":\\"x\\",\\"f\\":1.5}}'))
   expect_identical(lake_files(lake_open(raw_table(lines)))$min[[1L]], list(gone = 12, also = "x", f = 1.5))
