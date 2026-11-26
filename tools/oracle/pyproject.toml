@@ -1,0 +1,12 @@
+[project]
+name = "zulake-oracle"
+version = "0"
+description = "deltalake 1.7.0 answers for zulake's fixture tables"
+requires-python = "==3.12.*"
+dependencies = [
+    "deltalake==1.7.0",
+    "pyarrow==22.0.0",
+]
+
+[tool.uv]
+package = false
