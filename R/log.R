@@ -85,7 +85,7 @@ commit_name <- function(version) {
 # A JSON log file's actions, one named list per line. A line that is not
 # JSON, or not a JSON object, is a corrupt log.
 read_actions <- function(storage, name) {
-  bytes <- storage$get(paste0(log_dir, name))
+  bytes <- mark_big_integers(storage$get(paste0(log_dir, name)))
   actions <- tryCatch(
     zujson::json_parse_ndjson(bytes),
     zujson_error = function(e) {
@@ -108,6 +108,22 @@ read_actions <- function(storage, name) {
     }
   }
   actions
+}
+
+# A log file's bytes with every integer past 2^53 - 1 rewritten as a marked
+# string (int64.R), so that zujson cannot round it. Bytes with a NUL are left
+# (or that are not UTF-8) as they are: they are not JSON, and zujson says so.
+mark_big_integers <- function(bytes) {
+  if (!length(bytes) || any(bytes == as.raw(0L))) {
+    return(bytes)
+  }
+  text <- rawToChar(bytes)
+  if (!validUTF8(text)) {
+    return(bytes)
+  }
+  Encoding(text) <- "UTF-8"
+  marked <- mark_numbers(text)
+  if (identical(marked, text)) bytes else charToRaw(marked)
 }
 
 # `_delta_log/_last_checkpoint`, parsed, or NULL when the log has none. Its

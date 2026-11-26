@@ -256,6 +256,19 @@ def catalog_managed():
     ])
 
 
+def vacuum_protocol_check():
+    """The vacuumProtocolCheck reader feature, which readers only acknowledge: zulake and deltalake must open it."""
+    p = fresh("zl-vacuum-protocol-check")
+    sch = pa.schema([("id", pa.int64())])
+    write_deltalake(p, pa.table({"id": [0, 1]}, schema=sch))
+    append_commit(p, [
+        commit_info("UPGRADE PROTOCOL"),
+        {"protocol": {"minReaderVersion": 3, "minWriterVersion": 7,
+                      "readerFeatures": ["vacuumProtocolCheck"], "writerFeatures": ["vacuumProtocolCheck"]}},
+    ])
+    write_deltalake(p, pa.table({"id": [2]}, schema=sch), mode="append")
+
+
 Z85 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#"
 
 
@@ -326,7 +339,7 @@ def main():
     else:
         wanted = None
     for fn in (basic, types, partitioned, checkpointed, checkpoint_no_last, multipart_checkpoint, compacted, domains,
-               unknown_feature, catalog_managed, inline_dv, column_mapping_id):
+               unknown_feature, catalog_managed, vacuum_protocol_check, inline_dv, column_mapping_id):
         if wanted is None or fn.__name__ in wanted:
             fn()
             print("wrote", fn.__name__)

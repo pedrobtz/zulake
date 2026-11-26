@@ -1,0 +1,2 @@
+{"commitInfo":{"timestamp":1795695896639,"operation":"UPGRADE PROTOCOL","operationParameters":{},"clientVersion":"zulake-fixtures"}}
+{"protocol":{"minReaderVersion":3,"minWriterVersion":7,"readerFeatures":["vacuumProtocolCheck"],"writerFeatures":["vacuumProtocolCheck"]}}

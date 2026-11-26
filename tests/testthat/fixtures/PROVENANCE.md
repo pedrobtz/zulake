@@ -57,6 +57,7 @@ DAT (`delta-incubator/dat`) is not used: it has no licence (design §12, Q3).
 | `zl-partitioned` | zulake | `deltalake` 1.7.0 | 0–2 | string, integer and date partition columns; nulls, spaces, `/`, `=`, `%` and non-ASCII in values; a partition deleted |
 | `zl-types` | zulake | `deltalake` 1.7.0 | 0 | every type the writer has, at its edges: 8 to 64-bit integers at their limits and at 2^53 ± 1, signed zero and infinities, decimals of precision 10 and 38, non-ASCII strings, binary, dates of years 1 and 9999, `timestamp` and `timestamp_ntz`, struct, list and map |
 | `zl-unknown-reader-feature` | zulake | `deltalake` 1.7.0; edited | 0–1 | commit 1 (by hand) upgrades the protocol to reader feature `zulakeUnknownFeature`; every reader must refuse version 1 by that name |
+| `zl-vacuum-protocol-check` | zulake | `deltalake` 1.7.0; edited | 0–2 | commit 1 (by hand) upgrades the protocol to reader and writer feature `vacuumProtocolCheck`, then `deltalake` appends at version 2; readers only acknowledge the feature, so zulake and `deltalake` both open every version (added 2026-11-26, Stage 3, design D7 amendment) |
 
 ## Hostile logs
 

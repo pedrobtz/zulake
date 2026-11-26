@@ -12,7 +12,15 @@
 #   zulake_error_checkpoint_unreadable a log that needs a checkpoint (D14)
 #   zulake_error_unsupported_feature   a reader feature zulake refuses (D7);
 #                                      the condition's `feature` field
-#                                      names it
+#                                      names it, `protocol` holds the
+#                                      lake_protocol() frame
+#   zulake_error_int64                 a 64-bit value a double cannot hold
+#                                      exactly (D10); `value` is its digits
+#   zulake_error_filter                a filter outside the pruning subset
+#
+# and one warning, `zulake_warning_count_unknown` (class
+# c("zulake_warning_count_unknown", "zulake_warning", "warning")), when
+# lake_count() meets a file without `numRecords`; `files` counts them.
 #
 # Base R only: the package has no rlang or cli dependency.
 

@@ -95,9 +95,11 @@ log, which returns deleted and superseded rows. `quak` (portfolio) wraps
 - Classic, multi-part and V2 checkpoints, `_last_checkpoint`, and log
   compaction files where they are listed (§4.2).
 - Reader version 1 to 3 with the reader features `deletionVectors`,
-  `columnMapping` in `name` mode, `timestampNtz` and `v2Checkpoint`.
-  `columnMapping` in `id` mode, `catalogManaged` and any feature the
+  `columnMapping` in `name` mode, `timestampNtz`, `v2Checkpoint` and
+  `vacuumProtocolCheck`. `columnMapping` in `id` mode, `catalogManaged`,
+  `typeWidening`, `variantType`, `variantShredding` and any feature the
   package does not know are refused with a classed error naming it (D7).
+  Writer features are never a reason to refuse: `zulake` does not write.
 - Reading with column selection and a filter that prunes files by
   partition values and statistics, then filters rows exactly.
 
@@ -237,26 +239,26 @@ lake_load(tbl, version = NULL, timestamp = NULL)  # another snapshot
 # The table
 lake_version(tbl)        # the snapshot's version
 lake_versions(tbl)       # every version still in the log, with timestamps
-lake_history(tbl, limit = NULL)   # commitInfo, newest first
+lake_history(tbl, limit = NULL, int64)   # commitInfo, newest first
 lake_metadata(tbl)       # id, name, description, format, created time
 lake_schema(tbl)         # columns, Delta types, nullability, metadata
 lake_partition_columns(tbl)
 lake_properties(tbl)     # configuration, with protocol defaults filled in
 lake_protocol(tbl)       # versions and features, each marked supported
-lake_summary(tbl)        # one row: files, bytes, records, deleted rows
+lake_summary(tbl, int64) # one row: files, bytes, records, deleted rows
 
 # Files
-lake_files(tbl, filter = NULL, stats = TRUE)  # live add actions
-lake_partitions(tbl, filter = NULL)           # distinct partition values
-lake_removed(tbl)        # remove tombstones still in the log
+lake_files(tbl, filter = NULL, stats = TRUE, int64)  # live add actions
+lake_partitions(tbl, filter = NULL, int64)    # distinct partition values
+lake_removed(tbl, int64) # remove tombstones still in the log
 lake_deletion_vectors(tbl, files = NULL, rows = TRUE)  # descriptors, rows
 lake_count(tbl)          # records from stats, minus deleted rows
 
 # The log itself
 lake_log(tbl)            # every _delta_log entry: version, kind, size
-lake_actions(tbl, version)                    # one commit, every action
-lake_changes(tbl, from, to = lake_version(tbl))  # files added and removed
-lake_transactions(tbl)   # txn: latest version per appId
+lake_actions(tbl, version, int64)             # one commit, every action
+lake_changes(tbl, from, to = lake_version(tbl), int64)  # files added and removed
+lake_transactions(tbl, int64)   # txn: latest version per appId
 lake_domains(tbl)        # domainMetadata
 lake_checkpoints(tbl)    # checkpoints and _last_checkpoint
 
@@ -272,6 +274,70 @@ looked up there). That subset prunes. Any other call is allowed but only
 filters rows after reading; `lake_files()` refuses it, since it has no
 rows to filter (D8).
 
+`lake_count(tbl)` is the sum of `numRecords` over the live files minus
+the cardinality of their deletion vectors, from the log alone. `stats` is
+optional in the protocol: when any live file has no `numRecords` the
+result is `NA_real_`, with a classed warning
+(`zulake_warning_count_unknown`) giving the number of such files, which
+`lake_summary()` also reports as `files_without_records`. It is never a
+partial sum (`deltalake` 1.7.0 returns 0 for `simple_table` at version 0,
+which has 5 rows). From Stage 4, `footers = TRUE` reads the row counts of
+those files from their Parquet footers. A file with a deletion vector and
+no `numRecords` is a corrupt log. The cardinality is the descriptor's,
+which the log holds, so the subtraction needs no `zuroar` and is done from
+Stage 3 on (settled 2026-11-26); Stage 5 adds the rows themselves.
+
+Settled in Stage 3 (2026-11-26), the shapes the roxygen documents in full:
+
+- *Frames.* `lake_files()`: `path`, `uri`, `size_bytes`,
+  `modification_time`, `data_change`, `partition` (list of typed values),
+  `deletion_vector` (the five descriptor fields, `NULL` where absent), with
+  `stats = TRUE` `num_records`, `null_count`, `min`, `max`, and last
+  `action`, the `add` action unchanged (D2). `lake_changes()` is
+  `lake_files(stats = FALSE)` with a first column `change`. `lake_removed()`:
+  `path`, `deletion_timestamp`, `data_change`, `size_bytes`,
+  `partition_values` (as the log writes them), `deletion_vector`, `action`.
+  `lake_history()`: `version`, `timestamp`, `operation`, `commit_info`.
+  `lake_actions()`: one row per action, `version`, `line`, `type`,
+  `action`. `lake_schema()`: `name`, `type` (a nested type is `"struct"`,
+  `"array"` or `"map"`, with the type itself in `type_detail`),
+  `nullable`, `partition`, `physical_name`, `metadata`. `lake_protocol()`:
+  one row per requirement (`readerVersion`, `writerVersion`, then each
+  feature) with `reader`, `writer`, `version` and `supported`; the
+  `zulake_error_unsupported_feature` condition carries the same frame as
+  `protocol`, since a snapshot exists only when every row is supported.
+  `lake_properties()`: `key`, `value`, `default`, filling in only the
+  defaults the protocol states. `lake_partition_columns()` is a character
+  vector. Why: names follow `deltalake`'s `get_add_actions()` where it has
+  one, and the action itself stays reachable unchanged.
+- *Times* from the log (`modificationTime`, `deletionTimestamp`,
+  `createdTime`, commit times) are `POSIXct` in UTC. A version's
+  `timestamp` is its commit time as the protocol defines it (in-commit
+  timestamp or file modification time), the one `lake_open(timestamp =)`
+  uses; the raw `commitInfo.timestamp` stays in `commit_info`.
+- *64-bit values.* `int64 = c("double", "integer64")` on every function
+  that returns 64-bit counts or values from the log JSON. Integers past
+  2^53 - 1 are kept as text when the log is parsed (`zujson` rounds them
+  otherwise) and become a `zulake_error_int64` as doubles or an exact
+  `integer64`. `bit64` holds -2^63 + 1 to 2^63 - 1 (-2^63 is its `NA`), so
+  -2^63 is an error in both modes. Inside an action or `commitInfo` as the
+  log writes it, only a value a double cannot hold becomes an
+  `integer64`. `byte` and `short` values are integers, `integer` values
+  doubles, because an R integer cannot hold -2^31. Why: D10, and `bit64`
+  is only suggested.
+- *Statistics* are keyed by logical column name (deltalake's
+  `get_add_actions()` uses physical names under column mapping) and typed
+  by the column's Delta type; a `decimal` statistic is the JSON number's
+  text exactly (D10).
+- *Filters in Stage 3.* `lake_files()` and `lake_partitions()` take the
+  pruning subset of D8. Each file gets the set of outcomes the filter can
+  have on its rows (TRUE, FALSE, NA, combined by R's three-valued logic);
+  a comparison on partition columns has the one outcome R gives on the
+  file's typed partition values, and a comparison on any other column can
+  have any outcome until Stage 4 adds statistics. A file is kept when TRUE
+  is possible. A `decimal` partition value is compared as a double.
+  Anything outside the subset is a `zulake_error_filter`.
+
 `credentials` is a function of no arguments returning a bearer token as
 a single string. `zulake` calls it before the first request, and again
 once after a `401` before failing. It never stores the token in the
@@ -283,9 +349,13 @@ parser and a zone rule of its own). Every error is a condition of class
 `zulake_error` with one subclass per kind: `zulake_error_argument`,
 `zulake_error_uri` (a scheme with no backend yet), `zulake_error_storage`,
 `zulake_error_not_table`, `zulake_error_version`,
-`zulake_error_corrupt_log`, `zulake_error_checkpoint_unreadable` and
+`zulake_error_corrupt_log`, `zulake_error_checkpoint_unreadable`,
 `zulake_error_unsupported_feature`, whose `feature` field names the
-feature (D7). Built with base `stop()` on a classed condition: the
+feature (D7) and `protocol` field holds the `lake_protocol()` frame,
+`zulake_error_int64` (a value a double cannot hold, D10; `value` gives its
+digits) and `zulake_error_filter` (a filter outside the pruning subset).
+The one warning is `zulake_warning_count_unknown` (class
+`zulake_warning`), from `lake_count()`. Built with base `stop()` on a classed condition: the
 package has no `rlang` or `cli` dependency.
 
 ### 5.1 Against `deltalake` 1.7.0
@@ -305,7 +375,7 @@ The read and inspection side of `DeltaTable`, mapped:
 | `file_uris()` | `lake_files()$uri` | |
 | `get_add_actions()` | `lake_files()` | nested, no `flatten` |
 | `partitions()` | `lake_partitions()` | |
-| `count()` | `lake_count()` | stats minus DVs |
+| `count()` | `lake_count()` | stats minus DVs; `NA`, not a partial sum, without stats |
 | `deletion_vectors()` | `lake_deletion_vectors()` | positions, not `selection_vector` (D12) |
 | `transaction_version()` | `lake_transactions()` | every `appId` |
 | `to_pyarrow_table()` | `lake_read()` | (c) |
@@ -388,7 +458,12 @@ be returned is a classed error.
   `history()` is taken from the latest snapshot and cut at each version,
   because on an older snapshot 1.7.0 reports negative versions; and
   `deltalake` reads `columnMapping` in `id` mode, which `zulake` refuses
-  (D7, Q7).
+  (D7, Q7). Since Stage 3: `count()` sums the `numRecords` it has, so a
+  table without statistics counts 0, where `lake_count()` is `NA` with a
+  warning (§5); `get_add_actions()` keys statistics by physical name under
+  column mapping, `lake_files()` by logical name; and it drops a
+  `decimal(38, 18)` statistic written as a double (`zl-types`), which
+  `lake_files()` keeps as its text.
 - **Hostile log.** Truncated and corrupt commits, a missing checkpoint
   part, a `_last_checkpoint` that points past the log, a deletion vector
   with a bad checksum, a magic number that differs, a partition value of
@@ -442,6 +517,14 @@ The order of work, and what 0.1.0 waits for, are in
 - **D7.** Unsupported reader features are refused by name, before any
   data is read, never ignored: reading past `columnMapping` in `id` mode
   or past deletion vectors silently returns wrong rows.
+- **D7 amendment (2026-11-26).** A reader feature is accepted only when
+  the protocol's reader requirements for it are implemented, or are
+  empty. `vacuumProtocolCheck` is accepted on the second ground: "readers
+  don't need to understand or change anything new; they just need to
+  acknowledge the feature exists" (PROTOCOL.md at `483d55e`).
+  `typeWidening`, `variantType`, `variantShredding` and their `-preview`
+  names stay refused, because each obliges the reader to convert or
+  decode data. `writerFeatures` is never consulted.
 - **D8.** Filters are R expressions, not `deltalake`'s DNF tuples; the
   pruning subset is fixed and documented, and anything outside it only
   filters rows.
