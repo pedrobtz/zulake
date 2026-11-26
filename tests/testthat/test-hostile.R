@@ -33,10 +33,40 @@ test_that("a partition value of the wrong type is a corrupt log, and no snapshot
   expect_oracle(replay_files_frame(tbl, "path"), "zl-partitioned", 0, "add_actions")
 })
 
-test_that("a _last_checkpoint past the end of the log is a corrupt log", {
+test_that("a _last_checkpoint past the end of the log is a corrupt log, at every version", {
+  # deltalake 1.7.0 refuses the versions from 99 on ("Had a _last_checkpoint
+  # hint but didn't find any checkpoints") and opens the earlier ones;
+  # zulake refuses the log (design section 4.2).
   path <- fixture_table("last-checkpoint-past-log", "hostile")
-  expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
-  expect_no_snapshot(lake_open(path, version = 3), "zulake_error_corrupt_log")
+  for (version in list(NULL, 3, 10, 12)) {
+    expect_no_snapshot(lake_open(path, version = version), "zulake_error_corrupt_log")
+  }
+  # With the hint gone, the checkpoints are read: zl-checkpoint.
+  copy <- local_fixture_copy("last-checkpoint-past-log", "hostile")
+  unlink(file.path(copy, "_delta_log", "_last_checkpoint"))
+  expect_same_state(lake_open(copy), lake_open(fixture_table("zl-checkpoint")), "hint gone")
+})
+
+test_that("a multi-part checkpoint with a part missing, which _last_checkpoint names, is a corrupt log", {
+  # Part 2 of 3 is gone; _last_checkpoint names version 4 with parts = 3.
+  # deltalake 1.7.0 refuses versions 4 and 5 and opens 0 to 3.
+  path <- fixture_table("missing-checkpoint-part", "hostile")
+  for (version in list(NULL, 3, 4, 5)) {
+    expect_no_snapshot(lake_open(path, version = version), "zulake_error_corrupt_log")
+  }
+  err <- tryCatch(lake_open(path), error = identity)
+  expect_identical(err$checkpoint, 4)
+  # No part was read: the hint is checked against the listing first.
+  rec <- new.env()
+  storage <- recording_storage(zulake:::storage_local(path), rec)
+  expect_error(zulake:::snapshot_build(storage, path), class = "zulake_error_corrupt_log")
+  expect_identical(rec$calls, c("list _delta_log/", "get _delta_log/_last_checkpoint"))
+  # Without commits 0 to 3 and the hint, the log has neither commit 0 nor
+  # a whole checkpoint.
+  copy <- local_fixture_copy("missing-checkpoint-part", "hostile")
+  unlink(file.path(copy, "_delta_log", c("_last_checkpoint", sprintf("%020d.json", 0:3))))
+  expect_no_snapshot(lake_open(copy), "zulake_error_checkpoint_unreadable")
+  expect_identical(tryCatch(lake_open(copy), error = identity)$checkpoint, 4)
 })
 
 test_that("a _last_checkpoint that is not JSON, or has no version, is a corrupt log", {
@@ -47,6 +77,9 @@ test_that("a _last_checkpoint that is not JSON, or has no version, is a corrupt 
     expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
   }
   writeLines("{\"version\":0,\"size\":3}", f)
+  # Version 0 has no checkpoint: _last_checkpoint names one the log lacks.
+  expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
+  write_json_checkpoint(path, 0, readLines(file.path(path, "_delta_log", "00000000000000000000.json")))
   expect_identical(lake_open(path)$last_checkpoint[["version"]], 0)
 })
 
