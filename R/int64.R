@@ -12,7 +12,8 @@ num_mark <- "\x1e"
 
 # JSON text with number tokens rewritten as marked strings: every number when
 # `all` is TRUE, otherwise only integers whose magnitude passes 2^53 - 1.
-# Strings are matched whole first, so digits inside them are never touched.
+# Strings and numbers are matched whole, left to right, so digits inside a
+# string, a fraction or an exponent are never taken for an integer.
 mark_numbers <- function(text, all = FALSE) {
   if (!all) {
     hit <- grepl("[0-9]{16}", text)
@@ -22,7 +23,7 @@ mark_numbers <- function(text, all = FALSE) {
   }
   pattern <- paste0(
     "\"(?:[^\"\\\\]|\\\\.)*\"",
-    "|(?<![0-9.eE+-])-?[0-9]+(?:[.][0-9]+)?(?:[eE][+-]?[0-9]+)?"
+    "|-?[0-9]+(?:[.][0-9]+)?(?:[eE][+-]?[0-9]+)?"
   )
   m <- gregexpr(pattern, text, perl = TRUE)
   regmatches(text, m) <- lapply(regmatches(text, m), function(tok) {
@@ -74,11 +75,13 @@ check_int64 <- function(int64) {
   if (!int64 %in% c("double", "integer64")) {
     zulake_abort("argument", "`int64` must be \"double\" or \"integer64\".")
   }
-  if (int64 == "integer64" && !requireNamespace("bit64", quietly = TRUE)) {
+  if (int64 == "integer64" && !has_bit64()) {
     zulake_abort("argument", "`int64 = \"integer64\"` needs the bit64 package, which is not installed.")
   }
   int64
 }
+
+has_bit64 <- function() requireNamespace("bit64", quietly = TRUE)
 
 # 64-bit integers (a list or vector of NULL, NA, numbers and marked strings)
 # as a double vector, exact or an error, or as an integer64 vector. `what`

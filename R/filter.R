@@ -6,8 +6,8 @@
 # any expression that names no column; it is evaluated once, in the caller's
 # environment. A symbol that names a column is the column.
 #
-# Each file gets the set of outcomes the filter can have on its rows: TRUE,
-# FALSE and NA, as R evaluates the expression. A comparison on partition
+# Each file gets the outcomes the filter can have on its rows (TRUE, FALSE or
+# NA, as R evaluates the expression). A comparison on partition
 # columns only has one outcome per file, the one R gives on the file's
 # partition values. A comparison that involves another column can have any
 # outcome until statistics are used (Stage 4). `!`, `&` and `|` combine the
@@ -118,20 +118,22 @@ filter_operand <- function(x, columns, env, expr) {
   list(column = NULL, expr = value, value = value)
 }
 
-# The outcomes each of `n` files can have: list(t, f, na) of logical vectors.
+# Whether each of `n` files can make the filter TRUE (`t`) and FALSE (`f`)
+# on some row. NA needs no tracking: under R's three-valued logic `!x` is
+# TRUE only where `x` is FALSE, `x & y` only where both are TRUE and `x | y`
+# where either is, and FALSE likewise, so an NA outcome never leads to TRUE.
 filter_outcomes <- function(plan, parts, n) {
   switch(plan$op,
     not = {
       a <- filter_outcomes(plan$args[[1L]], parts, n)
-      list(t = a$f, f = a$t, na = a$na)
+      list(t = a$f, f = a$t)
     },
     and = {
       a <- filter_outcomes(plan$args[[1L]], parts, n)
       b <- filter_outcomes(plan$args[[2L]], parts, n)
       list(
         t = a$t & b$t,
-        f = a$f | b$f,
-        na = (a$na & (b$na | b$t)) | (b$na & (a$na | a$t))
+        f = a$f | b$f
       )
     },
     or = {
@@ -139,19 +141,18 @@ filter_outcomes <- function(plan, parts, n) {
       b <- filter_outcomes(plan$args[[2L]], parts, n)
       list(
         t = a$t | b$t,
-        f = a$f & b$f,
-        na = (a$na & (b$na | b$f)) | (b$na & (a$na | a$f))
+        f = a$f & b$f
       )
     },
     atom = {
       if (!all(plan$columns %in% names(parts))) {
-        return(list(t = rep(TRUE, n), f = rep(TRUE, n), na = rep(TRUE, n)))
+        return(list(t = rep(TRUE, n), f = rep(TRUE, n)))
       }
       r <- eval(plan$call, as.list(parts), baseenv())
       if (!is.logical(r) || length(r) != n) {
         filter_error(plan$call, "it does not give one TRUE, FALSE or NA per file")
       }
-      list(t = r %in% TRUE, f = r %in% FALSE, na = is.na(r))
+      list(t = r %in% TRUE, f = r %in% FALSE)
     }
   )
 }
