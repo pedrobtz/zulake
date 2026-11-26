@@ -65,124 +65,217 @@
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://pedrobtz.github.io/zulake/">zulake</a></span><span class="op">)</span></span></code></pre></div>
 <p>A Delta Lake table is a folder of Parquet files plus a log that says
 which files make up each version. Reading the files without the log
-returns deleted and superseded rows. zulake reads the log itself: this
-page opens a table, looks inside it, and then reads it.</p>
-<p>Every section uses one table on Azure, and a function you supply that
-returns a Microsoft Entra ID token for Azure Storage. zulake calls it
-before its first request and again if Azure says the token has expired;
-it never stores, prints or saves the token. Here the token comes from
-the Azure CLI:</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">uri</span> <span class="op">&lt;-</span> <span class="st">"abfss://lake@account.dfs.core.windows.net/sales/orders"</span></span>
-<span><span class="va">token</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/system2.html" class="external-link">system2</a></span><span class="op">(</span><span class="st">"az"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
-<span>    <span class="st">"account"</span>, <span class="st">"get-access-token"</span>, <span class="st">"--resource"</span>, <span class="st">"https://storage.azure.com"</span>,</span>
-<span>    <span class="st">"--query"</span>, <span class="st">"accessToken"</span>, <span class="st">"--output"</span>, <span class="st">"tsv"</span></span>
-<span>  <span class="op">)</span>, stdout <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span><span class="op">}</span></span></code></pre></div>
-<p>The same table is also
-<code>https://account.dfs.core.windows.net/lake/sales/orders</code> or
-<code>https://account.blob.core.windows.net/lake/sales/orders</code>; a
-local path works too, with no <code>credentials</code>.</p>
+returns deleted and superseded rows. zulake reads the log itself: on
+this page we open a table, look inside its log, and then read it with a
+filter. Reading a table on Azure is the last section; everything before
+it runs on a table that ships with the package.</p>
 <div class="section level2">
 <h2 id="open-a-table">Open a table<a class="anchor" aria-label="anchor" href="#open-a-table"></a>
 </h2>
-<p><code><a href="../reference/lake_open.html">lake_open()</a></code> builds a snapshot of one version, the latest
-unless you ask for another. A snapshot never changes;
-<code><a href="../reference/lake_open.html">lake_load()</a></code> gives you a new one.</p>
+<p>The example table holds a few orders, partitioned by
+<code>region</code>, written in five commits on five days.
+<code><a href="../reference/lake_open.html">lake_open()</a></code> builds a <strong>snapshot</strong> of one
+version, the latest unless you ask for another.</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">path</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"orders"</span>, package <span class="op">=</span> <span class="st">"zulake"</span><span class="op">)</span></span>
+<span><span class="va">tbl</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/lake_open.html">lake_open</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span></span>
+<span><span class="va">tbl</span></span>
+<span><span class="co">#&gt; &lt;zulake_table&gt; delta table, version 4</span></span>
+<span><span class="co">#&gt; uri:       /home/runner/work/_temp/Library/zulake/extdata/orders</span></span>
+<span><span class="co">#&gt; committed: 2025-01-10 09:00:00 UTC</span></span>
+<span><span class="co">#&gt; files:     12 (16890 bytes)</span></span>
+<span><span class="co">#&gt; records:   23</span></span></code></pre></div>
+<p>A snapshot never changes. <code><a href="../reference/lake_versions.html">lake_versions()</a></code> lists the
+versions the log still holds, with the time each was committed, and
+<code><a href="../reference/lake_open.html">lake_load()</a></code> gives you a snapshot of another one, by number
+or by time.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">tbl</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/lake_open.html">lake_open</a></span><span class="op">(</span><span class="va">uri</span>, credentials <span class="op">=</span> <span class="va">token</span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/lake_open.html">lake_version</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/lake_versions.html">lake_summary</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
-<span><span class="va">old</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/lake_open.html">lake_load</a></span><span class="op">(</span><span class="va">tbl</span>, version <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/lake_versions.html">lake_versions</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
+<span><span class="co">#&gt;   version           timestamp</span></span>
+<span><span class="co">#&gt; 1       0 2025-01-06 09:00:00</span></span>
+<span><span class="co">#&gt; 2       1 2025-01-07 09:00:00</span></span>
+<span><span class="co">#&gt; 3       2 2025-01-08 09:00:00</span></span>
+<span><span class="co">#&gt; 4       3 2025-01-09 09:00:00</span></span>
+<span><span class="co">#&gt; 5       4 2025-01-10 09:00:00</span></span>
+<span><span class="va">old</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/lake_open.html">lake_load</a></span><span class="op">(</span><span class="va">tbl</span>, timestamp <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.POSIXlt.html" class="external-link">as.POSIXct</a></span><span class="op">(</span><span class="st">"2025-01-08 12:00"</span>, tz <span class="op">=</span> <span class="st">"UTC"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/lake_open.html">lake_version</a></span><span class="op">(</span><span class="va">old</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] 2</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="the-log-as-data-frames">The log as data frames<a class="anchor" aria-label="anchor" href="#the-log-as-data-frames"></a>
 </h2>
-<p>Inspection is what zulake is for. Every action in the log comes back
-as a base data frame, unchanged, with nested values in list columns.</p>
+<p>Inspection is what zulake is for. Each function answers one question
+from the log alone, as a base data frame, with nested values in list
+columns. The history says what each commit did:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/lake_versions.html">lake_history</a></span><span class="op">(</span><span class="va">tbl</span>, limit <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/lake_versions.html">lake_schema</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/lake_files.html">lake_files</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/lake_versions.html">lake_history</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"version"</span>, <span class="st">"timestamp"</span>, <span class="st">"operation"</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="co">#&gt;   version           timestamp operation</span></span>
+<span><span class="co">#&gt; 1       4 2025-01-10 09:00:00     WRITE</span></span>
+<span><span class="co">#&gt; 2       3 2025-01-09 09:00:00    DELETE</span></span>
+<span><span class="co">#&gt; 3       2 2025-01-08 09:00:00     WRITE</span></span>
+<span><span class="co">#&gt; 4       1 2025-01-07 09:00:00     WRITE</span></span>
+<span><span class="co">#&gt; 5       0 2025-01-06 09:00:00     WRITE</span></span>
+<span><span class="fu"><a href="../reference/lake_versions.html">lake_schema</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"name"</span>, <span class="st">"type"</span>, <span class="st">"partition"</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="co">#&gt;         name   type partition</span></span>
+<span><span class="co">#&gt; 1   order_id   long     FALSE</span></span>
+<span><span class="co">#&gt; 2   customer string     FALSE</span></span>
+<span><span class="co">#&gt; 3     amount double     FALSE</span></span>
+<span><span class="co">#&gt; 4 order_date   date     FALSE</span></span>
+<span><span class="co">#&gt; 5     region string      TRUE</span></span></code></pre></div>
+<p><code><a href="../reference/lake_files.html">lake_files()</a></code> lists the files of the snapshot with their
+partition values and statistics; <code><a href="../reference/lake_files.html">lake_count()</a></code> adds up the
+row counts the statistics record, without reading a file.</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">files</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/lake_files.html">lake_files</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
+<span><span class="va">files</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"path"</span>, <span class="st">"size_bytes"</span>, <span class="st">"num_records"</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="co">#&gt;                             path size_bytes num_records</span></span>
+<span><span class="co">#&gt; 1  region=APAC/part-0001.parquet       1438           3</span></span>
+<span><span class="co">#&gt; 2  region=APAC/part-0004.parquet       1409           2</span></span>
+<span><span class="co">#&gt; 3  region=APAC/part-0007.parquet       1412           2</span></span>
+<span><span class="co">#&gt; 4  region=APAC/part-0011.parquet       1382           1</span></span>
+<span><span class="co">#&gt; 5    region=EU/part-0002.parquet       1434           3</span></span>
+<span><span class="co">#&gt; 6    region=EU/part-0005.parquet       1409           2</span></span>
+<span><span class="co">#&gt; 7    region=EU/part-0008.parquet       1412           2</span></span>
+<span><span class="co">#&gt; 8    region=EU/part-0012.parquet       1382           1</span></span>
+<span><span class="co">#&gt; 9    region=US/part-0006.parquet       1409           2</span></span>
+<span><span class="co">#&gt; 10   region=US/part-0009.parquet       1409           2</span></span>
+<span><span class="co">#&gt; 11   region=US/part-0010.parquet       1412           2</span></span>
+<span><span class="co">#&gt; 12   region=US/part-0013.parquet       1382           1</span></span>
 <span><span class="fu"><a href="../reference/lake_files.html">lake_count</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/lake_log.html">lake_actions</a></span><span class="op">(</span><span class="va">tbl</span>, version <span class="op">=</span> <span class="fu"><a href="../reference/lake_open.html">lake_version</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/lake_log.html">lake_changes</a></span><span class="op">(</span><span class="va">tbl</span>, from <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span></code></pre></div>
+<span><span class="co">#&gt; [1] 23</span></span></code></pre></div>
+<p>Version 3 deleted one order. <code><a href="../reference/lake_log.html">lake_actions()</a></code> shows that
+commit as the log holds it, and <code><a href="../reference/lake_log.html">lake_changes()</a></code> the files it
+took away and added: the file that held the order is replaced by one
+with its other rows.</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/lake_log.html">lake_actions</a></span><span class="op">(</span><span class="va">tbl</span>, version <span class="op">=</span> <span class="fl">3</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"line"</span>, <span class="st">"type"</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="co">#&gt;   line       type</span></span>
+<span><span class="co">#&gt; 1    1 commitInfo</span></span>
+<span><span class="co">#&gt; 2    2        add</span></span>
+<span><span class="co">#&gt; 3    3     remove</span></span>
+<span><span class="fu"><a href="../reference/lake_log.html">lake_changes</a></span><span class="op">(</span><span class="va">tbl</span>, from <span class="op">=</span> <span class="fl">2</span>, to <span class="op">=</span> <span class="fl">3</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"change"</span>, <span class="st">"path"</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="co">#&gt;    change                        path</span></span>
+<span><span class="co">#&gt; 1   added region=US/part-0010.parquet</span></span>
+<span><span class="co">#&gt; 2 removed region=US/part-0003.parquet</span></span></code></pre></div>
+<p>The last commit also recorded the version of the application that
+wrote it, which a loader uses to avoid writing the same batch twice:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/lake_log.html">lake_transactions</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
+<span><span class="co">#&gt;          app_id version        last_updated</span></span>
+<span><span class="co">#&gt; 1 orders-loader       4 2025-01-10 09:00:00</span></span></code></pre></div>
 <p>Counts, sizes and statistics are 64-bit in the log. They come back as
 doubles, exact up to 2^53 - 1, and an error beyond; ask for
 <code>int64 = "integer64"</code> to get <code>bit64</code> integers
-instead. A table whose files carry no statistics has an unknown row
-count: <code><a href="../reference/lake_files.html">lake_count()</a></code> says so with <code>NA</code> and a
-warning rather than counting only the files it can, and
-<code>lake_count(tbl, footers = TRUE)</code> reads those files’ counts
-from their Parquet footers.</p>
+instead.</p>
 </div>
 <div class="section level2">
 <h2 id="filters-prune-files-then-rows">Filters prune files, then rows<a class="anchor" aria-label="anchor" href="#filters-prune-files-then-rows"></a>
 </h2>
-<p>A filter is an R expression over column names. Partition values and
-statistics drop files that cannot match before anything is downloaded;
-the rows that remain are then filtered exactly, so the result never
-depends on the statistics. Local values are looked up where you call.
-Numbers in integer and decimal columns compare exactly, so a value a
-double cannot write exactly is given as text; strings compare in UTF-8
-byte order.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/lake_files.html">lake_files</a></span><span class="op">(</span><span class="va">tbl</span>, filter <span class="op">=</span> <span class="va">year</span> <span class="op">==</span> <span class="fl">2026</span> <span class="op">&amp;</span> <span class="va">region</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"EU"</span>, <span class="st">"UK"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">yr</span> <span class="op">&lt;-</span> <span class="fl">2026</span></span>
-<span><span class="fu"><a href="../reference/lake_read.html">lake_read</a></span><span class="op">(</span><span class="va">tbl</span>, columns <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"id"</span>, <span class="st">"amount"</span><span class="op">)</span>, filter <span class="op">=</span> <span class="va">year</span> <span class="op">==</span> <span class="va">yr</span> <span class="op">&amp;</span> <span class="va">amount</span> <span class="op">&gt;</span> <span class="st">"1000.10"</span><span class="op">)</span></span></code></pre></div>
-<p><code><a href="../reference/lake_read.html">lake_walk()</a></code> reads one file at a time and hands each
-piece to a function, for a table larger than memory. Columns qio cannot
-return yet (nested columns, decimals of more than 15 digits) are left
-out with a warning naming each.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">total</span> <span class="op">&lt;-</span> <span class="fl">0</span></span>
-<span><span class="fu"><a href="../reference/lake_read.html">lake_walk</a></span><span class="op">(</span><span class="va">tbl</span>, <span class="kw">function</span><span class="op">(</span><span class="va">piece</span><span class="op">)</span> <span class="va">total</span> <span class="op">&lt;&lt;-</span> <span class="va">total</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">piece</span><span class="op">$</span><span class="va">amount</span><span class="op">)</span>, filter <span class="op">=</span> <span class="va">year</span> <span class="op">==</span> <span class="va">yr</span><span class="op">)</span></span></code></pre></div>
-<p>A filter is decided row by row. Besides comparisons it may use
-row-wise functions such as <code><a href="https://rdrr.io/r/base/nchar.html" class="external-link">nchar()</a></code>, <code><a href="https://rdrr.io/r/base/Round.html" class="external-link">round()</a></code> or
-arithmetic, which filter rows but never rule out files; a call that
-looks at other rows, such as <code>amount &gt; mean(amount)</code>, is
-an error, because its answer would depend on how the table is split into
-files.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/lake_read.html">lake_read</a></span><span class="op">(</span><span class="va">tbl</span>, filter <span class="op">=</span> <span class="va">year</span> <span class="op">==</span> <span class="va">yr</span> <span class="op">&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nchar.html" class="external-link">nchar</a></span><span class="op">(</span><span class="va">region</span><span class="op">)</span> <span class="op">==</span> <span class="fl">2</span> <span class="op">&amp;</span> <span class="va">amount</span> <span class="op">*</span> <span class="fl">1.2</span> <span class="op">&gt;</span> <span class="fl">1000</span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level2">
-<h2 id="deletion-vectors">Deletion vectors<a class="anchor" aria-label="anchor" href="#deletion-vectors"></a>
-</h2>
-<p>Tables written by Databricks delete rows by marking them in a
-deletion vector rather than rewriting the file. zulake never returns a
-marked row. <code><a href="../reference/lake_deletion_vectors.html">lake_deletion_vectors()</a></code> shows each file’s
-vector and the rows it deletes; reading those rows needs the zuroar
-package, while the descriptors and <code><a href="../reference/lake_files.html">lake_count()</a></code> come from
-the log alone.</p>
+<p>A <strong>filter</strong> is an R expression over column names.
+Partition values and statistics rule out files that cannot match before
+anything is read: of the twelve files, only two can hold an order from
+the EU over 1000.</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/lake_deletion_vectors.html">lake_deletion_vectors</a></span><span class="op">(</span><span class="va">tbl</span>, rows <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
-<span><span class="va">dv</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/lake_deletion_vectors.html">lake_deletion_vectors</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
-<span><span class="va">dv</span><span class="op">$</span><span class="va">rows</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/lake_files.html">lake_files</a></span><span class="op">(</span><span class="va">tbl</span>, filter <span class="op">=</span> <span class="va">region</span> <span class="op">==</span> <span class="st">"EU"</span> <span class="op">&amp;</span> <span class="va">amount</span> <span class="op">&gt;</span> <span class="fl">1000</span><span class="op">)</span><span class="op">$</span><span class="va">path</span></span>
+<span><span class="co">#&gt; [1] "region=EU/part-0002.parquet" "region=EU/part-0008.parquet"</span></span></code></pre></div>
+<p><code><a href="../reference/lake_read.html">lake_read()</a></code> reads the files that remain and then filters
+their rows, so the result never depends on the statistics. Local values
+are looked up where you call, and dates compare as dates.</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">since</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/as.Date.html" class="external-link">as.Date</a></span><span class="op">(</span><span class="st">"2025-01-08"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/lake_read.html">lake_read</a></span><span class="op">(</span><span class="va">tbl</span>, columns <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"order_id"</span>, <span class="st">"customer"</span>, <span class="st">"amount"</span><span class="op">)</span>,</span>
+<span>          filter <span class="op">=</span> <span class="va">order_date</span> <span class="op">&gt;=</span> <span class="va">since</span> <span class="op">&amp;</span> <span class="va">amount</span> <span class="op">&gt;</span> <span class="fl">300</span><span class="op">)</span></span>
+<span><span class="co">#&gt;   order_id customer amount</span></span>
+<span><span class="co">#&gt; 1       24      Tia   1999</span></span>
+<span><span class="co">#&gt; 2       17      Noa   2500</span></span>
+<span><span class="co">#&gt; 3       20     Dara    330</span></span>
+<span><span class="co">#&gt; 4       21      Raj    820</span></span>
+<span><span class="co">#&gt; 5       22      Sam    410</span></span></code></pre></div>
+<p>Besides comparisons, a filter may use row-wise functions such as
+<code><a href="https://rdrr.io/r/base/nchar.html" class="external-link">nchar()</a></code>, <code><a href="https://rdrr.io/r/base/Round.html" class="external-link">round()</a></code> or arithmetic, which filter
+rows but never rule out files. A call that looks at other rows is an
+error, because its answer would depend on how the table is split into
+files:</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/lake_read.html">lake_read</a></span><span class="op">(</span><span class="va">tbl</span>, filter <span class="op">=</span> <span class="va">amount</span> <span class="op">&gt;</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">amount</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; <span style="color: #BBBB00; font-weight: bold;">Error</span><span style="font-weight: bold;">:</span></span></span>
+<span><span class="co">#&gt; <span style="color: #BBBB00;">!</span> `filter` cannot use amount &gt; mean(amount): mean() is applied to a column but is not row-wise. A filter is comparisons (==, !=, &lt;, &lt;=, &gt;, &gt;=), %in% and is.na() between a column and values, and the row-wise functions listed in ?lake_read, joined by !, &amp; and |.</span></span></code></pre></div>
+<p><code><a href="../reference/lake_read.html">lake_walk()</a></code> reads one file at a time and hands each
+piece to a function, for a table larger than memory:</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">total</span> <span class="op">&lt;-</span> <span class="fl">0</span></span>
+<span><span class="fu"><a href="../reference/lake_read.html">lake_walk</a></span><span class="op">(</span><span class="va">tbl</span>, <span class="kw">function</span><span class="op">(</span><span class="va">piece</span><span class="op">)</span> <span class="va">total</span> <span class="op">&lt;&lt;-</span> <span class="va">total</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">piece</span><span class="op">$</span><span class="va">amount</span><span class="op">)</span>,</span>
+<span>          filter <span class="op">=</span> <span class="va">region</span> <span class="op">==</span> <span class="st">"US"</span><span class="op">)</span></span>
+<span><span class="va">total</span></span>
+<span><span class="co">#&gt; [1] 3180.5</span></span></code></pre></div>
 </div>
 <div class="section level2">
-<h2 id="unsupported-features-are-refused">Unsupported features are refused<a class="anchor" aria-label="anchor" href="#unsupported-features-are-refused"></a>
+<h2 id="deletion-vectors-and-other-features">Deletion vectors and other features<a class="anchor" aria-label="anchor" href="#deletion-vectors-and-other-features"></a>
 </h2>
+<p>Tables written by Databricks often delete rows by marking them in a
+<strong>deletion vector</strong> rather than rewriting the file as the
+delete above did. zulake never returns a marked row.
+<code><a href="../reference/lake_deletion_vectors.html">lake_deletion_vectors()</a></code> shows each file’s vector and the
+rows it deletes; this table has none. Reading those rows needs the
+zuroar package, while the descriptors and <code><a href="../reference/lake_files.html">lake_count()</a></code> come
+from the log alone.</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/lake_deletion_vectors.html">lake_deletion_vectors</a></span><span class="op">(</span><span class="va">tbl</span>, rows <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1] uri               storage_type      path_or_inline_dv offset           </span></span>
+<span><span class="co">#&gt; [5] size_in_bytes     cardinality      </span></span>
+<span><span class="co">#&gt; &lt;0 rows&gt; (or 0-length row.names)</span></span></code></pre></div>
 <p>A table that needs a reader feature zulake does not support is
-refused with an error that names the feature, before any data is read,
-because ignoring it would return wrong rows.
-<code><a href="../reference/lake_versions.html">lake_protocol()</a></code> shows which features a table uses, each
-marked supported; the error of a refused table carries the same data
-frame.</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+refused, with an error that names the feature, before any data is read,
+because ignoring the feature would return wrong rows.
+<code><a href="../reference/lake_versions.html">lake_protocol()</a></code> shows the features a table uses, each
+marked supported; this one uses in-commit timestamps, which only writers
+must know about.</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/lake_versions.html">lake_protocol</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
-<span><span class="va">err</span> <span class="op">&lt;-</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span></span>
-<span>  <span class="fu"><a href="../reference/lake_open.html">lake_open</a></span><span class="op">(</span><span class="st">"abfss://lake@account.dfs.core.windows.net/sales/widened"</span>, credentials <span class="op">=</span> <span class="va">token</span><span class="op">)</span>,</span>
-<span>  zulake_error_unsupported_feature <span class="op">=</span> <span class="va">identity</span></span>
-<span><span class="op">)</span></span>
-<span><span class="va">err</span><span class="op">$</span><span class="va">feature</span></span>
-<span><span class="va">err</span><span class="op">$</span><span class="va">protocol</span></span></code></pre></div>
+<span><span class="co">#&gt;                name reader writer version supported</span></span>
+<span><span class="co">#&gt; 1     readerVersion   TRUE  FALSE       1      TRUE</span></span>
+<span><span class="co">#&gt; 2     writerVersion  FALSE   TRUE       7      TRUE</span></span>
+<span><span class="co">#&gt; 3 inCommitTimestamp  FALSE   TRUE      NA      TRUE</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="tables-on-azure">Tables on Azure<a class="anchor" aria-label="anchor" href="#tables-on-azure"></a>
+</h2>
+<p>The same functions read a table on Azure Data Lake Storage Gen2 or
+Blob Storage. You supply a function that returns a Microsoft Entra ID
+token for Azure Storage; zulake calls it before its first request and
+again if Azure says the token has expired, and never stores, prints or
+saves the token. Here the token comes from the Azure CLI (not run on
+this page):</p>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">token</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/system2.html" class="external-link">system2</a></span><span class="op">(</span><span class="st">"az"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
+<span>    <span class="st">"account"</span>, <span class="st">"get-access-token"</span>, <span class="st">"--resource"</span>, <span class="st">"https://storage.azure.com"</span>,</span>
+<span>    <span class="st">"--query"</span>, <span class="st">"accessToken"</span>, <span class="st">"--output"</span>, <span class="st">"tsv"</span></span>
+<span>  <span class="op">)</span>, stdout <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span><span class="va">tbl</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/lake_open.html">lake_open</a></span><span class="op">(</span><span class="st">"abfss://lake@account.dfs.core.windows.net/sales/orders"</span>,</span>
+<span>                 credentials <span class="op">=</span> <span class="va">token</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/lake_files.html">lake_files</a></span><span class="op">(</span><span class="va">tbl</span>, filter <span class="op">=</span> <span class="va">region</span> <span class="op">==</span> <span class="st">"EU"</span><span class="op">)</span></span></code></pre></div>
+<p>The same table is also
+<code>https://account.dfs.core.windows.net/lake/sales/orders</code> or
+<code>https://account.blob.core.windows.net/lake/sales/orders</code>.</p>
 </div>
 <div class="section level2">
 <h2 id="where-next">Where next<a class="anchor" aria-label="anchor" href="#where-next"></a>
 </h2>
-<p>Every function is listed in the <a href="https://pedrobtz.github.io/zulake/reference/index.html">reference</a>.</p>
+<ul>
+<li>
+<code><a href="../reference/lake_read.html">?lake_read</a></code> lists every function a filter may use, and
+how values compare.</li>
+<li>
+<code><a href="../reference/lake_files.html">?lake_files</a></code> describes each column of the file list and
+the statistics.</li>
+<li>
+<code><a href="../reference/lake_open.html">?lake_open</a></code> covers versions, timestamps, Azure URIs and
+credentials.</li>
+<li>The <a href="https://pedrobtz.github.io/zulake/reference/index.html">reference</a>
+lists every function.</li>
+</ul>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

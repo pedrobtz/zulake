@@ -149,31 +149,23 @@ as <code><a href="lake_read.html">lake_read()</a></code>, use it through the R s
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># A one-file table written by hand, so the example needs nothing else.</span></span></span>
-<span class="r-in"><span><span class="va">path</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span><span class="st">"table"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.create</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">path</span>, <span class="st">"_delta_log"</span><span class="op">)</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/writeLines.html" class="external-link">writeLines</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>  <span class="st">'{"protocol":{"minReaderVersion":1,"minWriterVersion":2}}'</span>,</span></span>
-<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>    <span class="st">'{"metaData":{"id":"example","format":{"provider":"parquet","options":{}},'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'"schemaString":"{\\"type\\":\\"struct\\",\\"fields\\":[{\\"name\\":'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'\\"id\\",\\"type\\":\\"long\\",\\"nullable\\":true,\\"metadata\\":{}}]}",'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'"partitionColumns":[],"configuration":{}}}'</span></span></span>
-<span class="r-in"><span>  <span class="op">)</span>,</span></span>
-<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>    <span class="st">'{"add":{"path":"part-0.parquet","partitionValues":{},"size":100,'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'"modificationTime":0,"dataChange":true}}'</span></span></span>
-<span class="r-in"><span>  <span class="op">)</span></span></span>
-<span class="r-in"><span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">path</span>, <span class="st">"_delta_log"</span>, <span class="st">"00000000000000000000.json"</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="fu"><a href="lake_is_table.html">lake_is_table</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] TRUE</span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># The example table the package ships: orders partitioned by region, five versions.</span></span></span>
+<span class="r-in"><span><span class="va">path</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"orders"</span>, package <span class="op">=</span> <span class="st">"zulake"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">tbl</span> <span class="op">&lt;-</span> <span class="fu">lake_open</span><span class="op">(</span><span class="va">path</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">tbl</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> &lt;zulake_table&gt; delta table, version 4</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> uri:       /home/runner/work/_temp/Library/zulake/extdata/orders</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> committed: 2025-01-10 09:00:00 UTC</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> files:     12 (16890 bytes)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> records:   23</span>
 <span class="r-in"><span><span class="fu">lake_version</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0</span>
-<span class="r-in"><span><span class="va">tbl0</span> <span class="op">&lt;-</span> <span class="fu">lake_load</span><span class="op">(</span><span class="va">tbl</span>, version <span class="op">=</span> <span class="fl">0</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 4</span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/unlink.html" class="external-link">unlink</a></span><span class="op">(</span><span class="va">path</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co"># An older version, by number or by the time it was committed:</span></span></span>
+<span class="r-in"><span><span class="fu">lake_version</span><span class="op">(</span><span class="fu">lake_open</span><span class="op">(</span><span class="va">path</span>, version <span class="op">=</span> <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 1</span>
+<span class="r-in"><span><span class="fu">lake_version</span><span class="op">(</span><span class="fu">lake_load</span><span class="op">(</span><span class="va">tbl</span>, timestamp <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.POSIXlt.html" class="external-link">as.POSIXct</a></span><span class="op">(</span><span class="st">"2025-01-08 12:00"</span>, tz <span class="op">=</span> <span class="st">"UTC"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 2</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># On Azure: a token for Azure Storage from the Azure CLI. Not run, because</span></span></span>
 <span class="r-in"><span><span class="co"># it needs an Azure account and a signed-in CLI.</span></span></span>

@@ -117,31 +117,23 @@ to check a location first.
 ## Examples
 
 ``` r
-# A one-file table written by hand, so the example needs nothing else.
-path <- tempfile("table")
-dir.create(file.path(path, "_delta_log"), recursive = TRUE)
-writeLines(c(
-  '{"protocol":{"minReaderVersion":1,"minWriterVersion":2}}',
-  paste0(
-    '{"metaData":{"id":"example","format":{"provider":"parquet","options":{}},',
-    '"schemaString":"{\\"type\\":\\"struct\\",\\"fields\\":[{\\"name\\":',
-    '\\"id\\",\\"type\\":\\"long\\",\\"nullable\\":true,\\"metadata\\":{}}]}",',
-    '"partitionColumns":[],"configuration":{}}}'
-  ),
-  paste0(
-    '{"add":{"path":"part-0.parquet","partitionValues":{},"size":100,',
-    '"modificationTime":0,"dataChange":true}}'
-  )
-), file.path(path, "_delta_log", "00000000000000000000.json"))
-
-lake_is_table(path)
-#> [1] TRUE
+# The example table the package ships: orders partitioned by region, five versions.
+path <- system.file("extdata", "orders", package = "zulake")
 tbl <- lake_open(path)
+tbl
+#> <zulake_table> delta table, version 4
+#> uri:       /home/runner/work/_temp/Library/zulake/extdata/orders
+#> committed: 2025-01-10 09:00:00 UTC
+#> files:     12 (16890 bytes)
+#> records:   23
 lake_version(tbl)
-#> [1] 0
-tbl0 <- lake_load(tbl, version = 0)
+#> [1] 4
 
-unlink(path, recursive = TRUE)
+# An older version, by number or by the time it was committed:
+lake_version(lake_open(path, version = 1))
+#> [1] 1
+lake_version(lake_load(tbl, timestamp = as.POSIXct("2025-01-08 12:00", tz = "UTC")))
+#> [1] 2
 
 # On Azure: a token for Azure Storage from the Azure CLI. Not run, because
 # it needs an Azure account and a signed-in CLI.

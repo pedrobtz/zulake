@@ -149,59 +149,46 @@ actions.</p></div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">path</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span><span class="st">"table"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.create</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">path</span>, <span class="st">"_delta_log"</span><span class="op">)</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/writeLines.html" class="external-link">writeLines</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>  <span class="st">'{"commitInfo":{"timestamp":1767225600000,"operation":"CREATE TABLE"}}'</span>,</span></span>
-<span class="r-in"><span>  <span class="st">'{"protocol":{"minReaderVersion":1,"minWriterVersion":2}}'</span>,</span></span>
-<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>    <span class="st">'{"metaData":{"id":"example","name":"orders","format":{"provider":"parquet","options":{}},'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'"schemaString":"{\\"type\\":\\"struct\\",\\"fields\\":[{\\"name\\":'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'\\"id\\",\\"type\\":\\"long\\",\\"nullable\\":true,\\"metadata\\":{}}]}",'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'"partitionColumns":[],"configuration":{"delta.appendOnly":"true"}}}'</span></span></span>
-<span class="r-in"><span>  <span class="op">)</span>,</span></span>
-<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>    <span class="st">'{"add":{"path":"part-0.parquet","partitionValues":{},"size":100,'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'"modificationTime":0,"dataChange":true,"stats":"{\\"numRecords\\":3}"}}'</span></span></span>
-<span class="r-in"><span>  <span class="op">)</span></span></span>
-<span class="r-in"><span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">path</span>, <span class="st">"_delta_log"</span>, <span class="st">"00000000000000000000.json"</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># The example table the package ships: orders partitioned by region, five versions.</span></span></span>
+<span class="r-in"><span><span class="va">path</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"orders"</span>, package <span class="op">=</span> <span class="st">"zulake"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">tbl</span> <span class="op">&lt;-</span> <span class="fu"><a href="lake_open.html">lake_open</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu">lake_versions</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   version           timestamp</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1       0 2026-11-26 17:28:34</span>
-<span class="r-in"><span><span class="fu">lake_history</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"version"</span>, <span class="st">"operation"</span><span class="op">)</span><span class="op">]</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   version    operation</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1       0 CREATE TABLE</span>
-<span class="r-in"><span><span class="fu">lake_metadata</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"id"</span>, <span class="st">"name"</span><span class="op">)</span><span class="op">]</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>        id   name</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1 example orders</span>
-<span class="r-in"><span><span class="fu">lake_schema</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"name"</span>, <span class="st">"type"</span>, <span class="st">"nullable"</span><span class="op">)</span><span class="op">]</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   name type nullable</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1   id long     TRUE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1       0 2025-01-06 09:00:00</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2       1 2025-01-07 09:00:00</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3       2 2025-01-08 09:00:00</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4       3 2025-01-09 09:00:00</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5       4 2025-01-10 09:00:00</span>
+<span class="r-in"><span><span class="fu">lake_history</span><span class="op">(</span><span class="va">tbl</span>, limit <span class="op">=</span> <span class="fl">2</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"version"</span>, <span class="st">"timestamp"</span>, <span class="st">"operation"</span><span class="op">)</span><span class="op">]</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   version           timestamp operation</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1       4 2025-01-10 09:00:00     WRITE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2       3 2025-01-09 09:00:00    DELETE</span>
+<span class="r-in"><span><span class="fu">lake_metadata</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"name"</span>, <span class="st">"description"</span>, <span class="st">"created_time"</span><span class="op">)</span><span class="op">]</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>     name                      description        created_time</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 orders zulake example: orders by region 2025-01-06 09:00:00</span>
+<span class="r-in"><span><span class="fu">lake_schema</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"name"</span>, <span class="st">"type"</span>, <span class="st">"nullable"</span>, <span class="st">"partition"</span><span class="op">)</span><span class="op">]</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>         name   type nullable partition</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1   order_id   long     TRUE     FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2   customer string     TRUE     FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3     amount double     TRUE     FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4 order_date   date     TRUE     FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5     region string     TRUE      TRUE</span>
 <span class="r-in"><span><span class="fu">lake_partition_columns</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> character(0)</span>
-<span class="r-in"><span><span class="fu">lake_properties</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>                                   key value default</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1                    delta.appendOnly  true   FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2   delta.checkpoint.writeStatsAsJson  true    TRUE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3 delta.checkpoint.writeStatsAsStruct false    TRUE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4            delta.columnMapping.mode  none    TRUE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5        delta.enableVariantShredding false    TRUE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6     delta.parquet.compression.codec  zstd    TRUE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 7        delta.parquet.format.version 1.0.0    TRUE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 8          delta.rowTrackingSuspended false    TRUE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "region"</span>
+<span class="r-in"><span><span class="va">props</span> <span class="op">&lt;-</span> <span class="fu">lake_properties</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">props</span><span class="op">[</span><span class="op">!</span><span class="va">props</span><span class="op">$</span><span class="va">default</span>, <span class="op">]</span>  <span class="co"># the ones the table sets</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>                              key value default</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5 delta.enableInCommitTimestamps  true   FALSE</span>
 <span class="r-in"><span><span class="fu">lake_protocol</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>            name reader writer version supported</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1 readerVersion   TRUE  FALSE       1      TRUE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2 writerVersion  FALSE   TRUE       2      TRUE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>                name reader writer version supported</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1     readerVersion   TRUE  FALSE       1      TRUE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2     writerVersion  FALSE   TRUE       7      TRUE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3 inCommitTimestamp  FALSE   TRUE      NA      TRUE</span>
 <span class="r-in"><span><span class="fu">lake_summary</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   version           timestamp files bytes records deleted_rows</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1       0 2026-11-26 17:28:34     1   100       3            0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1       4 2025-01-10 09:00:00    12 16890      23            0</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   files_with_deletion_vectors files_without_records</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 1                           0                     0</span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/unlink.html" class="external-link">unlink</a></span><span class="op">(</span><span class="va">path</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

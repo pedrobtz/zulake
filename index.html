@@ -51,22 +51,47 @@
 </h1></div>
 <!-- badges: start -->
 
-<p>The goal of zulake is to …</p>
+<p>zulake is an R package that opens a Delta Lake table where it is stored and returns what the table’s log records as base data frames.</p>
+<ul>
+<li>It replays the log in R, as the <a href="https://github.com/delta-io/delta/blob/master/PROTOCOL.md" class="external-link">Delta Lake protocol</a> prescribes: versions, commits, live files with their partition values and statistics, deletion vectors, schema and the changes between versions.</li>
+<li>It reads the data too, ruling out files by partition values and statistics before reading any of them.</li>
+<li>Tables can be on local disk, Azure Data Lake Storage Gen2 or Azure Blob Storage, with a bearer token from a function you supply.</li>
+<li>A table that needs a feature zulake does not support is refused by name, never read wrong.</li>
+</ul>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
-<p>You can install the development version of zulake from <a href="https://github.com/" class="external-link">GitHub</a> with:</p>
+<p>zulake is not on CRAN yet. Install the development version from GitHub:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># install.packages("pak")</span></span>
 <span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"pedrobtz/zulake"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
-<h2 id="example">Example<a class="anchor" aria-label="anchor" href="#example"></a>
+<h2 id="usage">Usage<a class="anchor" aria-label="anchor" href="#usage"></a>
 </h2>
-<p>This is a basic example which shows you how to solve a common problem:</p>
+<p>The package ships a small table of orders, partitioned by region. Open it, and list the files that can hold an order from the EU over 1000:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://pedrobtz.github.io/zulake/">zulake</a></span><span class="op">)</span></span>
-<span><span class="co">## basic example code</span></span></code></pre></div>
+<span></span>
+<span><span class="va">tbl</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/lake_open.html">lake_open</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"orders"</span>, package <span class="op">=</span> <span class="st">"zulake"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/lake_files.html">lake_files</a></span><span class="op">(</span><span class="va">tbl</span>, filter <span class="op">=</span> <span class="va">region</span> <span class="op">==</span> <span class="st">"EU"</span> <span class="op">&amp;</span> <span class="va">amount</span> <span class="op">&gt;</span> <span class="fl">1000</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"path"</span>, <span class="st">"num_records"</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="co">#&gt;                          path num_records</span></span>
+<span><span class="co">#&gt; 1 region=EU/part-0002.parquet           3</span></span>
+<span><span class="co">#&gt; 2 region=EU/part-0008.parquet           2</span></span></code></pre></div>
+<p>zulake also lists the table’s history and changes, and reads its rows; <a href="https://pedrobtz.github.io/zulake/articles/zulake.html">Get started</a> shows each of them.</p>
+</div>
+<div class="section level2">
+<h2 id="learn-more">Learn more<a class="anchor" aria-label="anchor" href="#learn-more"></a>
+</h2>
+<ul>
+<li>
+<a href="https://pedrobtz.github.io/zulake/articles/zulake.html">Get started</a>: open a table, inspect its log, read it with a filter, and read from Azure.</li>
+<li>
+<a href="https://pedrobtz.github.io/zulake/reference/index.html">Reference</a>: every function, the data frames they return and the errors they raise.</li>
+<li>
+<a href="https://pedrobtz.github.io/zulake/news/index.html">Changelog</a>: what each version changed.</li>
+</ul>
+<p>zulake reads tables and does not write them; to write one, use the Python <a href="https://delta-io.github.io/delta-rs/" class="external-link"><code>deltalake</code></a> package or Spark.</p>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="links">

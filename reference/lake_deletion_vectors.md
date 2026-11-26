@@ -75,6 +75,13 @@ whose `deletion_vector` column holds the same descriptors.
 ## Examples
 
 ``` r
+# The example table the package ships has no deletion vector:
+orders <- lake_open(system.file("extdata", "orders", package = "zulake"))
+lake_deletion_vectors(orders, rows = FALSE)
+#> [1] uri               storage_type      path_or_inline_dv offset           
+#> [5] size_in_bytes     cardinality      
+#> <0 rows> (or 0-length row.names)
+
 # A table of one file of ten rows, whose rows 0 and 9 are deleted by a
 # deletion vector written inline in the log.
 path <- tempfile("table")
@@ -106,7 +113,7 @@ writeLines(c(
 tbl <- lake_open(path)
 lake_deletion_vectors(tbl, rows = FALSE)
 #>                                                uri storage_type
-#> 1 /tmp/RtmpbOyseX/table1a7a3816b8e3/part-0.parquet            i
+#> 1 /tmp/RtmpTCPFFE/table19454813832f/part-0.parquet            i
 #>                               path_or_inline_dv offset size_in_bytes
 #> 1 ^Bg9^0rr910000000000iXQKl0rr91000315c8Xg000r9     NA            36
 #>   cardinality

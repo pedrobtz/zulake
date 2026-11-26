@@ -35,6 +35,8 @@ whose example also calls `lake_is_table()`.
 ## Examples
 
 ``` r
+lake_is_table(system.file("extdata", "orders", package = "zulake"))
+#> [1] TRUE
 lake_is_table(tempdir())
 #> [1] FALSE
 ```

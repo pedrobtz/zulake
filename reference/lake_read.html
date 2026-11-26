@@ -170,57 +170,40 @@ for the number of rows from the log alone.</p></div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># A partitioned table of two files: the data written with qio, the log by</span></span></span>
-<span class="r-in"><span><span class="co"># hand.</span></span></span>
-<span class="r-in"><span><span class="va">path</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span><span class="st">"table"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.create</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">path</span>, <span class="st">"_delta_log"</span><span class="op">)</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">add</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">year</span>, <span class="va">ids</span><span class="op">)</span> <span class="op">{</span></span></span>
-<span class="r-in"><span>  <span class="va">file</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"year=%d/part-0.parquet"</span>, <span class="va">year</span><span class="op">)</span></span></span>
-<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.create</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">path</span>, <span class="fu"><a href="https://rdrr.io/r/base/basename.html" class="external-link">dirname</a></span><span class="op">(</span><span class="va">file</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-in"><span>  <span class="fu">qio</span><span class="fu">::</span><span class="fu"><a href="https://pedrobtz.github.io/qio/reference/write_parquet.html" class="external-link">write_parquet</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>id <span class="op">=</span> <span class="va">ids</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">path</span>, <span class="va">file</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>    <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>      <span class="st">'{"add":{"path":"%s","partitionValues":{"year":"%d"},"size":%.0f,'</span>,</span></span>
-<span class="r-in"><span>      <span class="st">'"modificationTime":0,"dataChange":true,"stats":"{\\"numRecords\\":%d,'</span>,</span></span>
-<span class="r-in"><span>      <span class="st">'\\"minValues\\":{\\"id\\":%g},\\"maxValues\\":{\\"id\\":%g},'</span>,</span></span>
-<span class="r-in"><span>      <span class="st">'\\"nullCount\\":{\\"id\\":0}}"}}'</span></span></span>
-<span class="r-in"><span>    <span class="op">)</span>,</span></span>
-<span class="r-in"><span>    <span class="va">file</span>, <span class="va">year</span>, <span class="fu"><a href="https://rdrr.io/r/base/file.info.html" class="external-link">file.size</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">path</span>, <span class="va">file</span><span class="op">)</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">ids</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="va">ids</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">ids</span><span class="op">)</span></span></span>
-<span class="r-in"><span>  <span class="op">)</span></span></span>
-<span class="r-in"><span><span class="op">}</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/writeLines.html" class="external-link">writeLines</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>  <span class="st">'{"protocol":{"minReaderVersion":1,"minWriterVersion":2}}'</span>,</span></span>
-<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>    <span class="st">'{"metaData":{"id":"example","format":{"provider":"parquet","options":{}},'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'"schemaString":"{\\"type\\":\\"struct\\",\\"fields\\":['</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'{\\"name\\":\\"id\\",\\"type\\":\\"double\\",\\"nullable\\":true,\\"metadata\\":{}},'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'{\\"name\\":\\"year\\",\\"type\\":\\"integer\\",\\"nullable\\":true,\\"metadata\\":{}}]}",'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'"partitionColumns":["year"],"configuration":{}}}'</span></span></span>
-<span class="r-in"><span>  <span class="op">)</span>,</span></span>
-<span class="r-in"><span>  <span class="fu">add</span><span class="op">(</span><span class="fl">2025</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">2</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>  <span class="fu">add</span><span class="op">(</span><span class="fl">2026</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">5</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">path</span>, <span class="st">"_delta_log"</span>, <span class="st">"00000000000000000000.json"</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># The example table the package ships: orders partitioned by region, five versions.</span></span></span>
+<span class="r-in"><span><span class="va">path</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"orders"</span>, package <span class="op">=</span> <span class="st">"zulake"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">tbl</span> <span class="op">&lt;-</span> <span class="fu"><a href="lake_open.html">lake_open</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu">lake_read</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   id year</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1  1 2025</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2  2 2025</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3  3 2025</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4  4 2026</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5  5 2026</span>
-<span class="r-in"><span><span class="fu">lake_read</span><span class="op">(</span><span class="va">tbl</span>, filter <span class="op">=</span> <span class="va">id</span> <span class="op">&gt;=</span> <span class="fl">3</span> <span class="op">&amp;</span> <span class="va">year</span> <span class="op">==</span> <span class="fl">2026</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   id year</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1  4 2026</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2  5 2026</span>
-<span class="r-in"><span><span class="co"># The statistics alone rule out the 2025 file for this filter:</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="lake_files.html">lake_files</a></span><span class="op">(</span><span class="va">tbl</span>, filter <span class="op">=</span> <span class="va">id</span> <span class="op">&gt;</span> <span class="fl">3</span><span class="op">)</span><span class="op">$</span><span class="va">path</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "year=2026/part-0.parquet"</span>
-<span class="r-in"><span><span class="fu">lake_walk</span><span class="op">(</span><span class="va">tbl</span>, <span class="kw">function</span><span class="op">(</span><span class="va">piece</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">piece</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 3</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 2</span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fu">lake_read</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   order_id customer amount order_date region</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1        3     Chen 980.25 2025-01-06   APAC</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2        6      Fay  75.75 2025-01-06   APAC</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3        9      Ivo 230.40 2025-01-06   APAC</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4       12      Kai  19.99 2025-01-07   APAC</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5       15      Mia  45.00 2025-01-07   APAC</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6       16     Chen  70.00 2025-01-08   APAC</span>
+<span class="r-in"><span><span class="fu">lake_read</span><span class="op">(</span><span class="va">tbl</span>, columns <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"order_id"</span>, <span class="st">"amount"</span><span class="op">)</span>, filter <span class="op">=</span> <span class="va">region</span> <span class="op">==</span> <span class="st">"EU"</span> <span class="op">&amp;</span> <span class="va">amount</span> <span class="op">&gt;</span> <span class="fl">100</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   order_id amount</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1        1    120</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2        7   1500</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3       13    310</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4       17   2500</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5       20    330</span>
+<span class="r-in"><span><span class="co"># Row-wise functions filter rows; dates compare as dates.</span></span></span>
+<span class="r-in"><span><span class="fu">lake_read</span><span class="op">(</span><span class="va">tbl</span>, filter <span class="op">=</span> <span class="va">order_date</span> <span class="op">&gt;=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.Date.html" class="external-link">as.Date</a></span><span class="op">(</span><span class="st">"2025-01-08"</span><span class="op">)</span> <span class="op">&amp;</span> <span class="fu"><a href="https://rdrr.io/r/base/nchar.html" class="external-link">nchar</a></span><span class="op">(</span><span class="va">customer</span><span class="op">)</span> <span class="op">==</span> <span class="fl">3</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   order_id customer amount order_date region</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1       19      Pia   99.9 2025-01-08   APAC</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2       24      Tia 1999.0 2025-01-10   APAC</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3       17      Noa 2500.0 2025-01-08     EU</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4       23      Ana   55.0 2025-01-10     EU</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5       18      Oli   15.0 2025-01-08     US</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6       21      Raj  820.0 2025-01-08     US</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 7       22      Sam  410.0 2025-01-10     US</span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/unlink.html" class="external-link">unlink</a></span><span class="op">(</span><span class="va">path</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co"># One file at a time, for a table larger than memory:</span></span></span>
+<span class="r-in"><span><span class="va">total</span> <span class="op">&lt;-</span> <span class="fl">0</span></span></span>
+<span class="r-in"><span><span class="fu">lake_walk</span><span class="op">(</span><span class="va">tbl</span>, <span class="kw">function</span><span class="op">(</span><span class="va">piece</span><span class="op">)</span> <span class="va">total</span> <span class="op">&lt;&lt;-</span> <span class="va">total</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">piece</span><span class="op">$</span><span class="va">amount</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">total</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 11615.79</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

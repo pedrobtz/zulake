@@ -128,57 +128,44 @@ for a commit's actions.
 ## Examples
 
 ``` r
-path <- tempfile("table")
-dir.create(file.path(path, "_delta_log"), recursive = TRUE)
-writeLines(c(
-  '{"commitInfo":{"timestamp":1767225600000,"operation":"CREATE TABLE"}}',
-  '{"protocol":{"minReaderVersion":1,"minWriterVersion":2}}',
-  paste0(
-    '{"metaData":{"id":"example","name":"orders","format":{"provider":"parquet","options":{}},',
-    '"schemaString":"{\\"type\\":\\"struct\\",\\"fields\\":[{\\"name\\":',
-    '\\"id\\",\\"type\\":\\"long\\",\\"nullable\\":true,\\"metadata\\":{}}]}",',
-    '"partitionColumns":[],"configuration":{"delta.appendOnly":"true"}}}'
-  ),
-  paste0(
-    '{"add":{"path":"part-0.parquet","partitionValues":{},"size":100,',
-    '"modificationTime":0,"dataChange":true,"stats":"{\\"numRecords\\":3}"}}'
-  )
-), file.path(path, "_delta_log", "00000000000000000000.json"))
-
+# The example table the package ships: orders partitioned by region, five versions.
+path <- system.file("extdata", "orders", package = "zulake")
 tbl <- lake_open(path)
 lake_versions(tbl)
 #>   version           timestamp
-#> 1       0 2026-11-26 17:28:34
-lake_history(tbl)[c("version", "operation")]
-#>   version    operation
-#> 1       0 CREATE TABLE
-lake_metadata(tbl)[c("id", "name")]
-#>        id   name
-#> 1 example orders
-lake_schema(tbl)[c("name", "type", "nullable")]
-#>   name type nullable
-#> 1   id long     TRUE
+#> 1       0 2025-01-06 09:00:00
+#> 2       1 2025-01-07 09:00:00
+#> 3       2 2025-01-08 09:00:00
+#> 4       3 2025-01-09 09:00:00
+#> 5       4 2025-01-10 09:00:00
+lake_history(tbl, limit = 2)[c("version", "timestamp", "operation")]
+#>   version           timestamp operation
+#> 1       4 2025-01-10 09:00:00     WRITE
+#> 2       3 2025-01-09 09:00:00    DELETE
+lake_metadata(tbl)[c("name", "description", "created_time")]
+#>     name                      description        created_time
+#> 1 orders zulake example: orders by region 2025-01-06 09:00:00
+lake_schema(tbl)[c("name", "type", "nullable", "partition")]
+#>         name   type nullable partition
+#> 1   order_id   long     TRUE     FALSE
+#> 2   customer string     TRUE     FALSE
+#> 3     amount double     TRUE     FALSE
+#> 4 order_date   date     TRUE     FALSE
+#> 5     region string     TRUE      TRUE
 lake_partition_columns(tbl)
-#> character(0)
-lake_properties(tbl)
-#>                                   key value default
-#> 1                    delta.appendOnly  true   FALSE
-#> 2   delta.checkpoint.writeStatsAsJson  true    TRUE
-#> 3 delta.checkpoint.writeStatsAsStruct false    TRUE
-#> 4            delta.columnMapping.mode  none    TRUE
-#> 5        delta.enableVariantShredding false    TRUE
-#> 6     delta.parquet.compression.codec  zstd    TRUE
-#> 7        delta.parquet.format.version 1.0.0    TRUE
-#> 8          delta.rowTrackingSuspended false    TRUE
+#> [1] "region"
+props <- lake_properties(tbl)
+props[!props$default, ]  # the ones the table sets
+#>                              key value default
+#> 5 delta.enableInCommitTimestamps  true   FALSE
 lake_protocol(tbl)
-#>            name reader writer version supported
-#> 1 readerVersion   TRUE  FALSE       1      TRUE
-#> 2 writerVersion  FALSE   TRUE       2      TRUE
+#>                name reader writer version supported
+#> 1     readerVersion   TRUE  FALSE       1      TRUE
+#> 2     writerVersion  FALSE   TRUE       7      TRUE
+#> 3 inCommitTimestamp  FALSE   TRUE      NA      TRUE
 lake_summary(tbl)
 #>   version           timestamp files bytes records deleted_rows
-#> 1       0 2026-11-26 17:28:34     1   100       3            0
+#> 1       4 2025-01-10 09:00:00    12 16890      23            0
 #>   files_with_deletion_vectors files_without_records
 #> 1                           0                     0
-
-unlink(path, recursive = TRUE)
 ```

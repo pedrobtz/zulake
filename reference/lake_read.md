@@ -153,55 +153,38 @@ for the number of rows from the log alone.
 ## Examples
 
 ``` r
-# A partitioned table of two files: the data written with qio, the log by
-# hand.
-path <- tempfile("table")
-dir.create(file.path(path, "_delta_log"), recursive = TRUE)
-add <- function(year, ids) {
-  file <- sprintf("year=%d/part-0.parquet", year)
-  dir.create(file.path(path, dirname(file)))
-  qio::write_parquet(data.frame(id = ids), file.path(path, file))
-  sprintf(
-    paste0(
-      '{"add":{"path":"%s","partitionValues":{"year":"%d"},"size":%.0f,',
-      '"modificationTime":0,"dataChange":true,"stats":"{\\"numRecords\\":%d,',
-      '\\"minValues\\":{\\"id\\":%g},\\"maxValues\\":{\\"id\\":%g},',
-      '\\"nullCount\\":{\\"id\\":0}}"}}'
-    ),
-    file, year, file.size(file.path(path, file)), length(ids), min(ids), max(ids)
-  )
-}
-writeLines(c(
-  '{"protocol":{"minReaderVersion":1,"minWriterVersion":2}}',
-  paste0(
-    '{"metaData":{"id":"example","format":{"provider":"parquet","options":{}},',
-    '"schemaString":"{\\"type\\":\\"struct\\",\\"fields\\":[',
-    '{\\"name\\":\\"id\\",\\"type\\":\\"double\\",\\"nullable\\":true,\\"metadata\\":{}},',
-    '{\\"name\\":\\"year\\",\\"type\\":\\"integer\\",\\"nullable\\":true,\\"metadata\\":{}}]}",',
-    '"partitionColumns":["year"],"configuration":{}}}'
-  ),
-  add(2025, c(1, 2, 3)),
-  add(2026, c(4, 5))
-), file.path(path, "_delta_log", "00000000000000000000.json"))
-
+# The example table the package ships: orders partitioned by region, five versions.
+path <- system.file("extdata", "orders", package = "zulake")
 tbl <- lake_open(path)
-lake_read(tbl)
-#>   id year
-#> 1  1 2025
-#> 2  2 2025
-#> 3  3 2025
-#> 4  4 2026
-#> 5  5 2026
-lake_read(tbl, filter = id >= 3 & year == 2026)
-#>   id year
-#> 1  4 2026
-#> 2  5 2026
-# The statistics alone rule out the 2025 file for this filter:
-lake_files(tbl, filter = id > 3)$path
-#> [1] "year=2026/part-0.parquet"
-lake_walk(tbl, function(piece) print(nrow(piece)))
-#> [1] 3
-#> [1] 2
+head(lake_read(tbl))
+#>   order_id customer amount order_date region
+#> 1        3     Chen 980.25 2025-01-06   APAC
+#> 2        6      Fay  75.75 2025-01-06   APAC
+#> 3        9      Ivo 230.40 2025-01-06   APAC
+#> 4       12      Kai  19.99 2025-01-07   APAC
+#> 5       15      Mia  45.00 2025-01-07   APAC
+#> 6       16     Chen  70.00 2025-01-08   APAC
+lake_read(tbl, columns = c("order_id", "amount"), filter = region == "EU" & amount > 100)
+#>   order_id amount
+#> 1        1    120
+#> 2        7   1500
+#> 3       13    310
+#> 4       17   2500
+#> 5       20    330
+# Row-wise functions filter rows; dates compare as dates.
+lake_read(tbl, filter = order_date >= as.Date("2025-01-08") & nchar(customer) == 3)
+#>   order_id customer amount order_date region
+#> 1       19      Pia   99.9 2025-01-08   APAC
+#> 2       24      Tia 1999.0 2025-01-10   APAC
+#> 3       17      Noa 2500.0 2025-01-08     EU
+#> 4       23      Ana   55.0 2025-01-10     EU
+#> 5       18      Oli   15.0 2025-01-08     US
+#> 6       21      Raj  820.0 2025-01-08     US
+#> 7       22      Sam  410.0 2025-01-10     US
 
-unlink(path, recursive = TRUE)
+# One file at a time, for a table larger than memory:
+total <- 0
+lake_walk(tbl, function(piece) total <<- total + sum(piece$amount))
+total
+#> [1] 11615.79
 ```

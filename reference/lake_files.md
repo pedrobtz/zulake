@@ -124,47 +124,34 @@ for the files added and removed between two versions.
 ## Examples
 
 ``` r
-# A partitioned table of two files, written by hand.
-path <- tempfile("table")
-dir.create(file.path(path, "_delta_log"), recursive = TRUE)
-writeLines(c(
-  '{"protocol":{"minReaderVersion":1,"minWriterVersion":2}}',
-  paste0(
-    '{"metaData":{"id":"example","format":{"provider":"parquet","options":{}},',
-    '"schemaString":"{\\"type\\":\\"struct\\",\\"fields\\":[',
-    '{\\"name\\":\\"id\\",\\"type\\":\\"long\\",\\"nullable\\":true,\\"metadata\\":{}},',
-    '{\\"name\\":\\"year\\",\\"type\\":\\"integer\\",\\"nullable\\":true,\\"metadata\\":{}}]}",',
-    '"partitionColumns":["year"],"configuration":{}}}'
-  ),
-  paste0(
-    '{"add":{"path":"year=2025/part-0.parquet","partitionValues":{"year":"2025"},',
-    '"size":100,"modificationTime":0,"dataChange":true,',
-    '"stats":"{\\"numRecords\\":3,\\"minValues\\":{\\"id\\":1},\\"maxValues\\":{\\"id\\":3}}"}}'
-  ),
-  paste0(
-    '{"add":{"path":"year=2026/part-0.parquet","partitionValues":{"year":"2026"},',
-    '"size":100,"modificationTime":0,"dataChange":true,',
-    '"stats":"{\\"numRecords\\":2,\\"minValues\\":{\\"id\\":4},\\"maxValues\\":{\\"id\\":5}}"}}'
-  )
-), file.path(path, "_delta_log", "00000000000000000000.json"))
-
+# The example table the package ships: orders partitioned by region, five versions.
+path <- system.file("extdata", "orders", package = "zulake")
 tbl <- lake_open(path)
 lake_files(tbl)[c("path", "size_bytes", "num_records")]
-#>                       path size_bytes num_records
-#> 1 year=2025/part-0.parquet        100           3
-#> 2 year=2026/part-0.parquet        100           2
-lake_files(tbl, filter = year >= 2026)$path
-#> [1] "year=2026/part-0.parquet"
+#>                             path size_bytes num_records
+#> 1  region=APAC/part-0001.parquet       1438           3
+#> 2  region=APAC/part-0004.parquet       1409           2
+#> 3  region=APAC/part-0007.parquet       1412           2
+#> 4  region=APAC/part-0011.parquet       1382           1
+#> 5    region=EU/part-0002.parquet       1434           3
+#> 6    region=EU/part-0005.parquet       1409           2
+#> 7    region=EU/part-0008.parquet       1412           2
+#> 8    region=EU/part-0012.parquet       1382           1
+#> 9    region=US/part-0006.parquet       1409           2
+#> 10   region=US/part-0009.parquet       1409           2
+#> 11   region=US/part-0010.parquet       1412           2
+#> 12   region=US/part-0013.parquet       1382           1
+# Partition values and statistics decide which files a filter can match:
+lake_files(tbl, filter = region == "EU" & amount > 1000)$path
+#> [1] "region=EU/part-0002.parquet" "region=EU/part-0008.parquet"
 lake_partitions(tbl)
-#>   year
-#> 1 2025
-#> 2 2026
+#>   region
+#> 1   APAC
+#> 2     EU
+#> 3     US
+lake_removed(tbl)[c("path", "deletion_timestamp")]
+#>                          path  deletion_timestamp
+#> 1 region=US/part-0003.parquet 2025-01-09 09:00:00
 lake_count(tbl)
-#> [1] 5
-lake_removed(tbl)
-#> [1] path               deletion_timestamp data_change        size_bytes        
-#> [5] partition_values   deletion_vector    action            
-#> <0 rows> (or 0-length row.names)
-
-unlink(path, recursive = TRUE)
+#> [1] 23
 ```

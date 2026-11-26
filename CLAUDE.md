@@ -160,8 +160,8 @@ See `.agents/design.md` for the why. There is no native layer: no
 its seed, under R CMD check and covr alike; `tools/ci-run-tests.R` runs
 the same file from the source tree. The shuffle reorders every top-level
 expression of a test file, so shared functions go in `helper-*.R`, never
-at file scope. Fixtures (Stage 1, design §8): 27 Delta tables (14 copied
-from `delta-rs`, Apache-2.0; 2 changed from them; 11 `zl-*` written with
+at file scope. Fixtures (Stage 1, design §8): 28 Delta tables (14 copied
+from `delta-rs`, Apache-2.0; 2 changed from them; 12 `zl-*` written with
 `deltalake` 1.7.0) and 8 hostile logs, listed in
 `tests/testthat/fixtures/PROVENANCE.md`. They ship packed in
 `tests/testthat/fixtures/delta-fixtures.tar`, because Delta paths pass
@@ -174,6 +174,9 @@ edit. `deltalake` 1.7.0’s answers for every table and version are in
 `oracle_field(table, version, field)`, `oracle_refusal()` and
 `expect_oracle(actual, table, version, field)`. Never edit an answer by
 hand, and never edit a tree without repacking (see Commands).
+`inst/extdata/orders/`, the example table the README, vignette and
+examples open, is `pack.py`’s copy of `zl-orders` (`test-extdata.R`);
+edit the fixture, never the copy.
 
 Azure (`helper-azure.R`, `tools/azurite/README.md`): `test-azure.R` runs
 everywhere against `azure_fake()`, a `zu_mock_transport()` over the

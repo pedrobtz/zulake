@@ -162,49 +162,36 @@ the files added and removed between two versions.</p></div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># A partitioned table of two files, written by hand.</span></span></span>
-<span class="r-in"><span><span class="va">path</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span><span class="st">"table"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.create</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">path</span>, <span class="st">"_delta_log"</span><span class="op">)</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/writeLines.html" class="external-link">writeLines</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>  <span class="st">'{"protocol":{"minReaderVersion":1,"minWriterVersion":2}}'</span>,</span></span>
-<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>    <span class="st">'{"metaData":{"id":"example","format":{"provider":"parquet","options":{}},'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'"schemaString":"{\\"type\\":\\"struct\\",\\"fields\\":['</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'{\\"name\\":\\"id\\",\\"type\\":\\"long\\",\\"nullable\\":true,\\"metadata\\":{}},'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'{\\"name\\":\\"year\\",\\"type\\":\\"integer\\",\\"nullable\\":true,\\"metadata\\":{}}]}",'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'"partitionColumns":["year"],"configuration":{}}}'</span></span></span>
-<span class="r-in"><span>  <span class="op">)</span>,</span></span>
-<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>    <span class="st">'{"add":{"path":"year=2025/part-0.parquet","partitionValues":{"year":"2025"},'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'"size":100,"modificationTime":0,"dataChange":true,'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'"stats":"{\\"numRecords\\":3,\\"minValues\\":{\\"id\\":1},\\"maxValues\\":{\\"id\\":3}}"}}'</span></span></span>
-<span class="r-in"><span>  <span class="op">)</span>,</span></span>
-<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>    <span class="st">'{"add":{"path":"year=2026/part-0.parquet","partitionValues":{"year":"2026"},'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'"size":100,"modificationTime":0,"dataChange":true,'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'"stats":"{\\"numRecords\\":2,\\"minValues\\":{\\"id\\":4},\\"maxValues\\":{\\"id\\":5}}"}}'</span></span></span>
-<span class="r-in"><span>  <span class="op">)</span></span></span>
-<span class="r-in"><span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">path</span>, <span class="st">"_delta_log"</span>, <span class="st">"00000000000000000000.json"</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># The example table the package ships: orders partitioned by region, five versions.</span></span></span>
+<span class="r-in"><span><span class="va">path</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"orders"</span>, package <span class="op">=</span> <span class="st">"zulake"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">tbl</span> <span class="op">&lt;-</span> <span class="fu"><a href="lake_open.html">lake_open</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu">lake_files</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"path"</span>, <span class="st">"size_bytes"</span>, <span class="st">"num_records"</span><span class="op">)</span><span class="op">]</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>                       path size_bytes num_records</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1 year=2025/part-0.parquet        100           3</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2 year=2026/part-0.parquet        100           2</span>
-<span class="r-in"><span><span class="fu">lake_files</span><span class="op">(</span><span class="va">tbl</span>, filter <span class="op">=</span> <span class="va">year</span> <span class="op">&gt;=</span> <span class="fl">2026</span><span class="op">)</span><span class="op">$</span><span class="va">path</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "year=2026/part-0.parquet"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>                             path size_bytes num_records</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1  region=APAC/part-0001.parquet       1438           3</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2  region=APAC/part-0004.parquet       1409           2</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3  region=APAC/part-0007.parquet       1412           2</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4  region=APAC/part-0011.parquet       1382           1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5    region=EU/part-0002.parquet       1434           3</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6    region=EU/part-0005.parquet       1409           2</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 7    region=EU/part-0008.parquet       1412           2</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 8    region=EU/part-0012.parquet       1382           1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 9    region=US/part-0006.parquet       1409           2</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 10   region=US/part-0009.parquet       1409           2</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 11   region=US/part-0010.parquet       1412           2</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 12   region=US/part-0013.parquet       1382           1</span>
+<span class="r-in"><span><span class="co"># Partition values and statistics decide which files a filter can match:</span></span></span>
+<span class="r-in"><span><span class="fu">lake_files</span><span class="op">(</span><span class="va">tbl</span>, filter <span class="op">=</span> <span class="va">region</span> <span class="op">==</span> <span class="st">"EU"</span> <span class="op">&amp;</span> <span class="va">amount</span> <span class="op">&gt;</span> <span class="fl">1000</span><span class="op">)</span><span class="op">$</span><span class="va">path</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "region=EU/part-0002.parquet" "region=EU/part-0008.parquet"</span>
 <span class="r-in"><span><span class="fu">lake_partitions</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   year</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1 2025</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2 2026</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   region</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1   APAC</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2     EU</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3     US</span>
+<span class="r-in"><span><span class="fu">lake_removed</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"path"</span>, <span class="st">"deletion_timestamp"</span><span class="op">)</span><span class="op">]</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>                          path  deletion_timestamp</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 region=US/part-0003.parquet 2025-01-09 09:00:00</span>
 <span class="r-in"><span><span class="fu">lake_count</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 5</span>
-<span class="r-in"><span><span class="fu">lake_removed</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] path               deletion_timestamp data_change        size_bytes        </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [5] partition_values   deletion_vector    action            </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> &lt;0 rows&gt; (or 0-length row.names)</span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/unlink.html" class="external-link">unlink</a></span><span class="op">(</span><span class="va">path</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 23</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

@@ -132,48 +132,29 @@ one <code>_last_checkpoint</code> names.</p></li>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">path</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span><span class="st">"table"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.create</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">path</span>, <span class="st">"_delta_log"</span><span class="op">)</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">log</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">path</span>, <span class="st">"_delta_log"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/writeLines.html" class="external-link">writeLines</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>  <span class="st">'{"protocol":{"minReaderVersion":1,"minWriterVersion":2}}'</span>,</span></span>
-<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>    <span class="st">'{"metaData":{"id":"example","format":{"provider":"parquet","options":{}},'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'"schemaString":"{\\"type\\":\\"struct\\",\\"fields\\":[{\\"name\\":'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'\\"id\\",\\"type\\":\\"long\\",\\"nullable\\":true,\\"metadata\\":{}}]}",'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'"partitionColumns":[],"configuration":{}}}'</span></span></span>
-<span class="r-in"><span>  <span class="op">)</span>,</span></span>
-<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>    <span class="st">'{"add":{"path":"a.parquet","partitionValues":{},"size":100,'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'"modificationTime":0,"dataChange":true}}'</span></span></span>
-<span class="r-in"><span>  <span class="op">)</span></span></span>
-<span class="r-in"><span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">log</span>, <span class="st">"00000000000000000000.json"</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/writeLines.html" class="external-link">writeLines</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>  <span class="st">'{"txn":{"appId":"loader","version":7}}'</span>,</span></span>
-<span class="r-in"><span>  <span class="st">'{"remove":{"path":"a.parquet","deletionTimestamp":1,"dataChange":true}}'</span>,</span></span>
-<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>    <span class="st">'{"add":{"path":"b.parquet","partitionValues":{},"size":120,'</span>,</span></span>
-<span class="r-in"><span>    <span class="st">'"modificationTime":1,"dataChange":true}}'</span></span></span>
-<span class="r-in"><span>  <span class="op">)</span></span></span>
-<span class="r-in"><span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="va">log</span>, <span class="st">"00000000000000000001.json"</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># The example table the package ships: orders partitioned by region, five versions.</span></span></span>
+<span class="r-in"><span><span class="va">path</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"extdata"</span>, <span class="st">"orders"</span>, package <span class="op">=</span> <span class="st">"zulake"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">tbl</span> <span class="op">&lt;-</span> <span class="fu"><a href="lake_open.html">lake_open</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu">lake_log</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"name"</span>, <span class="st">"kind"</span>, <span class="st">"version"</span><span class="op">)</span><span class="op">]</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>                        name   kind version</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1 00000000000000000000.json commit       0</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2 00000000000000000001.json commit       1</span>
-<span class="r-in"><span><span class="fu">lake_actions</span><span class="op">(</span><span class="va">tbl</span>, <span class="fl">1</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"line"</span>, <span class="st">"type"</span><span class="op">)</span><span class="op">]</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   line   type</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1    1    txn</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2    2 remove</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3    3    add</span>
-<span class="r-in"><span><span class="fu">lake_changes</span><span class="op">(</span><span class="va">tbl</span>, from <span class="op">=</span> <span class="fl">0</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"change"</span>, <span class="st">"path"</span><span class="op">)</span><span class="op">]</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    change      path</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1   added b.parquet</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2 removed a.parquet</span>
+<span class="r-in"><span><span class="fu">lake_log</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"name"</span>, <span class="st">"kind"</span>, <span class="st">"version"</span>, <span class="st">"size"</span><span class="op">)</span><span class="op">]</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>                        name   kind version size</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 00000000000000000000.json commit       0 2850</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2 00000000000000000001.json commit       1 2029</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3 00000000000000000002.json commit       2 2030</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4 00000000000000000003.json commit       3 1152</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5 00000000000000000004.json commit       4 2132</span>
+<span class="r-in"><span><span class="fu">lake_actions</span><span class="op">(</span><span class="va">tbl</span>, version <span class="op">=</span> <span class="fl">3</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"line"</span>, <span class="st">"type"</span><span class="op">)</span><span class="op">]</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   line       type</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1    1 commitInfo</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2    2        add</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3    3     remove</span>
+<span class="r-in"><span><span class="co"># Version 3 deleted order 5: one file removed, its other rows written again.</span></span></span>
+<span class="r-in"><span><span class="fu">lake_changes</span><span class="op">(</span><span class="va">tbl</span>, from <span class="op">=</span> <span class="fl">2</span>, to <span class="op">=</span> <span class="fl">3</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"change"</span>, <span class="st">"path"</span><span class="op">)</span><span class="op">]</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    change                        path</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1   added region=US/part-0010.parquet</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2 removed region=US/part-0003.parquet</span>
 <span class="r-in"><span><span class="fu">lake_transactions</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   app_id version last_updated</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1 loader       7         &lt;NA&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>          app_id version        last_updated</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 orders-loader       4 2025-01-10 09:00:00</span>
 <span class="r-in"><span><span class="fu">lake_domains</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] domain        configuration</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> &lt;0 rows&gt; (or 0-length row.names)</span>
@@ -181,8 +162,6 @@ one <code>_last_checkpoint</code> names.</p></li>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] version           name              type              part             </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [5] parts             size              modification_time last_checkpoint  </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> &lt;0 rows&gt; (or 0-length row.names)</span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/unlink.html" class="external-link">unlink</a></span><span class="op">(</span><span class="va">path</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

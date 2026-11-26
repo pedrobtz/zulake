@@ -106,48 +106,29 @@ for the table's versions and history.
 ## Examples
 
 ``` r
-path <- tempfile("table")
-dir.create(file.path(path, "_delta_log"), recursive = TRUE)
-log <- file.path(path, "_delta_log")
-writeLines(c(
-  '{"protocol":{"minReaderVersion":1,"minWriterVersion":2}}',
-  paste0(
-    '{"metaData":{"id":"example","format":{"provider":"parquet","options":{}},',
-    '"schemaString":"{\\"type\\":\\"struct\\",\\"fields\\":[{\\"name\\":',
-    '\\"id\\",\\"type\\":\\"long\\",\\"nullable\\":true,\\"metadata\\":{}}]}",',
-    '"partitionColumns":[],"configuration":{}}}'
-  ),
-  paste0(
-    '{"add":{"path":"a.parquet","partitionValues":{},"size":100,',
-    '"modificationTime":0,"dataChange":true}}'
-  )
-), file.path(log, "00000000000000000000.json"))
-writeLines(c(
-  '{"txn":{"appId":"loader","version":7}}',
-  '{"remove":{"path":"a.parquet","deletionTimestamp":1,"dataChange":true}}',
-  paste0(
-    '{"add":{"path":"b.parquet","partitionValues":{},"size":120,',
-    '"modificationTime":1,"dataChange":true}}'
-  )
-), file.path(log, "00000000000000000001.json"))
-
+# The example table the package ships: orders partitioned by region, five versions.
+path <- system.file("extdata", "orders", package = "zulake")
 tbl <- lake_open(path)
-lake_log(tbl)[c("name", "kind", "version")]
-#>                        name   kind version
-#> 1 00000000000000000000.json commit       0
-#> 2 00000000000000000001.json commit       1
-lake_actions(tbl, 1)[c("line", "type")]
-#>   line   type
-#> 1    1    txn
-#> 2    2 remove
-#> 3    3    add
-lake_changes(tbl, from = 0)[c("change", "path")]
-#>    change      path
-#> 1   added b.parquet
-#> 2 removed a.parquet
+lake_log(tbl)[c("name", "kind", "version", "size")]
+#>                        name   kind version size
+#> 1 00000000000000000000.json commit       0 2850
+#> 2 00000000000000000001.json commit       1 2029
+#> 3 00000000000000000002.json commit       2 2030
+#> 4 00000000000000000003.json commit       3 1152
+#> 5 00000000000000000004.json commit       4 2132
+lake_actions(tbl, version = 3)[c("line", "type")]
+#>   line       type
+#> 1    1 commitInfo
+#> 2    2        add
+#> 3    3     remove
+# Version 3 deleted order 5: one file removed, its other rows written again.
+lake_changes(tbl, from = 2, to = 3)[c("change", "path")]
+#>    change                        path
+#> 1   added region=US/part-0010.parquet
+#> 2 removed region=US/part-0003.parquet
 lake_transactions(tbl)
-#>   app_id version last_updated
-#> 1 loader       7         <NA>
+#>          app_id version        last_updated
+#> 1 orders-loader       4 2025-01-10 09:00:00
 lake_domains(tbl)
 #> [1] domain        configuration
 #> <0 rows> (or 0-length row.names)
@@ -155,6 +136,4 @@ lake_checkpoints(tbl)
 #> [1] version           name              type              part             
 #> [5] parts             size              modification_time last_checkpoint  
 #> <0 rows> (or 0-length row.names)
-
-unlink(path, recursive = TRUE)
 ```
