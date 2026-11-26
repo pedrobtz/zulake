@@ -1,0 +1,210 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "clientVersion": "delta-rs.py-1.7.0",
+    "engineInfo": "delta-rs:py-1.7.0",
+    "operation": "WRITE",
+    "operationMetrics": {
+     "execution_time_ms": 0,
+     "num_added_files": 1,
+     "num_added_rows": 2,
+     "num_partitions": 0,
+     "num_removed_files": 0,
+     "num_retries": 0
+    },
+    "operationParameters": {
+     "mode": "ErrorIfExists"
+    },
+    "timestamp": 1795690965696,
+    "txnId": "bcb72ea6-d268-4d0e-8bc8-8e7016ee827e"
+   }
+  },
+  {
+   "protocol": {
+    "minReaderVersion": 1,
+    "minWriterVersion": 2
+   }
+  },
+  {
+   "metaData": {
+    "configuration": {},
+    "createdTime": 1795690965695,
+    "description": null,
+    "format": {
+     "options": {},
+     "provider": "parquet"
+    },
+    "id": "300558d8-cda9-4b4c-80c6-0b8e5956ab52",
+    "name": null,
+    "partitionColumns": [],
+    "schemaString": "{\"type\":\"struct\",\"fields\":[{\"name\":\"id\",\"type\":\"long\",\"nullable\":true,\"metadata\":{}}]}"
+   }
+  },
+  {
+   "add": {
+    "baseRowId": null,
+    "clusteringProvider": null,
+    "dataChange": true,
+    "defaultRowCommitVersion": null,
+    "modificationTime": 1795690965696,
+    "partitionValues": {},
+    "path": "part-00000-b9e73494-b01c-4794-a02c-29ec9157a4cc-c000.snappy.parquet",
+    "size": 496,
+    "stats": "{\"numRecords\":2,\"minValues\":{\"id\":0},\"maxValues\":{\"id\":1},\"nullCount\":{\"id\":0}}",
+    "tags": null
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [
+    {
+     "id": "1"
+    }
+   ],
+   "min": [
+    {
+     "id": "0"
+    }
+   ],
+   "modification_time": [
+    "1795690965696"
+   ],
+   "null_count": [
+    {
+     "id": "0"
+    }
+   ],
+   "num_records": [
+    "2"
+   ],
+   "path": [
+    "part-00000-b9e73494-b01c-4794-a02c-29ec9157a4cc-c000.snappy.parquet"
+   ],
+   "size_bytes": [
+    "496"
+   ]
+  },
+  "num_rows": 1,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<id: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<id: int64>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<id: int64>"
+   }
+  ]
+ },
+ "count": 2,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "clientVersion": "delta-rs.py-1.7.0",
+   "engineInfo": "delta-rs:py-1.7.0",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "execution_time_ms": 0,
+    "num_added_files": 1,
+    "num_added_rows": 2,
+    "num_partitions": 0,
+    "num_removed_files": 0,
+    "num_retries": 0
+   },
+   "operationParameters": {
+    "mode": "ErrorIfExists"
+   },
+   "timestamp": 1795690965696,
+   "txnId": "bcb72ea6-d268-4d0e-8bc8-8e7016ee827e",
+   "version": 0
+  }
+ ],
+ "loaded_version": 0,
+ "metadata": {
+  "configuration": {},
+  "created_time": 1795690965695,
+  "description": null,
+  "id": "300558d8-cda9-4b4c-80c6-0b8e5956ab52",
+  "name": null,
+  "partition_columns": []
+ },
+ "partitions": [],
+ "protocol": {
+  "min_reader_version": 1,
+  "min_writer_version": 2,
+  "reader_features": null,
+  "writer_features": null
+ },
+ "read": {
+  "columns": {
+   "id": [
+    "0",
+    "1"
+   ]
+  },
+  "num_rows": 2,
+  "schema": [
+   {
+    "name": "id",
+    "nullable": true,
+    "type": "int64"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {},
+    "name": "id",
+    "nullable": true,
+    "type": "long"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "zl-checkpoint-no-last",
+ "timestamp_lookup": [
+  {
+   "at": "2026-11-26T11:02:45.695Z",
+   "version": 0
+  },
+  {
+   "at": "2026-11-26T11:02:45.696Z",
+   "version": 0
+  }
+ ],
+ "transactions": {},
+ "version": 0
+}

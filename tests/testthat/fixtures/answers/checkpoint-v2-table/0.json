@@ -1,0 +1,231 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "clusterId": "0809-144302-2lacpwpk-v2n",
+    "engineInfo": "Databricks-Runtime/17.0.x-photon-scala2.13",
+    "isBlindAppend": true,
+    "isolationLevel": "WriteSerializable",
+    "operation": "CREATE TABLE",
+    "operationMetrics": {},
+    "operationParameters": {
+     "clusterBy": "[]",
+     "description": null,
+     "isManaged": "true",
+     "partitionBy": "[]",
+     "properties": "{\"delta.checkpoint.writeStatsAsStruct\":\"true\",\"delta.checkpointPolicy\":\"v2\"}",
+     "statsOnLoad": false
+    },
+    "tags": {
+     "restoresDeletedRows": "false"
+    },
+    "timestamp": 1754750593562,
+    "txnId": "39155116-641d-48a9-9c55-c1eeb0f2c796",
+    "userId": "2238620221098138",
+    "userName": "rtyler@scribd.com"
+   }
+  },
+  {
+   "metaData": {
+    "configuration": {
+     "delta.checkpoint.writeStatsAsStruct": "true",
+     "delta.checkpointPolicy": "v2"
+    },
+    "createdTime": 1754750593201,
+    "format": {
+     "options": {},
+     "provider": "parquet"
+    },
+    "id": "1060c65c-e4aa-4d98-80d7-3eb9bd52ee29",
+    "partitionColumns": [],
+    "schemaString": "{\"type\":\"struct\",\"fields\":[{\"name\":\"id\",\"type\":\"long\",\"nullable\":true,\"metadata\":{\"delta.identity.step\":1,\"delta.identity.allowExplicitInsert\":false,\"delta.identity.start\":1}},{\"name\":\"name\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"created_at\",\"type\":\"timestamp\",\"nullable\":true,\"metadata\":{}}]}"
+   }
+  },
+  {
+   "protocol": {
+    "minReaderVersion": 3,
+    "minWriterVersion": 7,
+    "readerFeatures": [
+     "v2Checkpoint"
+    ],
+    "writerFeatures": [
+     "v2Checkpoint",
+     "identityColumns",
+     "appendOnly",
+     "invariants"
+    ]
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [],
+   "min": [],
+   "modification_time": [],
+   "null_count": [],
+   "num_records": [],
+   "path": [],
+   "size_bytes": []
+  },
+  "num_rows": 0,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<id: int64, name: int64, created_at: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<id: int64, name: string, created_at: timestamp[us, tz=UTC]>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<id: int64, name: string, created_at: timestamp[us, tz=UTC]>"
+   }
+  ]
+ },
+ "count": 0,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "clusterId": "0809-144302-2lacpwpk-v2n",
+   "engineInfo": "Databricks-Runtime/17.0.x-photon-scala2.13",
+   "isBlindAppend": true,
+   "isolationLevel": "WriteSerializable",
+   "operation": "CREATE TABLE",
+   "operationMetrics": {},
+   "operationParameters": {
+    "clusterBy": "[]",
+    "description": null,
+    "isManaged": "true",
+    "partitionBy": "[]",
+    "properties": "{\"delta.checkpoint.writeStatsAsStruct\":\"true\",\"delta.checkpointPolicy\":\"v2\"}",
+    "statsOnLoad": false
+   },
+   "tags": {
+    "restoresDeletedRows": "false"
+   },
+   "timestamp": 1754750593562,
+   "txnId": "39155116-641d-48a9-9c55-c1eeb0f2c796",
+   "userId": "2238620221098138",
+   "userName": "rtyler@scribd.com",
+   "version": 0
+  }
+ ],
+ "loaded_version": 0,
+ "metadata": {
+  "configuration": {
+   "delta.checkpoint.writeStatsAsStruct": "true",
+   "delta.checkpointPolicy": "v2"
+  },
+  "created_time": 1754750593201,
+  "description": null,
+  "id": "1060c65c-e4aa-4d98-80d7-3eb9bd52ee29",
+  "name": null,
+  "partition_columns": []
+ },
+ "partitions": [],
+ "protocol": {
+  "min_reader_version": 3,
+  "min_writer_version": 7,
+  "reader_features": [
+   "v2Checkpoint"
+  ],
+  "writer_features": [
+   "appendOnly",
+   "identityColumns",
+   "invariants",
+   "v2Checkpoint"
+  ]
+ },
+ "read": {
+  "columns": {
+   "created_at": [],
+   "id": [],
+   "name": []
+  },
+  "num_rows": 0,
+  "schema": [
+   {
+    "name": "id",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "name",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "name": "created_at",
+    "nullable": true,
+    "type": "timestamp[us, tz=UTC]"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {
+     "delta.identity.allowExplicitInsert": false,
+     "delta.identity.start": 1,
+     "delta.identity.step": 1
+    },
+    "name": "id",
+    "nullable": true,
+    "type": "long"
+   },
+   {
+    "metadata": {},
+    "name": "name",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "metadata": {},
+    "name": "created_at",
+    "nullable": true,
+    "type": "timestamp"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "checkpoint-v2-table",
+ "timestamp_lookup": [
+  {
+   "at": "2025-08-09T14:43:13.561Z",
+   "version": 0
+  },
+  {
+   "at": "2025-08-09T14:43:13.562Z",
+   "version": 0
+  }
+ ],
+ "transactions": {},
+ "version": 0
+}

@@ -1,8 +1,11 @@
 Package: zulake
 Title: Inspect and Read 'Delta Lake' Tables
 Version: 0.0.0.9000
-Authors@R:
-    person("Pedro", "Baltazar", , "pedrobtz@gmail.com", role = c("aut", "cre", "cph"))
+Authors@R: c(
+    person("Pedro", "Baltazar", , "pedrobtz@gmail.com", role = c("aut", "cre", "cph")),
+    person("The delta-rs authors", role = "cph",
+           comment = "Delta test tables in tests/testthat/fixtures")
+  )
 Description: Opens a 'Delta Lake' table where it is stored, on 'Azure Data
     Lake Storage Gen2', 'Azure Blob Storage' or local disk, and returns what
     the table's own log records as data frames: its versions and commits,
@@ -13,14 +16,18 @@ Description: Opens a 'Delta Lake' table where it is stored, on 'Azure Data
     is replayed in R, following the 'Delta Lake' protocol
     <https://github.com/delta-io/delta/blob/master/PROTOCOL.md>.
 License: MIT + file LICENSE
+Copyright: See inst/COPYRIGHTS for the 'delta-rs' test tables (Apache
+    License 2.0) used by the tests.
 Config/roxygen2/version: 8.1.1
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Suggests:
     knitr,
+    qio,
     rmarkdown,
     testthat (>= 3.0.0),
-    withr
+    withr,
+    zujson
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 URL: https://pedrobtz.github.io/zulake/, https://github.com/pedrobtz/zulake

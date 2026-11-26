@@ -25,5 +25,10 @@ Authors:
   \item Pedro Baltazar \email{pedrobtz@gmail.com} [copyright holder]
 }
 
+Other contributors:
+\itemize{
+  \item The delta-rs authors (Delta test tables in tests/testthat/fixtures) [copyright holder]
+}
+
 }
 \keyword{internal}

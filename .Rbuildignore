@@ -15,3 +15,5 @@
 ^docs$
 ^pkgdown$
 ^tools$
+^tests/testthat/fixtures/tables$
+^tests/testthat/fixtures/hostile$

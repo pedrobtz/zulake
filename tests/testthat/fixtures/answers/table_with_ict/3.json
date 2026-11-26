@@ -1,0 +1,278 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "engineInfo": "Apache-Spark/4.2.0 Delta-Lake/4.4.1",
+    "inCommitTimestamp": 1792197130248,
+    "isBlindAppend": true,
+    "isolationLevel": "Serializable",
+    "operation": "WRITE",
+    "operationMetrics": {
+     "numFiles": "1",
+     "numOutputBytes": "454",
+     "numOutputRows": "1"
+    },
+    "operationParameters": {
+     "mode": "Append",
+     "partitionBy": "[]"
+    },
+    "readVersion": 2,
+    "timestamp": 1792197130248,
+    "txnId": "ef1813f2-9c3e-4659-9642-72a103b2a38a"
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1792197130237,
+    "partitionValues": {},
+    "path": "part-00000-0260d952-fb75-4c73-93ab-10835c1a0b24-c000.snappy.parquet",
+    "size": 454,
+    "stats": "{\"numRecords\":1,\"minValues\":{\"id\":3},\"maxValues\":{\"id\":3},\"nullCount\":{\"id\":0}}"
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [
+    {
+     "id": 3
+    },
+    {
+     "id": 2
+    },
+    {
+     "id": 1
+    }
+   ],
+   "min": [
+    {
+     "id": 3
+    },
+    {
+     "id": 2
+    },
+    {
+     "id": 1
+    }
+   ],
+   "modification_time": [
+    "1792197130237",
+    "1792197127806",
+    "1792197121522"
+   ],
+   "null_count": [
+    {
+     "id": "0"
+    },
+    {
+     "id": "0"
+    },
+    {
+     "id": "0"
+    }
+   ],
+   "num_records": [
+    "1",
+    "1",
+    "1"
+   ],
+   "path": [
+    "part-00000-0260d952-fb75-4c73-93ab-10835c1a0b24-c000.snappy.parquet",
+    "part-00000-686334e4-81f9-43f0-8220-c055fff80d42-c000.snappy.parquet",
+    "part-00000-f93b325c-a159-4a1e-8b99-1bbf0369c949-c000.snappy.parquet"
+   ],
+   "size_bytes": [
+    "454",
+    "454",
+    "454"
+   ]
+  },
+  "num_rows": 3,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<id: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<id: int32>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<id: int32>"
+   }
+  ]
+ },
+ "count": 3,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "engineInfo": "Apache-Spark/4.2.0 Delta-Lake/4.4.1",
+   "inCommitTimestamp": 1792197130248,
+   "isBlindAppend": true,
+   "isolationLevel": "Serializable",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "numFiles": "1",
+    "numOutputBytes": "454",
+    "numOutputRows": "1"
+   },
+   "operationParameters": {
+    "mode": "Append",
+    "partitionBy": "[]"
+   },
+   "readVersion": 2,
+   "timestamp": 1792197130248,
+   "txnId": "ef1813f2-9c3e-4659-9642-72a103b2a38a",
+   "version": 3
+  },
+  {
+   "engineInfo": "Apache-Spark/4.2.0 Delta-Lake/4.4.1",
+   "inCommitTimestamp": 1792197127819,
+   "isBlindAppend": true,
+   "isolationLevel": "Serializable",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "numFiles": "1",
+    "numOutputBytes": "454",
+    "numOutputRows": "1"
+   },
+   "operationParameters": {
+    "mode": "Append",
+    "partitionBy": "[]"
+   },
+   "readVersion": 1,
+   "timestamp": 1792197127819,
+   "txnId": "afa35b15-668e-4e88-bd44-5f207c2a6267",
+   "version": 2
+  },
+  {
+   "engineInfo": "Apache-Spark/4.2.0 Delta-Lake/4.4.1",
+   "inCommitTimestamp": 1792197121704,
+   "isBlindAppend": true,
+   "isolationLevel": "Serializable",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "numFiles": "1",
+    "numOutputBytes": "454",
+    "numOutputRows": "1"
+   },
+   "operationParameters": {
+    "mode": "Append",
+    "partitionBy": "[]"
+   },
+   "readVersion": 0,
+   "timestamp": 1792197121704,
+   "txnId": "31e827cf-135e-4101-8650-3c743bbc1427",
+   "version": 1
+  },
+  {
+   "engineInfo": "Apache-Spark/4.2.0 Delta-Lake/4.4.1",
+   "inCommitTimestamp": 1792197113852,
+   "isBlindAppend": true,
+   "isolationLevel": "Serializable",
+   "operation": "CREATE TABLE",
+   "operationMetrics": {},
+   "operationParameters": {
+    "clusterBy": "[]",
+    "description": null,
+    "isManaged": "false",
+    "partitionBy": "[]",
+    "properties": "{\"delta.enableInCommitTimestamps\":\"true\"}"
+   },
+   "timestamp": 1792197113852,
+   "txnId": "7d8bdabc-8e80-42c4-b04e-b302ae1d6123",
+   "version": 0
+  }
+ ],
+ "loaded_version": 3,
+ "metadata": {
+  "configuration": {
+   "delta.enableInCommitTimestamps": "true"
+  },
+  "created_time": 1792197113594,
+  "description": null,
+  "id": "f5a12a66-e616-4cf0-8b98-4c27cf058bf0",
+  "name": null,
+  "partition_columns": []
+ },
+ "partitions": [],
+ "protocol": {
+  "min_reader_version": 1,
+  "min_writer_version": 7,
+  "reader_features": null,
+  "writer_features": [
+   "appendOnly",
+   "inCommitTimestamp",
+   "invariants"
+  ]
+ },
+ "read": {
+  "columns": {
+   "id": [
+    1,
+    2,
+    3
+   ]
+  },
+  "num_rows": 3,
+  "schema": [
+   {
+    "name": "id",
+    "nullable": true,
+    "type": "int32"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {},
+    "name": "id",
+    "nullable": true,
+    "type": "integer"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "table_with_ict",
+ "timestamp_lookup": [
+  {
+   "at": "2026-10-17T00:32:10.247Z",
+   "version": 2
+  },
+  {
+   "at": "2026-10-17T00:32:10.248Z",
+   "version": 3
+  }
+ ],
+ "transactions": {},
+ "version": 3
+}

@@ -1,0 +1,182 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "engineInfo": "Apache-Spark/4.2.0 Delta-Lake/4.4.1",
+    "inCommitTimestamp": 1792197113852,
+    "isBlindAppend": true,
+    "isolationLevel": "Serializable",
+    "operation": "CREATE TABLE",
+    "operationMetrics": {},
+    "operationParameters": {
+     "clusterBy": "[]",
+     "description": null,
+     "isManaged": "false",
+     "partitionBy": "[]",
+     "properties": "{\"delta.enableInCommitTimestamps\":\"true\"}"
+    },
+    "timestamp": 1792197113852,
+    "txnId": "7d8bdabc-8e80-42c4-b04e-b302ae1d6123"
+   }
+  },
+  {
+   "metaData": {
+    "configuration": {
+     "delta.enableInCommitTimestamps": "true"
+    },
+    "createdTime": 1792197113594,
+    "format": {
+     "options": {},
+     "provider": "parquet"
+    },
+    "id": "f5a12a66-e616-4cf0-8b98-4c27cf058bf0",
+    "partitionColumns": [],
+    "schemaString": "{\"type\":\"struct\",\"fields\":[{\"name\":\"id\",\"type\":\"integer\",\"nullable\":true,\"metadata\":{}}]}"
+   }
+  },
+  {
+   "protocol": {
+    "minReaderVersion": 1,
+    "minWriterVersion": 7,
+    "writerFeatures": [
+     "inCommitTimestamp",
+     "invariants",
+     "appendOnly"
+    ]
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [],
+   "min": [],
+   "modification_time": [],
+   "null_count": [],
+   "num_records": [],
+   "path": [],
+   "size_bytes": []
+  },
+  "num_rows": 0,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<id: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<id: int32>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<id: int32>"
+   }
+  ]
+ },
+ "count": 0,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "engineInfo": "Apache-Spark/4.2.0 Delta-Lake/4.4.1",
+   "inCommitTimestamp": 1792197113852,
+   "isBlindAppend": true,
+   "isolationLevel": "Serializable",
+   "operation": "CREATE TABLE",
+   "operationMetrics": {},
+   "operationParameters": {
+    "clusterBy": "[]",
+    "description": null,
+    "isManaged": "false",
+    "partitionBy": "[]",
+    "properties": "{\"delta.enableInCommitTimestamps\":\"true\"}"
+   },
+   "timestamp": 1792197113852,
+   "txnId": "7d8bdabc-8e80-42c4-b04e-b302ae1d6123",
+   "version": 0
+  }
+ ],
+ "loaded_version": 0,
+ "metadata": {
+  "configuration": {
+   "delta.enableInCommitTimestamps": "true"
+  },
+  "created_time": 1792197113594,
+  "description": null,
+  "id": "f5a12a66-e616-4cf0-8b98-4c27cf058bf0",
+  "name": null,
+  "partition_columns": []
+ },
+ "partitions": [],
+ "protocol": {
+  "min_reader_version": 1,
+  "min_writer_version": 7,
+  "reader_features": null,
+  "writer_features": [
+   "appendOnly",
+   "inCommitTimestamp",
+   "invariants"
+  ]
+ },
+ "read": {
+  "columns": {
+   "id": []
+  },
+  "num_rows": 0,
+  "schema": [
+   {
+    "name": "id",
+    "nullable": true,
+    "type": "int32"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {},
+    "name": "id",
+    "nullable": true,
+    "type": "integer"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "table_with_ict",
+ "timestamp_lookup": [
+  {
+   "at": "2026-10-17T00:31:53.851Z",
+   "version": 0
+  },
+  {
+   "at": "2026-10-17T00:31:53.852Z",
+   "version": 0
+  }
+ ],
+ "transactions": {},
+ "version": 0
+}

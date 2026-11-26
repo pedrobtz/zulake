@@ -1,0 +1,32 @@
+zulake is released under the MIT licence (see LICENSE), copyright Pedro
+Baltazar, with the exception of the files below.
+
+Delta Lake test tables from delta-rs
+------------------------------------
+
+Files: the delta-rs tables in tests/testthat/fixtures/delta-fixtures.tar
+       (its tables/ entries checkpoint-v2-table, column_mapping,
+       deletion_vectors, delta-0.8.0-null-partition, delta-0.8.0-partitioned,
+       delta-2.2.0-partitioned-types, simple_table,
+       simple_table_with_checkpoint, table-with-dv-small,
+       table_failed_last_checkpoint_update, table_with_column_mapping,
+       table_with_edge_timestamps, table_with_ict and
+       v2-classic-checkpoint-json; the changed tables column_mapping_id_mode
+       and table-with-dv-small-inline; and the hostile logs made from
+       table-with-dv-small: dv-bad-checksum, dv-bad-magic and
+       dv-size-past-file), and deltalake's answers for those tables under
+       tests/testthat/fixtures/answers/.
+Source: https://github.com/delta-io/delta-rs, crates/test/tests/data, at
+        commit 40439ad6d37a9e99add5bd80796aa6179ebe339f.
+Copyright: Copyright (2020) QP Hou and a number of other contributors
+           (the delta-rs authors).
+License: Apache License, Version 2.0. The full text is in
+         tests/testthat/fixtures/LICENSE-delta-rs.txt, and at
+         https://www.apache.org/licenses/LICENSE-2.0.
+
+The tables are copied unchanged except column_mapping_id_mode and
+table-with-dv-small-inline, and the three hostile logs, whose changes are
+stated in tests/testthat/fixtures/PROVENANCE.md.
+
+The zl-* tables and the other hostile logs were written for zulake and are
+under its MIT licence.

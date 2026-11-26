@@ -1,0 +1,32 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "clientVersion": "zulake-fixtures",
+    "operation": "UPGRADE PROTOCOL",
+    "operationParameters": {},
+    "timestamp": 1795690965935
+   }
+  },
+  {
+   "protocol": {
+    "minReaderVersion": 3,
+    "minWriterVersion": 7,
+    "readerFeatures": [
+     "zulakeUnknownFeature"
+    ],
+    "writerFeatures": [
+     "zulakeUnknownFeature"
+    ]
+   }
+  }
+ ],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "refusal": {
+  "class": "DeltaError",
+  "message": "Kernel error: Unsupported: Feature 'zulakeUnknownFeature' is not supported"
+ },
+ "table": "zl-unknown-reader-feature",
+ "version": 1
+}

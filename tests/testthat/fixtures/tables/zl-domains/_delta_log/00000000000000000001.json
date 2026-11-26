@@ -1,0 +1,4 @@
+{"commitInfo":{"timestamp":1795690965922,"operation":"SET DOMAIN","operationParameters":{},"clientVersion":"zulake-fixtures"}}
+{"protocol":{"minReaderVersion":1,"minWriterVersion":7,"writerFeatures":["domainMetadata"]}}
+{"domainMetadata":{"domain":"zulake.test","configuration":"{\"k\":1}","removed":false}}
+{"domainMetadata":{"domain":"delta.zulake","configuration":"{}","removed":false}}

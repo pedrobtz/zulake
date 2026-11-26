@@ -1,0 +1,338 @@
+{
+ "actions": [
+  {
+   "add": {
+    "baseRowId": null,
+    "clusteringProvider": null,
+    "dataChange": true,
+    "defaultRowCommitVersion": null,
+    "deletionVector": null,
+    "modificationTime": 1709986423857,
+    "partitionValues": {},
+    "path": "part-00001-6791b37e-f318-4d2b-87a0-89be205c338b-c000.snappy.parquet",
+    "size": 1432,
+    "stats": "{\"numRecords\":5,\"minValues\":{\"deleted\":false,\"price\":0,\"id\":\"1\",\"sold\":0},\"maxValues\":{\"sold\":4,\"id\":\"5\",\"price\":4,\"deleted\":false},\"nullCount\":{\"id\":0,\"price\":0,\"sold\":0,\"deleted\":0}}",
+    "tags": null
+   }
+  },
+  {
+   "commitInfo": {
+    "clientVersion": "delta-rs.0.17.1",
+    "operation": "WRITE",
+    "operationParameters": {
+     "mode": "Append"
+    },
+    "timestamp": 1709986423857
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [
+    {
+     "deleted": false,
+     "id": "5",
+     "price": "4",
+     "sold": 4
+    },
+    {
+     "deleted": false,
+     "id": "5",
+     "price": "4",
+     "sold": 4
+    },
+    {
+     "deleted": false,
+     "id": "5",
+     "price": "4",
+     "sold": 4
+    }
+   ],
+   "min": [
+    {
+     "deleted": false,
+     "id": "1",
+     "price": "0",
+     "sold": 0
+    },
+    {
+     "deleted": false,
+     "id": "1",
+     "price": "0",
+     "sold": 0
+    },
+    {
+     "deleted": false,
+     "id": "1",
+     "price": "0",
+     "sold": 0
+    }
+   ],
+   "modification_time": [
+    "1709986423857",
+    "1709986334424",
+    "1709986334474"
+   ],
+   "null_count": [
+    {
+     "deleted": "0",
+     "id": "0",
+     "price": "0",
+     "sold": "0"
+    },
+    {
+     "deleted": "0",
+     "id": "0",
+     "price": "0",
+     "sold": "0"
+    },
+    {
+     "deleted": "0",
+     "id": "0",
+     "price": "0",
+     "sold": "0"
+    }
+   ],
+   "num_records": [
+    "5",
+    "5",
+    "5"
+   ],
+   "path": [
+    "part-00001-6791b37e-f318-4d2b-87a0-89be205c338b-c000.snappy.parquet",
+    "part-00001-9c90a84d-6999-463c-bd2d-f68333e6d03d-c000.snappy.parquet",
+    "part-00001-fed6d112-d244-4c54-810d-25ba3f0a4016-c000.snappy.parquet"
+   ],
+   "size_bytes": [
+    "1432",
+    "1432",
+    "1432"
+   ]
+  },
+  "num_rows": 3,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<id: int64, price: int64, sold: int64, deleted: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<id: string, price: int64, sold: int32, deleted: bool>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<id: string, price: int64, sold: int32, deleted: bool>"
+   }
+  ]
+ },
+ "count": 15,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "clientVersion": "delta-rs.0.17.1",
+   "operation": "WRITE",
+   "operationParameters": {
+    "mode": "Append"
+   },
+   "timestamp": 1709986423857,
+   "version": 2
+  },
+  {
+   "clientVersion": "delta-rs.0.17.1",
+   "operation": "WRITE",
+   "operationParameters": {
+    "mode": "Append"
+   },
+   "timestamp": 1709986334475,
+   "version": 1
+  },
+  {
+   "clientVersion": "delta-rs.0.17.1",
+   "operation": "WRITE",
+   "operationParameters": {
+    "mode": "Append"
+   },
+   "timestamp": 1709986334424,
+   "version": 0
+  }
+ ],
+ "loaded_version": 2,
+ "metadata": {
+  "configuration": {},
+  "created_time": 1709986334419,
+  "description": null,
+  "id": "98c9faeb-7940-43eb-9898-50b2a99c0a7e",
+  "name": null,
+  "partition_columns": []
+ },
+ "partitions": [],
+ "protocol": {
+  "min_reader_version": 1,
+  "min_writer_version": 2,
+  "reader_features": null,
+  "writer_features": null
+ },
+ "read": {
+  "columns": {
+   "deleted": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "id": [
+    "1",
+    "1",
+    "1",
+    "2",
+    "2",
+    "2",
+    "3",
+    "3",
+    "3",
+    "4",
+    "4",
+    "4",
+    "5",
+    "5",
+    "5"
+   ],
+   "price": [
+    "0",
+    "0",
+    "0",
+    "1",
+    "1",
+    "1",
+    "2",
+    "2",
+    "2",
+    "3",
+    "3",
+    "3",
+    "4",
+    "4",
+    "4"
+   ],
+   "sold": [
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+    2,
+    2,
+    2,
+    3,
+    3,
+    3,
+    4,
+    4,
+    4
+   ]
+  },
+  "num_rows": 15,
+  "schema": [
+   {
+    "name": "id",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "name": "price",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "sold",
+    "nullable": true,
+    "type": "int32"
+   },
+   {
+    "name": "deleted",
+    "nullable": true,
+    "type": "bool"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {},
+    "name": "id",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "metadata": {},
+    "name": "price",
+    "nullable": true,
+    "type": "long"
+   },
+   {
+    "metadata": {},
+    "name": "sold",
+    "nullable": true,
+    "type": "integer"
+   },
+   {
+    "metadata": {},
+    "name": "deleted",
+    "nullable": true,
+    "type": "boolean"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "table_failed_last_checkpoint_update",
+ "timestamp_lookup": [
+  {
+   "at": "2024-03-09T12:13:43.856Z",
+   "version": 1
+  },
+  {
+   "at": "2024-03-09T12:13:43.857Z",
+   "version": 2
+  }
+ ],
+ "transactions": {},
+ "version": 2
+}

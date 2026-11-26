@@ -1,0 +1,188 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "isBlindAppend": true,
+    "operation": "WRITE",
+    "operationMetrics": {
+     "numFiles": "1",
+     "numOutputBytes": "442",
+     "numOutputRows": "1"
+    },
+    "operationParameters": {
+     "mode": "Append",
+     "partitionBy": "[]"
+    },
+    "timestamp": 1615751699523
+   }
+  },
+  {
+   "protocol": {
+    "minReaderVersion": 1,
+    "minWriterVersion": 2
+   }
+  },
+  {
+   "metaData": {
+    "configuration": {},
+    "createdTime": 1615751699422,
+    "format": {
+     "options": {},
+     "provider": "parquet"
+    },
+    "id": "cf3741a3-5f93-434f-99ac-9a4bebcdf06c",
+    "partitionColumns": [],
+    "schemaString": "{\"type\":\"struct\",\"fields\":[{\"name\":\"version\",\"type\":\"integer\",\"nullable\":true,\"metadata\":{}}]}"
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1615751699515,
+    "partitionValues": {},
+    "path": "part-00000-3810fbe0-9892-431d-bcfd-7de5788dfe8d-c000.snappy.parquet",
+    "size": 442
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [
+    null
+   ],
+   "min": [
+    null
+   ],
+   "modification_time": [
+    "1615751699515"
+   ],
+   "null_count": [
+    null
+   ],
+   "num_records": [
+    null
+   ],
+   "path": [
+    "part-00000-3810fbe0-9892-431d-bcfd-7de5788dfe8d-c000.snappy.parquet"
+   ],
+   "size_bytes": [
+    "442"
+   ]
+  },
+  "num_rows": 1,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<version: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<version: int32>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<version: int32>"
+   }
+  ]
+ },
+ "count": 0,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "isBlindAppend": true,
+   "operation": "WRITE",
+   "operationMetrics": {
+    "numFiles": "1",
+    "numOutputBytes": "442",
+    "numOutputRows": "1"
+   },
+   "operationParameters": {
+    "mode": "Append",
+    "partitionBy": "[]"
+   },
+   "timestamp": 1615751699523,
+   "version": 0
+  }
+ ],
+ "loaded_version": 0,
+ "metadata": {
+  "configuration": {},
+  "created_time": 1615751699422,
+  "description": null,
+  "id": "cf3741a3-5f93-434f-99ac-9a4bebcdf06c",
+  "name": null,
+  "partition_columns": []
+ },
+ "partitions": [],
+ "protocol": {
+  "min_reader_version": 1,
+  "min_writer_version": 2,
+  "reader_features": null,
+  "writer_features": null
+ },
+ "read": {
+  "columns": {
+   "version": [
+    0
+   ]
+  },
+  "num_rows": 1,
+  "schema": [
+   {
+    "name": "version",
+    "nullable": true,
+    "type": "int32"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {},
+    "name": "version",
+    "nullable": true,
+    "type": "integer"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "simple_table_with_checkpoint",
+ "timestamp_lookup": [
+  {
+   "at": "2021-03-14T19:54:59.522Z",
+   "version": 0
+  },
+  {
+   "at": "2021-03-14T19:54:59.523Z",
+   "version": 0
+  }
+ ],
+ "transactions": {},
+ "version": 0
+}

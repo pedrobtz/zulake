@@ -1,0 +1,262 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "isBlindAppend": true,
+    "operation": "WRITE",
+    "operationParameters": {
+     "mode": "ErrorIfExists",
+     "partitionBy": "[]"
+    },
+    "timestamp": 1587968586154
+   }
+  },
+  {
+   "protocol": {
+    "minReaderVersion": 1,
+    "minWriterVersion": 2
+   }
+  },
+  {
+   "metaData": {
+    "configuration": {},
+    "createdTime": 1587968585495,
+    "format": {
+     "options": {},
+     "provider": "parquet"
+    },
+    "id": "5fba94ed-9794-4965-ba6e-6ee3c0d22af9",
+    "partitionColumns": [],
+    "schemaString": "{\"type\":\"struct\",\"fields\":[{\"name\":\"id\",\"type\":\"long\",\"nullable\":true,\"metadata\":{}}]}"
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1587968586000,
+    "partitionValues": {},
+    "path": "part-00000-a72b1fb3-f2df-41fe-a8f0-e65b746382dd-c000.snappy.parquet",
+    "size": 262
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1587968586000,
+    "partitionValues": {},
+    "path": "part-00001-c506e79a-0bf8-4e2b-a42b-9731b2e490ae-c000.snappy.parquet",
+    "size": 429
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1587968586000,
+    "partitionValues": {},
+    "path": "part-00003-508ae4aa-801c-4c2c-a923-f6f89930a5c1-c000.snappy.parquet",
+    "size": 429
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1587968586000,
+    "partitionValues": {},
+    "path": "part-00004-80938522-09c0-420c-861f-5a649e3d9674-c000.snappy.parquet",
+    "size": 429
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1587968586000,
+    "partitionValues": {},
+    "path": "part-00006-63ce9deb-bc0f-482d-b9a1-7e717b67f294-c000.snappy.parquet",
+    "size": 429
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1587968586000,
+    "partitionValues": {},
+    "path": "part-00007-94f725e2-3963-4b00-9e83-e31021a93cf9-c000.snappy.parquet",
+    "size": 429
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ],
+   "min": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ],
+   "modification_time": [
+    "1587968586000",
+    "1587968586000",
+    "1587968586000",
+    "1587968586000",
+    "1587968586000",
+    "1587968586000"
+   ],
+   "null_count": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ],
+   "num_records": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ],
+   "path": [
+    "part-00000-a72b1fb3-f2df-41fe-a8f0-e65b746382dd-c000.snappy.parquet",
+    "part-00001-c506e79a-0bf8-4e2b-a42b-9731b2e490ae-c000.snappy.parquet",
+    "part-00003-508ae4aa-801c-4c2c-a923-f6f89930a5c1-c000.snappy.parquet",
+    "part-00004-80938522-09c0-420c-861f-5a649e3d9674-c000.snappy.parquet",
+    "part-00006-63ce9deb-bc0f-482d-b9a1-7e717b67f294-c000.snappy.parquet",
+    "part-00007-94f725e2-3963-4b00-9e83-e31021a93cf9-c000.snappy.parquet"
+   ],
+   "size_bytes": [
+    "262",
+    "429",
+    "429",
+    "429",
+    "429",
+    "429"
+   ]
+  },
+  "num_rows": 6,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<id: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<id: int64>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<id: int64>"
+   }
+  ]
+ },
+ "count": 0,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "isBlindAppend": true,
+   "operation": "WRITE",
+   "operationParameters": {
+    "mode": "ErrorIfExists",
+    "partitionBy": "[]"
+   },
+   "timestamp": 1587968586154,
+   "version": 0
+  }
+ ],
+ "loaded_version": 0,
+ "metadata": {
+  "configuration": {},
+  "created_time": 1587968585495,
+  "description": null,
+  "id": "5fba94ed-9794-4965-ba6e-6ee3c0d22af9",
+  "name": null,
+  "partition_columns": []
+ },
+ "partitions": [],
+ "protocol": {
+  "min_reader_version": 1,
+  "min_writer_version": 2,
+  "reader_features": null,
+  "writer_features": null
+ },
+ "read": {
+  "columns": {
+   "id": [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4"
+   ]
+  },
+  "num_rows": 5,
+  "schema": [
+   {
+    "name": "id",
+    "nullable": true,
+    "type": "int64"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {},
+    "name": "id",
+    "nullable": true,
+    "type": "long"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "simple_table",
+ "timestamp_lookup": [
+  {
+   "at": "2020-04-27T06:23:06.153Z",
+   "version": 0
+  },
+  {
+   "at": "2020-04-27T06:23:06.154Z",
+   "version": 0
+  }
+ ],
+ "transactions": {},
+ "version": 0
+}

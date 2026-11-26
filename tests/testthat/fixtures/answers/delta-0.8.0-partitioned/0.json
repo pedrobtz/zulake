@@ -1,0 +1,434 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "isBlindAppend": true,
+    "operation": "WRITE",
+    "operationMetrics": {
+     "numFiles": "6",
+     "numOutputBytes": "2477",
+     "numOutputRows": "7"
+    },
+    "operationParameters": {
+     "mode": "ErrorIfExists",
+     "partitionBy": "[\"year\",\"month\",\"day\"]"
+    },
+    "timestamp": 1615555646188
+   }
+  },
+  {
+   "protocol": {
+    "minReaderVersion": 1,
+    "minWriterVersion": 2
+   }
+  },
+  {
+   "metaData": {
+    "configuration": {},
+    "createdTime": 1615555644515,
+    "format": {
+     "options": {},
+     "provider": "parquet"
+    },
+    "id": "fe5a3c11-30d4-4dd7-b115-a1c121e66a4e",
+    "partitionColumns": [
+     "year",
+     "month",
+     "day"
+    ],
+    "schemaString": "{\"type\":\"struct\",\"fields\":[{\"name\":\"value\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"year\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"month\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"day\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}}]}"
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1615555646000,
+    "partitionValues": {
+     "day": "1",
+     "month": "1",
+     "year": "2020"
+    },
+    "path": "year=2020/month=1/day=1/part-00000-8eafa330-3be9-4a39-ad78-fd13c2027c7e.c000.snappy.parquet",
+    "size": 414
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1615555646000,
+    "partitionValues": {
+     "day": "3",
+     "month": "2",
+     "year": "2020"
+    },
+    "path": "year=2020/month=2/day=3/part-00000-94d16827-f2fd-42cd-a060-f67ccc63ced9.c000.snappy.parquet",
+    "size": 414
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1615555646000,
+    "partitionValues": {
+     "day": "5",
+     "month": "2",
+     "year": "2020"
+    },
+    "path": "year=2020/month=2/day=5/part-00000-89cdd4c8-2af7-4add-8ea3-3990b2f027b5.c000.snappy.parquet",
+    "size": 414
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1615555646000,
+    "partitionValues": {
+     "day": "20",
+     "month": "12",
+     "year": "2021"
+    },
+    "path": "year=2021/month=12/day=20/part-00000-9275fdf4-3961-4184-baa0-1c8a2bb98104.c000.snappy.parquet",
+    "size": 407
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1615555646000,
+    "partitionValues": {
+     "day": "4",
+     "month": "12",
+     "year": "2021"
+    },
+    "path": "year=2021/month=12/day=4/part-00000-6dc763c0-3e8b-4d52-b19e-1f92af3fbb25.c000.snappy.parquet",
+    "size": 414
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1615555646000,
+    "partitionValues": {
+     "day": "5",
+     "month": "4",
+     "year": "2021"
+    },
+    "path": "year=2021/month=4/day=5/part-00000-c5856301-3439-4032-a6fc-22b7bc92bebb.c000.snappy.parquet",
+    "size": 414
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ],
+   "min": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ],
+   "modification_time": [
+    "1615555646000",
+    "1615555646000",
+    "1615555646000",
+    "1615555646000",
+    "1615555646000",
+    "1615555646000"
+   ],
+   "null_count": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ],
+   "num_records": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ],
+   "partition": [
+    {
+     "day": "1",
+     "month": "1",
+     "year": "2020"
+    },
+    {
+     "day": "3",
+     "month": "2",
+     "year": "2020"
+    },
+    {
+     "day": "5",
+     "month": "2",
+     "year": "2020"
+    },
+    {
+     "day": "20",
+     "month": "12",
+     "year": "2021"
+    },
+    {
+     "day": "4",
+     "month": "12",
+     "year": "2021"
+    },
+    {
+     "day": "5",
+     "month": "4",
+     "year": "2021"
+    }
+   ],
+   "path": [
+    "year=2020/month=1/day=1/part-00000-8eafa330-3be9-4a39-ad78-fd13c2027c7e.c000.snappy.parquet",
+    "year=2020/month=2/day=3/part-00000-94d16827-f2fd-42cd-a060-f67ccc63ced9.c000.snappy.parquet",
+    "year=2020/month=2/day=5/part-00000-89cdd4c8-2af7-4add-8ea3-3990b2f027b5.c000.snappy.parquet",
+    "year=2021/month=12/day=20/part-00000-9275fdf4-3961-4184-baa0-1c8a2bb98104.c000.snappy.parquet",
+    "year=2021/month=12/day=4/part-00000-6dc763c0-3e8b-4d52-b19e-1f92af3fbb25.c000.snappy.parquet",
+    "year=2021/month=4/day=5/part-00000-c5856301-3439-4032-a6fc-22b7bc92bebb.c000.snappy.parquet"
+   ],
+   "size_bytes": [
+    "414",
+    "414",
+    "414",
+    "407",
+    "414",
+    "414"
+   ]
+  },
+  "num_rows": 6,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<value: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<value: string>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<value: string>"
+   },
+   {
+    "name": "partition",
+    "nullable": true,
+    "type": "struct<year: string, month: string, day: string>"
+   }
+  ]
+ },
+ "count": 0,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "isBlindAppend": true,
+   "operation": "WRITE",
+   "operationMetrics": {
+    "numFiles": "6",
+    "numOutputBytes": "2477",
+    "numOutputRows": "7"
+   },
+   "operationParameters": {
+    "mode": "ErrorIfExists",
+    "partitionBy": "[\"year\",\"month\",\"day\"]"
+   },
+   "timestamp": 1615555646188,
+   "version": 0
+  }
+ ],
+ "loaded_version": 0,
+ "metadata": {
+  "configuration": {},
+  "created_time": 1615555644515,
+  "description": null,
+  "id": "fe5a3c11-30d4-4dd7-b115-a1c121e66a4e",
+  "name": null,
+  "partition_columns": [
+   "year",
+   "month",
+   "day"
+  ]
+ },
+ "partitions": [
+  {
+   "day": "1",
+   "month": "1",
+   "year": "2020"
+  },
+  {
+   "day": "20",
+   "month": "12",
+   "year": "2021"
+  },
+  {
+   "day": "3",
+   "month": "2",
+   "year": "2020"
+  },
+  {
+   "day": "4",
+   "month": "12",
+   "year": "2021"
+  },
+  {
+   "day": "5",
+   "month": "2",
+   "year": "2020"
+  },
+  {
+   "day": "5",
+   "month": "4",
+   "year": "2021"
+  }
+ ],
+ "protocol": {
+  "min_reader_version": 1,
+  "min_writer_version": 2,
+  "reader_features": null,
+  "writer_features": null
+ },
+ "read": {
+  "columns": {
+   "day": [
+    "1",
+    "3",
+    "5",
+    "5",
+    "4",
+    "20",
+    "20"
+   ],
+   "month": [
+    "1",
+    "2",
+    "2",
+    "4",
+    "12",
+    "12",
+    "12"
+   ],
+   "value": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7"
+   ],
+   "year": [
+    "2020",
+    "2020",
+    "2020",
+    "2021",
+    "2021",
+    "2021",
+    "2021"
+   ]
+  },
+  "num_rows": 7,
+  "schema": [
+   {
+    "name": "value",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "name": "year",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "name": "month",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "name": "day",
+    "nullable": true,
+    "type": "string"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {},
+    "name": "value",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "metadata": {},
+    "name": "year",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "metadata": {},
+    "name": "month",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "metadata": {},
+    "name": "day",
+    "nullable": true,
+    "type": "string"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "delta-0.8.0-partitioned",
+ "timestamp_lookup": [
+  {
+   "at": "2021-03-12T13:27:26.187Z",
+   "version": 0
+  },
+  {
+   "at": "2021-03-12T13:27:26.188Z",
+   "version": 0
+  }
+ ],
+ "transactions": {},
+ "version": 0
+}

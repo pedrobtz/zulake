@@ -1,0 +1,328 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "engineInfo": "Apache-Spark/3.3.1 Delta-Lake/2.2.0",
+    "isBlindAppend": true,
+    "isolationLevel": "Serializable",
+    "operation": "WRITE",
+    "operationMetrics": {
+     "numFiles": "3",
+     "numOutputBytes": "1356",
+     "numOutputRows": "3"
+    },
+    "operationParameters": {
+     "mode": "Append",
+     "partitionBy": "[\"c1\",\"c2\"]"
+    },
+    "timestamp": 1670892998177,
+    "txnId": "046a258f-45e3-4657-b0bf-abfb0f76681c"
+   }
+  },
+  {
+   "protocol": {
+    "minReaderVersion": 1,
+    "minWriterVersion": 2
+   }
+  },
+  {
+   "metaData": {
+    "configuration": {},
+    "createdTime": 1670892997849,
+    "format": {
+     "options": {},
+     "provider": "parquet"
+    },
+    "id": "aff5cb91-8cd9-4195-aef9-446908507302",
+    "partitionColumns": [
+     "c1",
+     "c2"
+    ],
+    "schemaString": "{\"type\":\"struct\",\"fields\":[{\"name\":\"c1\",\"type\":\"integer\",\"nullable\":true,\"metadata\":{}},{\"name\":\"c2\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"c3\",\"type\":\"integer\",\"nullable\":true,\"metadata\":{}}]}"
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1670892998135,
+    "partitionValues": {
+     "c1": "4",
+     "c2": "c"
+    },
+    "path": "c1=4/c2=c/part-00003-f525f459-34f9-46f5-82d6-d42121d883fd.c000.snappy.parquet",
+    "size": 452,
+    "stats": "{\"numRecords\":1,\"minValues\":{\"c3\":5},\"maxValues\":{\"c3\":5},\"nullCount\":{\"c3\":0}}"
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1670892998135,
+    "partitionValues": {
+     "c1": "5",
+     "c2": "b"
+    },
+    "path": "c1=5/c2=b/part-00007-4e73fa3b-2c88-424a-8051-f8b54328ffdb.c000.snappy.parquet",
+    "size": 452,
+    "stats": "{\"numRecords\":1,\"minValues\":{\"c3\":6},\"maxValues\":{\"c3\":6},\"nullCount\":{\"c3\":0}}"
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1670892998135,
+    "partitionValues": {
+     "c1": "6",
+     "c2": "a"
+    },
+    "path": "c1=6/c2=a/part-00011-10619b10-b691-4fd0-acc4-2a9608499d7c.c000.snappy.parquet",
+    "size": 452,
+    "stats": "{\"numRecords\":1,\"minValues\":{\"c3\":4},\"maxValues\":{\"c3\":4},\"nullCount\":{\"c3\":0}}"
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [
+    {
+     "c3": 5
+    },
+    {
+     "c3": 6
+    },
+    {
+     "c3": 4
+    }
+   ],
+   "min": [
+    {
+     "c3": 5
+    },
+    {
+     "c3": 6
+    },
+    {
+     "c3": 4
+    }
+   ],
+   "modification_time": [
+    "1670892998135",
+    "1670892998135",
+    "1670892998135"
+   ],
+   "null_count": [
+    {
+     "c3": "0"
+    },
+    {
+     "c3": "0"
+    },
+    {
+     "c3": "0"
+    }
+   ],
+   "num_records": [
+    "1",
+    "1",
+    "1"
+   ],
+   "partition": [
+    {
+     "c1": 4,
+     "c2": "c"
+    },
+    {
+     "c1": 5,
+     "c2": "b"
+    },
+    {
+     "c1": 6,
+     "c2": "a"
+    }
+   ],
+   "path": [
+    "c1=4/c2=c/part-00003-f525f459-34f9-46f5-82d6-d42121d883fd.c000.snappy.parquet",
+    "c1=5/c2=b/part-00007-4e73fa3b-2c88-424a-8051-f8b54328ffdb.c000.snappy.parquet",
+    "c1=6/c2=a/part-00011-10619b10-b691-4fd0-acc4-2a9608499d7c.c000.snappy.parquet"
+   ],
+   "size_bytes": [
+    "452",
+    "452",
+    "452"
+   ]
+  },
+  "num_rows": 3,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<c3: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<c3: int32>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<c3: int32>"
+   },
+   {
+    "name": "partition",
+    "nullable": true,
+    "type": "struct<c1: int32, c2: string>"
+   }
+  ]
+ },
+ "count": 3,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "engineInfo": "Apache-Spark/3.3.1 Delta-Lake/2.2.0",
+   "isBlindAppend": true,
+   "isolationLevel": "Serializable",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "numFiles": "3",
+    "numOutputBytes": "1356",
+    "numOutputRows": "3"
+   },
+   "operationParameters": {
+    "mode": "Append",
+    "partitionBy": "[\"c1\",\"c2\"]"
+   },
+   "timestamp": 1670892998177,
+   "txnId": "046a258f-45e3-4657-b0bf-abfb0f76681c",
+   "version": 0
+  }
+ ],
+ "loaded_version": 0,
+ "metadata": {
+  "configuration": {},
+  "created_time": 1670892997849,
+  "description": null,
+  "id": "aff5cb91-8cd9-4195-aef9-446908507302",
+  "name": null,
+  "partition_columns": [
+   "c1",
+   "c2"
+  ]
+ },
+ "partitions": [
+  {
+   "c1": "4",
+   "c2": "c"
+  },
+  {
+   "c1": "5",
+   "c2": "b"
+  },
+  {
+   "c1": "6",
+   "c2": "a"
+  }
+ ],
+ "protocol": {
+  "min_reader_version": 1,
+  "min_writer_version": 2,
+  "reader_features": null,
+  "writer_features": null
+ },
+ "read": {
+  "columns": {
+   "c1": [
+    4,
+    5,
+    6
+   ],
+   "c2": [
+    "c",
+    "b",
+    "a"
+   ],
+   "c3": [
+    5,
+    6,
+    4
+   ]
+  },
+  "num_rows": 3,
+  "schema": [
+   {
+    "name": "c1",
+    "nullable": true,
+    "type": "int32"
+   },
+   {
+    "name": "c2",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "name": "c3",
+    "nullable": true,
+    "type": "int32"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {},
+    "name": "c1",
+    "nullable": true,
+    "type": "integer"
+   },
+   {
+    "metadata": {},
+    "name": "c2",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "metadata": {},
+    "name": "c3",
+    "nullable": true,
+    "type": "integer"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "delta-2.2.0-partitioned-types",
+ "timestamp_lookup": [
+  {
+   "at": "2022-12-13T00:56:38.176Z",
+   "version": 0
+  },
+  {
+   "at": "2022-12-13T00:56:38.177Z",
+   "version": 0
+  }
+ ],
+ "transactions": {},
+ "version": 0
+}

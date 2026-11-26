@@ -1,0 +1,324 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "clusterId": "0428-070410-lm8e9giw",
+    "engineInfo": "Databricks-Runtime/13.3.x-photon-scala2.12",
+    "isBlindAppend": false,
+    "isolationLevel": "WriteSerializable",
+    "notebook": {
+     "notebookId": "3271485675102593"
+    },
+    "operation": "WRITE",
+    "operationMetrics": {
+     "numFiles": "2",
+     "numOutputBytes": "1700",
+     "numOutputRows": "5"
+    },
+    "operationParameters": {
+     "mode": "Overwrite",
+     "partitionBy": "[\"Company Very Short\"]",
+     "statsOnLoad": false
+    },
+    "tags": {
+     "restoresDeletedRows": "false"
+    },
+    "timestamp": 1699946089972,
+    "txnId": "0e8eece8-347f-4c77-bc4f-daf3a5985dc9",
+    "userId": "2797914831036774",
+    "userName": "censoredmail@bmsuisse.ch"
+   }
+  },
+  {
+   "metaData": {
+    "configuration": {
+     "delta.autoOptimize.optimizeWrite": "true",
+     "delta.columnMapping.maxColumnId": "2",
+     "delta.columnMapping.mode": "name",
+     "delta.targetFileSize": "33554432",
+     "delta.tuneFileSizesForRewrites": "true"
+    },
+    "createdTime": 1699946083038,
+    "format": {
+     "options": {},
+     "provider": "parquet"
+    },
+    "id": "592de637-dd77-4aaa-af00-97d723a7f1f1",
+    "partitionColumns": [
+     "Company Very Short"
+    ],
+    "schemaString": "{\"type\":\"struct\",\"fields\":[{\"name\":\"Company Very Short\",\"type\":\"string\",\"nullable\":true,\"metadata\":{\"delta.columnMapping.id\":1,\"delta.columnMapping.physicalName\":\"col-173b4db9-b5ad-427f-9e75-516aae37fbbb\"}},{\"name\":\"Super Name\",\"type\":\"string\",\"nullable\":true,\"metadata\":{\"delta.columnMapping.id\":2,\"delta.columnMapping.physicalName\":\"col-3877fd94-0973-4941-ac6b-646849a1ff65\"}}]}"
+   }
+  },
+  {
+   "protocol": {
+    "minReaderVersion": 2,
+    "minWriterVersion": 5
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1699946088000,
+    "partitionValues": {
+     "col-173b4db9-b5ad-427f-9e75-516aae37fbbb": "BMS"
+    },
+    "path": "BH/part-00000-4d6e745c-8e04-48d9-aa60-438228358f1a.c000.zstd.parquet",
+    "size": 890,
+    "stats": "{\"numRecords\":4,\"minValues\":{\"col-3877fd94-0973-4941-ac6b-646849a1ff65\":\"Anthony Johnson\"},\"maxValues\":{\"col-3877fd94-0973-4941-ac6b-646849a1ff65\":\"Stephanie Mcgrath\"},\"nullCount\":{\"col-3877fd94-0973-4941-ac6b-646849a1ff65\":0}}",
+    "tags": {
+     "INSERTION_TIME": "1699946088000000",
+     "MAX_INSERTION_TIME": "1699946088000000",
+     "MIN_INSERTION_TIME": "1699946088000000",
+     "OPTIMIZE_TARGET_SIZE": "33554432"
+    }
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1699946088000,
+    "partitionValues": {
+     "col-173b4db9-b5ad-427f-9e75-516aae37fbbb": "BME"
+    },
+    "path": "8v/part-00001-69b4a452-aeac-4ffa-bf5c-a0c2833d05eb.c000.zstd.parquet",
+    "size": 810,
+    "stats": "{\"numRecords\":1,\"minValues\":{\"col-3877fd94-0973-4941-ac6b-646849a1ff65\":\"Timothy Lamb\"},\"maxValues\":{\"col-3877fd94-0973-4941-ac6b-646849a1ff65\":\"Timothy Lamb\"},\"nullCount\":{\"col-3877fd94-0973-4941-ac6b-646849a1ff65\":0}}",
+    "tags": {
+     "INSERTION_TIME": "1699946088000001",
+     "MAX_INSERTION_TIME": "1699946088000001",
+     "MIN_INSERTION_TIME": "1699946088000001",
+     "OPTIMIZE_TARGET_SIZE": "33554432"
+    }
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [
+    {
+     "col-3877fd94-0973-4941-ac6b-646849a1ff65": "Timothy Lamb"
+    },
+    {
+     "col-3877fd94-0973-4941-ac6b-646849a1ff65": "Stephanie Mcgrath"
+    }
+   ],
+   "min": [
+    {
+     "col-3877fd94-0973-4941-ac6b-646849a1ff65": "Timothy Lamb"
+    },
+    {
+     "col-3877fd94-0973-4941-ac6b-646849a1ff65": "Anthony Johnson"
+    }
+   ],
+   "modification_time": [
+    "1699946088000",
+    "1699946088000"
+   ],
+   "null_count": [
+    {
+     "col-3877fd94-0973-4941-ac6b-646849a1ff65": "0"
+    },
+    {
+     "col-3877fd94-0973-4941-ac6b-646849a1ff65": "0"
+    }
+   ],
+   "num_records": [
+    "1",
+    "4"
+   ],
+   "partition": [
+    {
+     "Company Very Short": "BME"
+    },
+    {
+     "Company Very Short": "BMS"
+    }
+   ],
+   "path": [
+    "8v/part-00001-69b4a452-aeac-4ffa-bf5c-a0c2833d05eb.c000.zstd.parquet",
+    "BH/part-00000-4d6e745c-8e04-48d9-aa60-438228358f1a.c000.zstd.parquet"
+   ],
+   "size_bytes": [
+    "810",
+    "890"
+   ]
+  },
+  "num_rows": 2,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<col-3877fd94-0973-4941-ac6b-646849a1ff65: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<col-3877fd94-0973-4941-ac6b-646849a1ff65: string>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<col-3877fd94-0973-4941-ac6b-646849a1ff65: string>"
+   },
+   {
+    "name": "partition",
+    "nullable": true,
+    "type": "struct<Company Very Short: string>"
+   }
+  ]
+ },
+ "count": 5,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "clusterId": "0428-070410-lm8e9giw",
+   "engineInfo": "Databricks-Runtime/13.3.x-photon-scala2.12",
+   "isBlindAppend": false,
+   "isolationLevel": "WriteSerializable",
+   "notebook": {
+    "notebookId": "3271485675102593"
+   },
+   "operation": "WRITE",
+   "operationMetrics": {
+    "numFiles": "2",
+    "numOutputBytes": "1700",
+    "numOutputRows": "5"
+   },
+   "operationParameters": {
+    "mode": "Overwrite",
+    "partitionBy": "[\"Company Very Short\"]",
+    "statsOnLoad": false
+   },
+   "tags": {
+    "restoresDeletedRows": "false"
+   },
+   "timestamp": 1699946089972,
+   "txnId": "0e8eece8-347f-4c77-bc4f-daf3a5985dc9",
+   "userId": "2797914831036774",
+   "userName": "censoredmail@bmsuisse.ch",
+   "version": 0
+  }
+ ],
+ "loaded_version": 0,
+ "metadata": {
+  "configuration": {
+   "delta.autoOptimize.optimizeWrite": "true",
+   "delta.columnMapping.maxColumnId": "2",
+   "delta.columnMapping.mode": "name",
+   "delta.targetFileSize": "33554432",
+   "delta.tuneFileSizesForRewrites": "true"
+  },
+  "created_time": 1699946083038,
+  "description": null,
+  "id": "592de637-dd77-4aaa-af00-97d723a7f1f1",
+  "name": null,
+  "partition_columns": [
+   "Company Very Short"
+  ]
+ },
+ "partitions": [
+  {
+   "Company Very Short": "BME"
+  },
+  {
+   "Company Very Short": "BMS"
+  }
+ ],
+ "protocol": {
+  "min_reader_version": 2,
+  "min_writer_version": 5,
+  "reader_features": null,
+  "writer_features": null
+ },
+ "read": {
+  "columns": {
+   "Company Very Short": [
+    "BME",
+    "BMS",
+    "BMS",
+    "BMS",
+    "BMS"
+   ],
+   "Super Name": [
+    "Timothy Lamb",
+    "Anthony Johnson",
+    "Mr. Daniel Ferguson MD",
+    "Nathan Bennett",
+    "Stephanie Mcgrath"
+   ]
+  },
+  "num_rows": 5,
+  "schema": [
+   {
+    "name": "Company Very Short",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "name": "Super Name",
+    "nullable": true,
+    "type": "string"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {
+     "delta.columnMapping.id": 1,
+     "delta.columnMapping.physicalName": "col-173b4db9-b5ad-427f-9e75-516aae37fbbb"
+    },
+    "name": "Company Very Short",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "metadata": {
+     "delta.columnMapping.id": 2,
+     "delta.columnMapping.physicalName": "col-3877fd94-0973-4941-ac6b-646849a1ff65"
+    },
+    "name": "Super Name",
+    "nullable": true,
+    "type": "string"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "table_with_column_mapping",
+ "timestamp_lookup": [
+  {
+   "at": "2023-11-14T07:14:49.971Z",
+   "version": 0
+  },
+  {
+   "at": "2023-11-14T07:14:49.972Z",
+   "version": 0
+  }
+ ],
+ "transactions": {},
+ "version": 0
+}

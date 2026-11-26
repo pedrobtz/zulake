@@ -1,0 +1,467 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "clientVersion": "delta-rs.py-1.7.0",
+    "engineInfo": "delta-rs:py-1.7.0",
+    "operation": "WRITE",
+    "operationMetrics": {
+     "execution_time_ms": 1,
+     "num_added_files": 5,
+     "num_added_rows": 6,
+     "num_partitions": 0,
+     "num_removed_files": 0,
+     "num_retries": 0
+    },
+    "operationParameters": {
+     "mode": "ErrorIfExists",
+     "partitionBy": "[\"p_str\",\"p_int\",\"p_date\"]"
+    },
+    "timestamp": 1795690965444,
+    "txnId": "6ec8e6b4-ad5c-4d66-9a52-6b905f437028"
+   }
+  },
+  {
+   "protocol": {
+    "minReaderVersion": 1,
+    "minWriterVersion": 2
+   }
+  },
+  {
+   "metaData": {
+    "configuration": {},
+    "createdTime": 1795690965442,
+    "description": null,
+    "format": {
+     "options": {},
+     "provider": "parquet"
+    },
+    "id": "423bb524-5150-4b78-9afc-25addb4996f2",
+    "name": null,
+    "partitionColumns": [
+     "p_str",
+     "p_int",
+     "p_date"
+    ],
+    "schemaString": "{\"type\":\"struct\",\"fields\":[{\"name\":\"value\",\"type\":\"long\",\"nullable\":true,\"metadata\":{}},{\"name\":\"p_str\",\"type\":\"string\",\"nullable\":true,\"metadata\":{}},{\"name\":\"p_int\",\"type\":\"integer\",\"nullable\":true,\"metadata\":{}},{\"name\":\"p_date\",\"type\":\"date\",\"nullable\":true,\"metadata\":{}}]}"
+   }
+  },
+  {
+   "add": {
+    "baseRowId": null,
+    "clusteringProvider": null,
+    "dataChange": true,
+    "defaultRowCommitVersion": null,
+    "modificationTime": 1795690965444,
+    "partitionValues": {
+     "p_date": "2024-01-02",
+     "p_int": "2",
+     "p_str": "a b"
+    },
+    "path": "p_str=a%2520b/p_int=2/p_date=2024-01-02/part-00000-0c3d8a97-a030-432c-b80b-90f86165ea02-c000.snappy.parquet",
+    "size": 496,
+    "stats": "{\"numRecords\":1,\"minValues\":{\"value\":2},\"maxValues\":{\"value\":2},\"nullCount\":{\"value\":0}}",
+    "tags": null
+   }
+  },
+  {
+   "add": {
+    "baseRowId": null,
+    "clusteringProvider": null,
+    "dataChange": true,
+    "defaultRowCommitVersion": null,
+    "modificationTime": 1795690965444,
+    "partitionValues": {
+     "p_date": "2024-01-03",
+     "p_int": null,
+     "p_str": "x/y=z%"
+    },
+    "path": "p_str=x%252Fy%253Dz%2525/p_int=__HIVE_DEFAULT_PARTITION__/p_date=2024-01-03/part-00000-b049eea4-94e7-4253-b374-dc3564b7e6c5-c000.snappy.parquet",
+    "size": 496,
+    "stats": "{\"numRecords\":1,\"minValues\":{\"value\":3},\"maxValues\":{\"value\":3},\"nullCount\":{\"value\":0}}",
+    "tags": null
+   }
+  },
+  {
+   "add": {
+    "baseRowId": null,
+    "clusteringProvider": null,
+    "dataChange": true,
+    "defaultRowCommitVersion": null,
+    "modificationTime": 1795690965444,
+    "partitionValues": {
+     "p_date": "2024-01-01",
+     "p_int": "1",
+     "p_str": "a"
+    },
+    "path": "p_str=a/p_int=1/p_date=2024-01-01/part-00000-a1f59a5b-38fb-49b9-9e4f-dbfe59734b4d-c000.snappy.parquet",
+    "size": 506,
+    "stats": "{\"numRecords\":2,\"minValues\":{\"value\":1},\"maxValues\":{\"value\":6},\"nullCount\":{\"value\":0}}",
+    "tags": null
+   }
+  },
+  {
+   "add": {
+    "baseRowId": null,
+    "clusteringProvider": null,
+    "dataChange": true,
+    "defaultRowCommitVersion": null,
+    "modificationTime": 1795690965444,
+    "partitionValues": {
+     "p_date": "2024-01-05",
+     "p_int": "4",
+     "p_str": null
+    },
+    "path": "p_str=__HIVE_DEFAULT_PARTITION__/p_int=4/p_date=2024-01-05/part-00000-7e90cd84-42d8-4394-a04c-f5029b7b1758-c000.snappy.parquet",
+    "size": 496,
+    "stats": "{\"numRecords\":1,\"minValues\":{\"value\":5},\"maxValues\":{\"value\":5},\"nullCount\":{\"value\":0}}",
+    "tags": null
+   }
+  },
+  {
+   "add": {
+    "baseRowId": null,
+    "clusteringProvider": null,
+    "dataChange": true,
+    "defaultRowCommitVersion": null,
+    "modificationTime": 1795690965444,
+    "partitionValues": {
+     "p_date": null,
+     "p_int": "3",
+     "p_str": "café"
+    },
+    "path": "p_str=caf%25C3%25A9/p_int=3/p_date=__HIVE_DEFAULT_PARTITION__/part-00000-3df763b2-ee20-4930-b208-239aa80ec84d-c000.snappy.parquet",
+    "size": 496,
+    "stats": "{\"numRecords\":1,\"minValues\":{\"value\":4},\"maxValues\":{\"value\":4},\"nullCount\":{\"value\":0}}",
+    "tags": null
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [
+    {
+     "value": "5"
+    },
+    {
+     "value": "2"
+    },
+    {
+     "value": "6"
+    },
+    {
+     "value": "4"
+    },
+    {
+     "value": "3"
+    }
+   ],
+   "min": [
+    {
+     "value": "5"
+    },
+    {
+     "value": "2"
+    },
+    {
+     "value": "1"
+    },
+    {
+     "value": "4"
+    },
+    {
+     "value": "3"
+    }
+   ],
+   "modification_time": [
+    "1795690965444",
+    "1795690965444",
+    "1795690965444",
+    "1795690965444",
+    "1795690965444"
+   ],
+   "null_count": [
+    {
+     "value": "0"
+    },
+    {
+     "value": "0"
+    },
+    {
+     "value": "0"
+    },
+    {
+     "value": "0"
+    },
+    {
+     "value": "0"
+    }
+   ],
+   "num_records": [
+    "1",
+    "1",
+    "2",
+    "1",
+    "1"
+   ],
+   "partition": [
+    {
+     "p_date": "2024-01-05",
+     "p_int": 4,
+     "p_str": null
+    },
+    {
+     "p_date": "2024-01-02",
+     "p_int": 2,
+     "p_str": "a b"
+    },
+    {
+     "p_date": "2024-01-01",
+     "p_int": 1,
+     "p_str": "a"
+    },
+    {
+     "p_date": null,
+     "p_int": 3,
+     "p_str": "café"
+    },
+    {
+     "p_date": "2024-01-03",
+     "p_int": null,
+     "p_str": "x/y=z%"
+    }
+   ],
+   "path": [
+    "p_str=__HIVE_DEFAULT_PARTITION__/p_int=4/p_date=2024-01-05/part-00000-7e90cd84-42d8-4394-a04c-f5029b7b1758-c000.snappy.parquet",
+    "p_str=a%2520b/p_int=2/p_date=2024-01-02/part-00000-0c3d8a97-a030-432c-b80b-90f86165ea02-c000.snappy.parquet",
+    "p_str=a/p_int=1/p_date=2024-01-01/part-00000-a1f59a5b-38fb-49b9-9e4f-dbfe59734b4d-c000.snappy.parquet",
+    "p_str=caf%25C3%25A9/p_int=3/p_date=__HIVE_DEFAULT_PARTITION__/part-00000-3df763b2-ee20-4930-b208-239aa80ec84d-c000.snappy.parquet",
+    "p_str=x%252Fy%253Dz%2525/p_int=__HIVE_DEFAULT_PARTITION__/p_date=2024-01-03/part-00000-b049eea4-94e7-4253-b374-dc3564b7e6c5-c000.snappy.parquet"
+   ],
+   "size_bytes": [
+    "496",
+    "496",
+    "506",
+    "496",
+    "496"
+   ]
+  },
+  "num_rows": 5,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<value: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<value: int64>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<value: int64>"
+   },
+   {
+    "name": "partition",
+    "nullable": true,
+    "type": "struct<p_str: string, p_int: int32, p_date: date32[day]>"
+   }
+  ]
+ },
+ "count": 6,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "clientVersion": "delta-rs.py-1.7.0",
+   "engineInfo": "delta-rs:py-1.7.0",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "execution_time_ms": 1,
+    "num_added_files": 5,
+    "num_added_rows": 6,
+    "num_partitions": 0,
+    "num_removed_files": 0,
+    "num_retries": 0
+   },
+   "operationParameters": {
+    "mode": "ErrorIfExists",
+    "partitionBy": "[\"p_str\",\"p_int\",\"p_date\"]"
+   },
+   "timestamp": 1795690965444,
+   "txnId": "6ec8e6b4-ad5c-4d66-9a52-6b905f437028",
+   "version": 0
+  }
+ ],
+ "loaded_version": 0,
+ "metadata": {
+  "configuration": {},
+  "created_time": 1795690965442,
+  "description": null,
+  "id": "423bb524-5150-4b78-9afc-25addb4996f2",
+  "name": null,
+  "partition_columns": [
+   "p_str",
+   "p_int",
+   "p_date"
+  ]
+ },
+ "partitions": [
+  {
+   "p_date": "2024-01-01",
+   "p_int": "1",
+   "p_str": "a"
+  },
+  {
+   "p_date": "2024-01-02",
+   "p_int": "2",
+   "p_str": "a b"
+  },
+  {
+   "p_date": "2024-01-03",
+   "p_int": null,
+   "p_str": "x/y=z%"
+  },
+  {
+   "p_date": "2024-01-05",
+   "p_int": "4",
+   "p_str": null
+  },
+  {
+   "p_date": null,
+   "p_int": "3",
+   "p_str": "café"
+  }
+ ],
+ "protocol": {
+  "min_reader_version": 1,
+  "min_writer_version": 2,
+  "reader_features": null,
+  "writer_features": null
+ },
+ "read": {
+  "columns": {
+   "p_date": [
+    "2024-01-01",
+    "2024-01-02",
+    "2024-01-03",
+    null,
+    "2024-01-05",
+    "2024-01-01"
+   ],
+   "p_int": [
+    1,
+    2,
+    null,
+    3,
+    4,
+    1
+   ],
+   "p_str": [
+    "a",
+    "a b",
+    "x/y=z%",
+    "café",
+    null,
+    "a"
+   ],
+   "value": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6"
+   ]
+  },
+  "num_rows": 6,
+  "schema": [
+   {
+    "name": "value",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "p_str",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "name": "p_int",
+    "nullable": true,
+    "type": "int32"
+   },
+   {
+    "name": "p_date",
+    "nullable": true,
+    "type": "date32[day]"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {},
+    "name": "value",
+    "nullable": true,
+    "type": "long"
+   },
+   {
+    "metadata": {},
+    "name": "p_str",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "metadata": {},
+    "name": "p_int",
+    "nullable": true,
+    "type": "integer"
+   },
+   {
+    "metadata": {},
+    "name": "p_date",
+    "nullable": true,
+    "type": "date"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "zl-partitioned",
+ "timestamp_lookup": [
+  {
+   "at": "2026-11-26T11:02:45.443Z",
+   "version": 0
+  },
+  {
+   "at": "2026-11-26T11:02:45.444Z",
+   "version": 0
+  }
+ ],
+ "transactions": {},
+ "version": 0
+}
