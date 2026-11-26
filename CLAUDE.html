@@ -49,7 +49,7 @@
 </div>
 <div class="section level2">
 <h2 id="current-state">Current state<a class="anchor" aria-label="anchor" href="#current-state"></a></h2>
-<p>Scaffolded 2026-11-26 with <code>create-pkg.sh</code>. Stage 2 (log replay from commit 0, local disk only) is in: <code><a href="reference/lake_open.html">lake_open()</a></code>, <code><a href="reference/lake_is_table.html">lake_is_table()</a></code>, <code><a href="reference/lake_open.html">lake_load()</a></code>, <code><a href="reference/lake_open.html">lake_version()</a></code>. The roadmap in <a href=".agents/roadmap.html"><code>.agents/roadmap.md</code></a> takes it to v0.1.0. 0.1.0 waits for <code>zuhttp</code> on CRAN and for <code>zuroar</code> 0.1.0 (design §9); local log replay, inspection and reading are built on local fixtures first.</p>
+<p>Scaffolded 2026-11-26 with <code>create-pkg.sh</code>. Stage 2 (log replay from commit 0, local disk only) is in: <code><a href="reference/lake_open.html">lake_open()</a></code>, <code><a href="reference/lake_is_table.html">lake_is_table()</a></code>, <code><a href="reference/lake_open.html">lake_load()</a></code>, <code><a href="reference/lake_open.html">lake_version()</a></code>. Stage 3 (inspection) adds the table, file and log functions of design §5, except <code>lake_deletion_vectors()</code>. The roadmap in <a href=".agents/roadmap.html"><code>.agents/roadmap.md</code></a> takes it to v0.1.0. 0.1.0 waits for <code>zuhttp</code> on CRAN and for <code>zuroar</code> 0.1.0 (design §9); local log replay, inspection and reading are built on local fixtures first.</p>
 </div>
 <div class="section level2">
 <h2 id="versions-and-dependents">Versions and dependents<a class="anchor" aria-label="anchor" href="#versions-and-dependents"></a></h2>
@@ -81,6 +81,14 @@
 <li>
 <code>R/open.R</code>: the exported functions and <code>snapshot_build()</code>, which documents the snapshot’s fields.</li>
 <li>
+<code>R/int64.R</code>: integers past 2^53 - 1 kept as marked text through <code>zujson</code> (<code>mark_numbers()</code>), and turned into doubles, errors or <code>integer64</code> (<code>int64_values()</code>, <code>unmark_tree()</code>).</li>
+<li>
+<code>R/values.R</code>: the schema, partition values and statistics typed by Delta type.</li>
+<li>
+<code>R/filter.R</code>: the pruning subset of a filter and its outcomes per file.</li>
+<li>
+<code>R/table.R</code>, <code>R/files.R</code>, <code>R/log-inspect.R</code>, <code>R/print.R</code>: the inspection functions and the print method.</li>
+<li>
 <code>R/conditions.R</code>: <code>zulake_abort()</code> and the <code>zulake_error_*</code> classes.</li>
 </ul></div>
 <div class="section level2">
@@ -100,7 +108,7 @@
 </ul></div>
 <div class="section level2">
 <h2 id="testing">Testing<a class="anchor" aria-label="anchor" href="#testing"></a></h2>
-<p><code>tests/testthat.R</code> runs every file with <code>shuffle = TRUE</code> after printing its seed, under R CMD check and covr alike; <code>tools/ci-run-tests.R</code> runs the same file from the source tree. The shuffle reorders every top-level expression of a test file, so shared functions go in <code>helper-*.R</code>, never at file scope. Fixtures (Stage 1, design §8): 26 Delta tables (14 copied from <code>delta-rs</code>, Apache-2.0; 2 changed from them; 10 <code>zl-*</code> written with <code>deltalake</code> 1.7.0) and 8 hostile logs, listed in <code>tests/testthat/fixtures/PROVENANCE.md</code>. They ship packed in <code>tests/testthat/fixtures/delta-fixtures.tar</code>, because Delta paths pass the 100 bytes a package tarball allows; the unpacked <code>tables/</code> and <code>hostile/</code> trees are in git only (<code>.Rbuildignore</code>), and are what you edit. <code>deltalake</code> 1.7.0’s answers for every table and version are in <code>tests/testthat/fixtures/answers/</code> (fields and encoding in <code>tools/oracle/README.md</code>). Tests reach them through <code>helper-oracle.R</code>: <code>fixture_table(name)</code>, <code>local_fixture_copy(name)</code>, <code>oracle_field(table, version, field)</code>, <code>oracle_refusal()</code> and <code>expect_oracle(actual, table, version, field)</code>. Never edit an answer by hand, and never edit a tree without repacking (see Commands). A live Azure suite gated on <code>ZULAKE_AZURE_URI</code> comes in Stage 6.</p>
+<p><code>tests/testthat.R</code> runs every file with <code>shuffle = TRUE</code> after printing its seed, under R CMD check and covr alike; <code>tools/ci-run-tests.R</code> runs the same file from the source tree. The shuffle reorders every top-level expression of a test file, so shared functions go in <code>helper-*.R</code>, never at file scope. Fixtures (Stage 1, design §8): 27 Delta tables (14 copied from <code>delta-rs</code>, Apache-2.0; 2 changed from them; 11 <code>zl-*</code> written with <code>deltalake</code> 1.7.0) and 8 hostile logs, listed in <code>tests/testthat/fixtures/PROVENANCE.md</code>. They ship packed in <code>tests/testthat/fixtures/delta-fixtures.tar</code>, because Delta paths pass the 100 bytes a package tarball allows; the unpacked <code>tables/</code> and <code>hostile/</code> trees are in git only (<code>.Rbuildignore</code>), and are what you edit. <code>deltalake</code> 1.7.0’s answers for every table and version are in <code>tests/testthat/fixtures/answers/</code> (fields and encoding in <code>tools/oracle/README.md</code>). Tests reach them through <code>helper-oracle.R</code>: <code>fixture_table(name)</code>, <code>local_fixture_copy(name)</code>, <code>oracle_field(table, version, field)</code>, <code>oracle_refusal()</code> and <code>expect_oracle(actual, table, version, field)</code>. Never edit an answer by hand, and never edit a tree without repacking (see Commands). A live Azure suite gated on <code>ZULAKE_AZURE_URI</code> comes in Stage 6.</p>
 </div>
 <div class="section level2">
 <h2 id="continuous-integration">Continuous integration<a class="anchor" aria-label="anchor" href="#continuous-integration"></a></h2>

@@ -43,10 +43,20 @@ a base data frame, unchanged, with nested values in list columns.
 ``` r
 
 lake_history(tbl, limit = 10)
+lake_schema(tbl)
 lake_files(tbl)
+lake_count(tbl)
 lake_actions(tbl, version = lake_version(tbl))
 lake_changes(tbl, from = 3)
 ```
+
+Counts, sizes and statistics are 64-bit in the log. They come back as
+doubles, exact up to 2^53 - 1, and an error beyond; ask for
+`int64 = "integer64"` to get `bit64` integers instead. A table whose
+files carry no statistics has an unknown row count:
+[`lake_count()`](https://pedrobtz.github.io/zulake/reference/lake_files.md)
+says so with `NA` and a warning rather than counting only the files it
+can.
 
 ## Filters prune files, then rows
 
@@ -66,12 +76,20 @@ lake_read(tbl, columns = c("id", "amount"), filter = year == yr)
 
 A table that needs a reader feature zulake does not support is refused
 with an error that names the feature, before any data is read, because
-ignoring it would return wrong rows. `lake_protocol()` shows which
-features a table uses and which are supported.
+ignoring it would return wrong rows.
+[`lake_protocol()`](https://pedrobtz.github.io/zulake/reference/lake_versions.md)
+shows which features a table uses, each marked supported; the error of a
+refused table carries the same data frame.
 
 ``` r
 
 lake_protocol(tbl)
+err <- tryCatch(
+  lake_open("abfss://lake@account.dfs.core.windows.net/sales/widened", credentials = token),
+  zulake_error_unsupported_feature = identity
+)
+err$feature
+err$protocol
 ```
 
 ## Where next

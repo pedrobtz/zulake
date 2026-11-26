@@ -81,7 +81,7 @@ unless you ask for another. A snapshot never changes;
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">tbl</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/lake_open.html">lake_open</a></span><span class="op">(</span><span class="va">uri</span>, credentials <span class="op">=</span> <span class="va">token</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/lake_open.html">lake_version</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
-<span><span class="fu">lake_summary</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/lake_versions.html">lake_summary</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
 <span><span class="va">old</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/lake_open.html">lake_load</a></span><span class="op">(</span><span class="va">tbl</span>, version <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
@@ -90,10 +90,18 @@ unless you ask for another. A snapshot never changes;
 <p>Inspection is what zulake is for. Every action in the log comes back
 as a base data frame, unchanged, with nested values in list columns.</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">lake_history</span><span class="op">(</span><span class="va">tbl</span>, limit <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span>
-<span><span class="fu">lake_files</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
-<span><span class="fu">lake_actions</span><span class="op">(</span><span class="va">tbl</span>, version <span class="op">=</span> <span class="fu"><a href="../reference/lake_open.html">lake_version</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="fu">lake_changes</span><span class="op">(</span><span class="va">tbl</span>, from <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/lake_versions.html">lake_history</a></span><span class="op">(</span><span class="va">tbl</span>, limit <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/lake_versions.html">lake_schema</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/lake_files.html">lake_files</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/lake_files.html">lake_count</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/lake_log.html">lake_actions</a></span><span class="op">(</span><span class="va">tbl</span>, version <span class="op">=</span> <span class="fu"><a href="../reference/lake_open.html">lake_version</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/lake_log.html">lake_changes</a></span><span class="op">(</span><span class="va">tbl</span>, from <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span></code></pre></div>
+<p>Counts, sizes and statistics are 64-bit in the log. They come back as
+doubles, exact up to 2^53 - 1, and an error beyond; ask for
+<code>int64 = "integer64"</code> to get <code>bit64</code> integers
+instead. A table whose files carry no statistics has an unknown row
+count: <code><a href="../reference/lake_files.html">lake_count()</a></code> says so with <code>NA</code> and a
+warning rather than counting only the files it can.</p>
 </div>
 <div class="section level2">
 <h2 id="filters-prune-files-then-rows">Filters prune files, then rows<a class="anchor" aria-label="anchor" href="#filters-prune-files-then-rows"></a>
@@ -104,7 +112,7 @@ the rows that remain are then filtered exactly, so the result never
 depends on the statistics. Local values are looked up where you
 call.</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">lake_files</span><span class="op">(</span><span class="va">tbl</span>, filter <span class="op">=</span> <span class="va">year</span> <span class="op">==</span> <span class="fl">2026</span> <span class="op">&amp;</span> <span class="va">region</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"EU"</span>, <span class="st">"UK"</span><span class="op">)</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/lake_files.html">lake_files</a></span><span class="op">(</span><span class="va">tbl</span>, filter <span class="op">=</span> <span class="va">year</span> <span class="op">==</span> <span class="fl">2026</span> <span class="op">&amp;</span> <span class="va">region</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"EU"</span>, <span class="st">"UK"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">yr</span> <span class="op">&lt;-</span> <span class="fl">2026</span></span>
 <span><span class="fu">lake_read</span><span class="op">(</span><span class="va">tbl</span>, columns <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"id"</span>, <span class="st">"amount"</span><span class="op">)</span>, filter <span class="op">=</span> <span class="va">year</span> <span class="op">==</span> <span class="va">yr</span><span class="op">)</span></span></code></pre></div>
 </div>
@@ -114,10 +122,17 @@ call.</p>
 <p>A table that needs a reader feature zulake does not support is
 refused with an error that names the feature, before any data is read,
 because ignoring it would return wrong rows.
-<code>lake_protocol()</code> shows which features a table uses and which
-are supported.</p>
+<code><a href="../reference/lake_versions.html">lake_protocol()</a></code> shows which features a table uses, each
+marked supported; the error of a refused table carries the same data
+frame.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">lake_protocol</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/lake_versions.html">lake_protocol</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
+<span><span class="va">err</span> <span class="op">&lt;-</span> <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="../reference/lake_open.html">lake_open</a></span><span class="op">(</span><span class="st">"abfss://lake@account.dfs.core.windows.net/sales/widened"</span>, credentials <span class="op">=</span> <span class="va">token</span><span class="op">)</span>,</span>
+<span>  zulake_error_unsupported_feature <span class="op">=</span> <span class="va">identity</span></span>
+<span><span class="op">)</span></span>
+<span><span class="va">err</span><span class="op">$</span><span class="va">feature</span></span>
+<span><span class="va">err</span><span class="op">$</span><span class="va">protocol</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="where-next">Where next<a class="anchor" aria-label="anchor" href="#where-next"></a>
