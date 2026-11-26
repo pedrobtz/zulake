@@ -52,9 +52,20 @@
   `zulake_warning_column_skipped` warning naming each, or are a
   `zulake_error_column_unreadable` error when named in `columns` or used
   in `filter`. A decimal of precision 15 or less is a double.
-* Reading a table with deletion vectors or column mapping is refused with
-  `zulake_error_unsupported_feature` until a later version applies them,
-  so a read never returns deleted rows.
+* Deletion vectors: `lake_read()` and `lake_walk()` never return the rows
+  a deletion vector marks, inline (Z85) or in a file at a relative or
+  absolute path, with each vector's CRC-32 checked.
+  `lake_deletion_vectors()` lists each live file's descriptor and, with
+  `rows = TRUE`, the 0-based positions of its deleted rows. The rows need
+  the suggested zuroar package (installed with `pak::pak("pedrobtz/zuroar")`);
+  without it such a read is a `zulake_error_missing_package` naming it,
+  while `lake_count()` and `lake_deletion_vectors(rows = FALSE)` still
+  work. A vector that does not agree with its descriptor (checksum, magic
+  number, size, row count) is a `zulake_error_corrupt_log`, and no rows are
+  returned.
+* Tables with column mapping in `name` mode are read, by physical column
+  names in the files and logical names in the result; `timestamp_ntz`
+  columns are `POSIXct` in UTC.
 * `lake_count(footers = TRUE)` reads the row count of each file without a
   `numRecords` statistic from its Parquet footer.
 * A `long` statistic in `lake_files()` that the `int64` mode cannot hold

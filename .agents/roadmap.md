@@ -26,7 +26,7 @@ Stage 2b, checkpoints, waits for that `qio` and runs after Stage 7.
 | 2 | [Log replay](#stage-2--log-replay) | quick | [#4](https://github.com/pedrobtz/zulake/issues/4) | [#30](https://github.com/pedrobtz/zulake/pull/30) | 2026-11-26 |
 | 3 | [Inspection](#stage-3--inspection) | quick | [#5](https://github.com/pedrobtz/zulake/issues/5) | [#31](https://github.com/pedrobtz/zulake/pull/31) | 2026-11-26 |
 | 4 | [Reading and pruning](#stage-4--reading-and-pruning) | quick | [#6](https://github.com/pedrobtz/zulake/issues/6) | [#32](https://github.com/pedrobtz/zulake/pull/32) | 2026-11-26 |
-| 5 | [Deletion vectors and column mapping](#stage-5--deletion-vectors-and-column-mapping) | full | [#7](https://github.com/pedrobtz/zulake/issues/7) | | |
+| 5 | [Deletion vectors and column mapping](#stage-5--deletion-vectors-and-column-mapping) | full | [#7](https://github.com/pedrobtz/zulake/issues/7) | | 2026-11-26 |
 | 6 | [Azure backend](#stage-6--azure-backend) | quick | [#8](https://github.com/pedrobtz/zulake/issues/8) | | |
 | 7 | [Documentation](#stage-7--documentation) | quick | [#9](https://github.com/pedrobtz/zulake/issues/9) | | |
 | 2b | [Checkpoints](#stage-2b--checkpoints) | quick | [#26](https://github.com/pedrobtz/zulake/issues/26) | | |
@@ -446,6 +446,24 @@ refusals on a multi-file fixture; shadowing of `nchar` by the caller, in
   was seen to fail.
 - `.agents/assurance.md` has Boundaries rows for deletion vectors, Z85 and
   column mapping.
+
+**Deviations (2026-11-26).**
+
+- The `nosuggests` test of `zuroar`'s absence is `tests/zuroar-absent.R`,
+  a base-R script, not a `test-dv.R` test: the `nosuggests` image has no
+  testthat, so no `test-dv.R` test can run there. It checks only where
+  `zuroar` is absent; `test-dv.R` checks the same on every leg with
+  `zuroar_available()` mocked. The R-CMD-check caller now passes
+  `nosuggests: true` (r-actions runs the job only when asked).
+- The `name`-mode column-mapping and `timestampNtz` tests are in
+  `test-read.R` as listed; `timestampNtz` has one fixture (`zl-types`),
+  since `column_mapping` has no such column.
+- The protocol's own inline Example 3 is in Delta's "native" format
+  (magic 1681511376), which its format section does not define, so it is
+  tested as refused (design §4.4), and its Z85 decoding is checked against
+  the example's rows through a 32-bit bitmap.
+- Begins with the 2026-11-26 Stage 4 correction (filters row-wise by
+  construction), recorded under Stage 4.
 
 **Design.** [§4.4](design.md#44-deletion-vectors),
 [D9](design.md#10-decisions).
