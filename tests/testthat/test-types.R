@@ -17,7 +17,6 @@ test_that("every 64-bit value from the log straddles 2^53: exact, then an error,
       txn = function(i) lake_transactions(tbl, int64 = i)$version,
       history = function(i) lake_history(tbl, int64 = i)$commit_info[[1L]]$operationMetrics$n,
       min = function(i) lake_files(tbl, int64 = i)$min[[1L]]$id,
-      max = function(i) lake_files(tbl, int64 = i)$max[[1L]]$id,
       partition = function(i) lake_files(tbl, stats = FALSE, int64 = i)$partition[[1L]]$p,
       partitions = function(i) lake_partitions(tbl, int64 = i)$p
     )
@@ -94,23 +93,80 @@ test_that("a sum of counts straddles 2^53 too", {
 
 test_that("integer64 holds -2^63 + 1 to 2^63 - 1; past that, and at bit64's NA, a classed error", {
   skip_if_not_installed("bit64")
-  for (text in c("9223372036854775807", "-9223372036854775807", "9223372036854775808", "-9223372036854775808")) {
-    lines <- c(raw_header(), raw_add("a.parquet", stats = sprintf('{\\"minValues\\":{\\"id\\":%s}}', text)))
+  for (text in c("9223372036854775807", "-9223372036854775807", "-9223372036854775808")) {
+    lines <- c(raw_header(c(id = "long", p = "long"), partition = "p"),
+               raw_add("a.parquet", partition = sprintf('{"p":"%s"}', text)))
     tbl <- lake_open(raw_table(lines))
-    if (text %in% c("9223372036854775807", "-9223372036854775807")) {
-      expect_identical(as.character(lake_files(tbl, int64 = "integer64")$min[[1L]]$id), text)
+    got <- tryCatch(lake_files(tbl, int64 = "integer64")$partition[[1L]]$p, error = identity)
+    if (text != "-9223372036854775808") {
+      expect_identical(as.character(got), text)
     } else {
-      expect_error(lake_files(tbl, int64 = "integer64"), class = "zulake_error_int64")
+      expect_s3_class(got, "zulake_error_int64")
+      expect_identical(got$value, text)
     }
     expect_error(lake_files(tbl), class = "zulake_error_int64")
-    expect_identical(nrow(lake_files(tbl, stats = FALSE)), 1L)
+    # Pruning compares the partition value as text, so it never fails.
+    expect_identical(length(filter_files(tbl, quote(p == text), environment(), "double")), 1L)
   }
+  # Past a long, a partition value is a corrupt log.
+  lines <- c(raw_header(c(id = "long", p = "long"), partition = "p"),
+             raw_add("a.parquet", partition = '{"p":"9223372036854775808"}'))
+  expect_error(lake_open(raw_table(lines)), class = "zulake_error_corrupt_log")
+})
+
+test_that("a long statistic the int64 mode cannot hold is NA, with one classed warning per column", {
+  skip_if_not_installed("bit64")
+  limits <- list(
+    double = c(fits = c("9007199254740991", "-9007199254740991"), past = c("9007199254740992", "-9007199254740992")),
+    integer64 = c(fits = c("9223372036854775807", "-9223372036854775807"),
+                  past = c("9223372036854775808", "-9223372036854775808"))
+  )
+  for (int64 in names(limits)) {
+    for (text in limits[[int64]]) {
+      stats <- sprintf('{\\"numRecords\\":1,\\"minValues\\":{\\"id\\":%s,\\"j\\":%s},\\"maxValues\\":{\\"id\\":%s},\\"nullCount\\":{\\"id\\":0}}',
+                       text, text, text)
+      tbl <- lake_open(raw_table(c(raw_header(c(id = "long", j = "long")), raw_add("a.parquet", stats = stats),
+                                   raw_add("b.parquet", stats = stats))))
+      got <- collect_warnings(lake_files(tbl, int64 = int64))
+      f <- got$value
+      label <- paste(int64, text)
+      if (text %in% limits[[int64]][1:2]) {
+        expect_length(got$warnings, 0L)
+        expect_identical(sprintf("%s", as.character(f$min[[2L]]$id)), if (int64 == "double") sprintf("%.0f", as.numeric(text)) else text)
+      } else {
+        expect_length(got$warnings, 2L)
+        for (w in got$warnings) {
+          expect_s3_class(w, "zulake_warning_int64")
+          expect_s3_class(w, "zulake_warning")
+          expect_identical(w$value, text, label = label)
+          expect_identical(w$path, "a.parquet", label = label)
+        }
+        expect_setequal(vapply(got$warnings, function(w) w$column, ""), c("id", "j"))
+        expect_true(is.na(f$min[[1L]]$id) && is.na(f$max[[2L]]$id) && is.na(f$min[[2L]]$j), label = label)
+        expect_identical(class(f$min[[1L]]$id), if (int64 == "double") "numeric" else "integer64")
+        # The exact digits stay in the action.
+        expect_true(grepl(text, f$action[[1L]]$stats, fixed = TRUE))
+        # Pruning compares them exactly, without a warning.
+        expect_identical(nrow(expect_silent(lake_files(tbl, filter = id == text, stats = FALSE))), 2L)
+        expect_identical(nrow(lake_files(tbl, filter = id != text, stats = FALSE)), 0L)
+      }
+    }
+  }
+  # A count past the limit is still an error.
+  stats <- '{\\"numRecords\\":1,\\"nullCount\\":{\\"id\\":9007199254740993}}'
+  tbl <- lake_open(raw_table(c(raw_header(), raw_add("a.parquet", stats = stats))))
+  expect_error(lake_files(tbl), class = "zulake_error_int64")
   # zl-types holds long statistics at -2^63 and 2^63 - 1 (deltalake's answer
-  # has both).
+  # has both): NA with a warning in both modes, never an error.
   tbl <- lake_open(fixture_table("zl-types"))
   expect_identical(oracle_field("zl-types", 0, c("add_actions", "columns", "min"))[[1L]]$i64, "-9223372036854775808")
-  expect_error(lake_files(tbl), class = "zulake_error_int64")
-  expect_error(lake_files(tbl, int64 = "integer64"), class = "zulake_error_int64")
+  for (int64 in c("double", "integer64")) {
+    got <- collect_warnings(lake_files(tbl, int64 = int64))
+    expect_length(got$warnings, 1L)
+    expect_s3_class(got$warnings[[1L]], "zulake_warning_int64")
+    expect_identical(got$warnings[[1L]]$column, "i64")
+    expect_true(is.na(got$value$min[[1L]]$i64))
+  }
 })
 
 test_that("decimal statistics are the log's JSON text, byte for byte", {
