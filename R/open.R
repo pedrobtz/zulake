@@ -12,10 +12,15 @@
 #' file is read, because ignoring a feature returns wrong rows.
 #'
 #' zulake reads tables on local disk and on Azure (Blob Storage and Data
-#' Lake Storage Gen2), replaying the log from its first commit. A table whose
-#' log no longer reaches commit 0 needs a checkpoint, which zulake cannot
-#' read yet, and is refused with a `zulake_error_checkpoint_unreadable`
-#' error.
+#' Lake Storage Gen2), replaying the log from the latest checkpoint at or
+#' before the version (classic, multi-part or V2, with its sidecars), or
+#' from the first commit when there is none. A checkpoint that cannot be
+#' read is passed over for an earlier one or for the commits; a version
+#' that needs it, in a log that no longer reaches commit 0, is refused with
+#' a `zulake_error_checkpoint_unreadable` error. A version whose commits
+#' were cleaned up, older than the earliest checkpoint, is a
+#' `zulake_error_version` error. A file's `dataChange` from a checkpoint is
+#' the checkpoint's copy, which some writers set to `FALSE`.
 #'
 #' @section Azure:
 #' A table on Azure is given by one of three URI forms, which all reach the
@@ -62,12 +67,14 @@
 #'
 #'   Every error is a condition of class `zulake_error`, with a subclass
 #'   that says why: `zulake_error_not_table` (no Delta log at `uri`),
-#'   `zulake_error_version` (no such version), `zulake_error_uri` (a URI
-#'   zulake cannot open), `zulake_error_storage` (a file that cannot be
+#'   `zulake_error_version` (no such version, or one no longer in the log),
+#'   `zulake_error_uri` (a URI zulake cannot open), `zulake_error_storage` (a file that cannot be
 #'   read; from Azure with the HTTP `status` and Azure's error `code`),
 #'   `zulake_error_auth` (credentials refused), `zulake_error_corrupt_log`
 #'   (a log that breaks the protocol, such as a commit that is not JSON or a
-#'   partition value of the wrong type), `zulake_error_checkpoint_unreadable`
+#'   partition value of the wrong type, or a `_last_checkpoint` naming a
+#'   checkpoint the log does not hold whole),
+#'   `zulake_error_checkpoint_unreadable` (its `checkpoint` field gives the version, `parent` the read failure)
 #'   and `zulake_error_unsupported_feature`, whose `feature` field names the
 #'   feature.
 #' @seealso [lake_is_table()] to check a location first.
@@ -171,28 +178,39 @@ snapshot_build <- function(storage, uri, version = NULL, timestamp = NULL) {
       uri = uri
     )
   }
+  sets <- checkpoint_sets(entries)
   commits <- entries$version[entries$kind == "commit"]
-  checkpoints <- entries$version[entries$kind == "checkpoint"]
-  if (!length(commits)) {
+  whole <- vapply(sets, function(s) s$version[1L], 0)
+  if (!length(commits) && !length(whole)) {
     zulake_abort(
       "checkpoint_unreadable",
-      sprintf(
-        "%s has checkpoints but no commits, and zulake cannot read checkpoints yet.",
-        format_string(uri)
-      ),
-      checkpoint = max(checkpoints)
+      sprintf("%s has no commits, and no checkpoint that is whole.", format_string(uri)),
+      checkpoint = max(entries$version[entries$kind == "checkpoint"])
     )
   }
-  latest <- max(commits)
+  latest <- max(commits, whole)
   last_checkpoint <- read_last_checkpoint(storage, entries)
-  if (!is.null(last_checkpoint) && last_checkpoint[["version"]] > latest) {
-    zulake_abort(
-      "corrupt_log",
-      sprintf(
-        "_last_checkpoint names version %s, but the log ends at version %s.",
-        format_number(last_checkpoint[["version"]]), format_number(latest)
+  if (!is.null(last_checkpoint)) {
+    named <- last_checkpoint[["version"]]
+    if (named > latest) {
+      zulake_abort(
+        "corrupt_log",
+        sprintf(
+          "_last_checkpoint names version %s, but the log ends at version %s.",
+          format_number(named), format_number(latest)
+        )
       )
-    )
+    }
+    if (!named %in% whole) {
+      zulake_abort(
+        "corrupt_log",
+        sprintf(
+          "_last_checkpoint names the checkpoint at version %s, which the log does not hold whole.",
+          format_number(named)
+        ),
+        checkpoint = named
+      )
+    }
   }
 
   cache <- new.env(parent = emptyenv())
@@ -202,12 +220,21 @@ snapshot_build <- function(storage, uri, version = NULL, timestamp = NULL) {
     }
     cache[[name]]
   }
+  cp_cache <- new.env(parent = emptyenv())
+  read_cp <- function(set) {
+    key <- set$name[1L]
+    if (is.null(cp_cache[[key]])) {
+      cp_cache[[key]] <- list(read_checkpoint(storage, set, read))
+    }
+    cp_cache[[key]][[1L]]
+  }
+  state_at <- function(v) replay_state(entries, sets, v, read, read_cp)
 
   state <- NULL
   if (!is.null(timestamp)) {
     # The latest snapshot says whether commits carry in-commit timestamps,
     # so it must itself be one zulake can read.
-    state <- replay(replay_plan(entries, latest), read)
+    state <- state_at(latest)
     check_reader_features(state$protocol, state$metadata, latest)
     version <- version_at(timestamp, entries, state$protocol, state$metadata, read)
     if (version != latest) state <- NULL
@@ -224,7 +251,7 @@ snapshot_build <- function(storage, uri, version = NULL, timestamp = NULL) {
     )
   }
   if (is.null(state)) {
-    state <- replay(replay_plan(entries, version), read)
+    state <- state_at(version)
   }
 
   check_reader_features(state$protocol, state$metadata, version)

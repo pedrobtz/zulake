@@ -1,21 +1,23 @@
 # Log replay (design section 4.2; the protocol's "Action Reconciliation").
 #
-# Until qio reads nested Parquet (D14), replay starts at commit 0 and reads
-# JSON only: commits, and log compaction files in place of the commits they
-# cover. Checkpoints are listed but never read; a log that no longer reaches
-# commit 0 is refused with `zulake_error_checkpoint_unreadable`.
+# Replay starts from the latest whole checkpoint at or before the version
+# (checkpoint.R), or from commit 0 when there is none or none can be read,
+# and applies the commits after it, with log compaction files in place of
+# the commits they cover.
 
-# The files to read, in order, to reach `version`: one row per file, `name`,
-# `from` and `to` (the versions it covers). Greedy from commit 0: at each
+# The files to read, in order, to go from `start` to `version`: one row per
+# file, `name`, `from` and `to` (the versions it covers). Greedy: at each
 # version, the compaction file that starts there and reaches furthest
-# without passing `version`, else the commit itself.
-replay_plan <- function(entries, version) {
+# without passing `version`, else the commit itself. `failed` holds the
+# checkpoints that could not be read (conditions), for the error when a
+# commit is missing.
+replay_plan <- function(entries, version, start = 0, failed = list()) {
   commits <- entries[entries$kind == "commit", , drop = FALSE]
   compactions <- entries[entries$kind == "compaction" & entries$end_version <= version, , drop = FALSE]
   names <- character()
   from <- numeric()
   to <- numeric()
-  at <- 0
+  at <- start
   while (at <= version) {
     hit <- which(compactions$version == at)
     if (length(hit)) {
@@ -28,7 +30,7 @@ replay_plan <- function(entries, version) {
     }
     hit <- match(at, commits$version)
     if (is.na(hit)) {
-      missing_commit(entries, at, version)
+      missing_commit(entries, at, start, version, failed)
     }
     names <- c(names, commits$name[hit])
     from <- c(from, at)
@@ -38,21 +40,35 @@ replay_plan <- function(entries, version) {
   new_data_frame(list(name = names, from = from, to = to))
 }
 
-missing_commit <- function(entries, at, version) {
-  checkpoints <- entries$version[entries$kind == "checkpoint" & entries$version >= at & entries$version <= version]
-  if (length(checkpoints)) {
-    cp <- max(checkpoints)
+# A commit replay needs is not in the log. From commit 0, with a checkpoint
+# at or before `version` that is not whole or cannot be read: the log has
+# neither, `zulake_error_checkpoint_unreadable`. Otherwise, with a
+# checkpoint after `version`: the commits before that checkpoint were cleaned
+# up, as the protocol allows, so the version is gone, `zulake_error_version`.
+# With neither, the log is corrupt.
+missing_commit <- function(entries, at, start, version, failed) {
+  if (start == 0 && length(failed)) {
+    e <- failed[[which.max(vapply(failed, function(f) f$checkpoint, 0))]]
     zulake_abort(
       "checkpoint_unreadable",
       sprintf(
-        paste(
-          "Version %s needs the checkpoint at version %s: commit %s is no longer in the log.",
-          "zulake cannot read checkpoints yet (it waits for a qio that reads nested Parquet)."
-        ),
-        format_number(version), format_number(cp), format_number(at)
+        "Version %s needs the checkpoint at version %s, since commit %s is no longer in the log, and %s",
+        format_number(version), format_number(e$checkpoint), format_number(at), conditionMessage(e)
       ),
       version = version,
-      checkpoint = cp
+      checkpoint = e$checkpoint,
+      parent = e
+    )
+  }
+  later <- entries$version[entries$kind == "checkpoint" & entries$version > version]
+  if (length(later)) {
+    zulake_abort(
+      "version",
+      sprintf(
+        "Version %s can no longer be built: commit %s is gone from the log, which a checkpoint at version %s replaces.",
+        format_number(version), format_number(at), format_number(min(later))
+      ),
+      version = version
     )
   }
   zulake_abort(
@@ -65,10 +81,42 @@ missing_commit <- function(entries, at, version) {
   )
 }
 
-# The table's state after applying `plan`'s files in order: protocol,
-# metadata, live files, tombstones, transactions and domains. `read` returns
-# a file's actions by name.
-replay <- function(plan, read) {
+# The table's state at `version`: from the latest whole checkpoint at or
+# before it that can be read (`sets`, from checkpoint_sets()), else from
+# commit 0. A checkpoint that cannot be read is passed over: the commits
+# hold the same state. `read` returns a JSON log file's actions by name,
+# `read_cp` a checkpoint's.
+replay_state <- function(entries, sets, version, read, read_cp) {
+  failed <- list()
+  for (v in incomplete_checkpoints(entries, sets)) {
+    if (v <= version) {
+      failed[[length(failed) + 1L]] <- structure(
+        class = c("zulake_error_checkpoint_unreadable", "zulake_error", "error", "condition"),
+        list(
+          message = sprintf("the checkpoint at version %s is missing a part.", format_number(v)),
+          call = NULL, checkpoint = v
+        )
+      )
+    }
+  }
+  for (set in sets) {
+    cp <- set$version[1L]
+    if (cp > version) next
+    actions <- tryCatch(read_cp(set), zulake_error_checkpoint_unreadable = function(e) e)
+    if (inherits(actions, "condition")) {
+      failed[[length(failed) + 1L]] <- actions
+      next
+    }
+    plan <- replay_plan(entries, version, start = cp + 1)
+    return(replay(plan, read, list(name = set$name[1L], actions = actions)))
+  }
+  replay(replay_plan(entries, version, 0, failed), read)
+}
+
+# The table's state after applying a checkpoint's actions, if any, then
+# `plan`'s files in order: protocol, metadata, live files, tombstones,
+# transactions and domains. `read` returns a file's actions by name.
+replay <- function(plan, read, checkpoint = NULL) {
   st <- new.env(parent = emptyenv())
   st$protocol <- NULL
   st$metadata <- NULL
@@ -76,6 +124,9 @@ replay <- function(plan, read) {
   st$removes <- new.env(parent = emptyenv())
   st$txns <- list()
   st$domains <- list()
+  if (!is.null(checkpoint)) {
+    apply_file(st, checkpoint$name, checkpoint$actions)
+  }
   for (i in seq_len(nrow(plan))) {
     apply_file(st, plan$name[i], read(plan$name[i]))
   }

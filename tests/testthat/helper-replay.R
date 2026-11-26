@@ -95,7 +95,100 @@ recording_storage <- function(storage, env) {
     record("head", path)
     storage$head(path)
   }
+  if (is.function(storage$local_path)) {
+    wrapped$local_path <- function(path) {
+      record("local_path", path)
+      storage$local_path(path)
+    }
+  }
   wrapped
+}
+
+# The log files a snapshot of `path` at `version` reads, by name (the
+# `_delta_log/` prefix dropped), in the order it reads them.
+log_reads <- function(path, version = NULL) {
+  rec <- new.env()
+  storage <- recording_storage(zulake:::storage_local(path), rec)
+  zulake:::snapshot_build(storage, path, version)
+  calls <- rec$calls[!startsWith(rec$calls, "list ")]
+  sub("^[a-z_]+ _delta_log/", "", calls)
+}
+
+# ---- checkpoints -----------------------------------------------------------
+
+# Names of the fixture tables with a checkpoint.
+checkpoint_tables <- function() {
+  has <- vapply(fixture_names("tables"), function(t) {
+    any(grepl("[.]checkpoint[.]", list.files(file.path(fixture_table(t), "_delta_log"))))
+  }, NA)
+  names(has)[has]
+}
+
+# A private copy of fixture table `name` with its checkpoints, sidecars and
+# _last_checkpoint deleted, so that it replays from commit 0.
+local_commits_only <- function(name, env = parent.frame()) {
+  path <- local_fixture_copy(name, env = env)
+  log <- file.path(path, "_delta_log")
+  unlink(list.files(log, pattern = "[.]checkpoint[.]|^_last_checkpoint$", full.names = TRUE, all.files = TRUE))
+  unlink(file.path(log, "_sidecars"), recursive = TRUE)
+  path
+}
+
+# Versions of a table that have a whole checkpoint, ascending.
+checkpoint_versions <- function(path) {
+  entries <- zulake:::log_entries(zulake:::storage_local(path)$list("_delta_log/"))
+  sort(vapply(zulake:::checkpoint_sets(entries), function(s) s$version[1L], 0))
+}
+
+# An action as the checkpoint and the commit that wrote it both say it, for
+# comparing replays: null fields and empty maps left out, `dataChange`
+# dropped (checkpoint writers write false, design section 4.2), names in
+# byte order.
+action_core <- function(x) {
+  if (!is.list(x)) {
+    return(x)
+  }
+  empty <- vapply(x, function(v) is.null(v) || (is.list(v) && !length(v)), NA)
+  x <- x[!empty]
+  if (!is.null(names(x))) {
+    x <- x[setdiff(names(x), "dataChange")]
+    x <- x[order(names(x), method = "radix")]
+  }
+  lapply(x, action_core)
+}
+
+# Two snapshots of one table hold the same state, as every inspection
+# function shows it: the same files (statistics, partitions, deletion
+# vectors and the core of each add), protocol, metadata, schema, properties,
+# transactions, domains and tombstones.
+expect_same_state <- function(a, b, label) {
+  expect_identical(lake_version(a), lake_version(b), label = label)
+  fa <- lake_files(a)
+  fb <- lake_files(b)
+  cols <- setdiff(names(fa), c("uri", "data_change", "action"))
+  expect_identical(fa[cols], fb[cols], label = paste(label, "lake_files()"))
+  expect_identical(lapply(fa$action, action_core), lapply(fb$action, action_core), label = paste(label, "actions"))
+  expect_identical(lake_partitions(a), lake_partitions(b), label = label)
+  expect_identical(lake_protocol(a), lake_protocol(b), label = label)
+  expect_identical(lake_metadata(a), lake_metadata(b), label = label)
+  expect_identical(lake_schema(a), lake_schema(b), label = label)
+  expect_identical(lake_properties(a), lake_properties(b), label = label)
+  expect_identical(lake_transactions(a), lake_transactions(b), label = label)
+  expect_identical(lake_domains(a), lake_domains(b), label = label)
+  ra <- lake_removed(a)
+  rb <- lake_removed(b)
+  expect_identical(ra[c("path", "deletion_timestamp", "size_bytes")], rb[c("path", "deletion_timestamp", "size_bytes")], label = label)
+  sa <- lake_summary(a)
+  sb <- lake_summary(b)
+  expect_identical(sa[names(sa) != "timestamp"], sb[names(sb) != "timestamp"], label = label)
+}
+
+# A V2 checkpoint in JSON (a UUID-named file, one action per line) at
+# `version` of the table at `path`.
+write_json_checkpoint <- function(path, version, lines, uuid = "3a0d65cd-4b4c-4b4b-8a0b-0f2a1c2b3d4e") {
+  f <- file.path(path, "_delta_log", sprintf("%020.0f.checkpoint.%s.json", version, uuid))
+  writeBin(charToRaw(paste0(paste(lines, collapse = "\n"), "\n")), f)
+  invisible(f)
 }
 
 # ---- hand-written logs ---------------------------------------------------
@@ -192,4 +285,11 @@ mutate_json <- function(x) {
     x[[path[-length(path)]]] <- parent
   }
   x
+}
+
+# A private copy of the directory `path`, removed when `env` ends.
+local_copy_dir <- function(path, env = parent.frame()) {
+  dest <- withr::local_tempdir(.local_envir = env)
+  stopifnot(file.copy(path, dest, recursive = TRUE, copy.date = TRUE))
+  file.path(dest, basename(path))
 }

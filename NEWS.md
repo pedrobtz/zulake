@@ -32,11 +32,20 @@
 * 64-bit values from the log are doubles exact up to 2^53 - 1 and a
   `zulake_error_int64` beyond, or exact `bit64::integer64` values with
   `int64 = "integer64"`; `decimal` statistics are kept as their JSON text.
-* Every error is a classed condition inheriting from `zulake_error`. A
-  log that no longer reaches commit 0 is refused with
-  `zulake_error_checkpoint_unreadable` until checkpoints can be read; a
+* Every error is a classed condition inheriting from `zulake_error`; a
   corrupt log (a commit that is not JSON, a partition value of the wrong
-  type) with `zulake_error_corrupt_log`.
+  type) is a `zulake_error_corrupt_log`.
+* Checkpoints: replay starts from the latest whole checkpoint at or before
+  the version, classic, multi-part or V2 (in JSON or Parquet, with its
+  sidecars), read through qio (now >= 0.1.2.9000, which reads nested
+  Parquet), so tables whose early commits were cleaned up open. A stale
+  `_last_checkpoint` changes nothing; one naming a checkpoint the log does
+  not hold whole is a `zulake_error_corrupt_log`. A checkpoint that cannot
+  be read is passed over for an earlier one or the commits;
+  `zulake_error_checkpoint_unreadable` is left for a version that needs
+  it when commit 0 is gone. A version older than the earliest checkpoint
+  whose commits were removed is a `zulake_error_version`. Statistics come
+  from the `stats` JSON, as in a commit; `stats_parsed` is not read.
 * `lake_read()` returns a snapshot's rows and `lake_walk()` calls a
   function on each file's rows, reading the data files with qio (now
   imported) and adding partition columns from the log. A `filter` prunes

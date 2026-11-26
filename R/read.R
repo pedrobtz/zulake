@@ -47,9 +47,9 @@
 #' Columns are typed as qio returns them (see [qio::read_parquet()]), and
 #' partition columns as [lake_files()] types them, except that a `decimal`
 #' of precision 15 or less, data or partition, is a double, which holds it
-#' exactly. Columns qio cannot return are not lost silently: nested columns
-#' (`struct`, `array`, `map`) and decimals of precision above 15, until qio
-#' reads them. With `columns = NULL` they are left out, each named in a
+#' exactly. Columns zulake does not return are not lost silently: nested
+#' columns (`struct`, `array`, `map`), and decimals of precision above 15
+#' until qio reads them exactly. With `columns = NULL` they are left out, each named in a
 #' warning of class `zulake_warning_column_skipped` (fields `column` and
 #' `reason`); named in `columns` or used in `filter`, such a column is an
 #' error of class `zulake_error_column_unreadable` with the same fields.
@@ -222,7 +222,7 @@ read_scan <- function(tbl, columns, expr, env, int64) {
 # Why qio cannot return a column of Delta type `type`, or NA.
 type_unreadable <- function(type) {
   if (type %in% c("struct", "array", "map")) {
-    return(sprintf("it is a nested column (%s), which qio reads from version 0.2.0", type))
+    return(sprintf("it is a nested column (%s), which zulake does not read yet (design D14)", type))
   }
   ps <- decimal_ps(type)
   if (!is.null(ps) && ps[["precision"]] > max_double_precision) {
@@ -246,7 +246,7 @@ plan_unreadable <- function(plan, name) {
     return(sprintf("qio cannot read it (%s)", if (is.na(note)) "no reason given" else note))
   }
   if (any(plan$nested & startsWith(plan$path, paste0(name, ".")))) {
-    return("it is a nested column, which qio reads from version 0.2.0")
+    return("it is a nested column, which zulake does not read yet (design D14)")
   }
   NA_character_
 }

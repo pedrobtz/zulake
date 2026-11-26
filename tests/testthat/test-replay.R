@@ -240,19 +240,134 @@ test_that("log compaction files replace the commits they cover, with the same sn
   expect_no_snapshot(lake_open(path, version = 2), "zulake_error_corrupt_log")
 })
 
-test_that("a log without commit 0 is refused as needing a checkpoint, and no snapshot is returned", {
+test_that("replay from each checkpoint equals replay from commit 0, and both equal deltalake", {
+  # Stage 2b. Classic (zl-checkpoint, simple_table_with_checkpoint,
+  # table_failed_last_checkpoint_update, zl-checkpoint-no-last), multi-part
+  # (zl-multipart-checkpoint), V2 in JSON with Parquet sidecars
+  # (checkpoint-v2-table) and V2 under the classic name with a sidecar
+  # (v2-classic-checkpoint-json).
+  tables <- checkpoint_tables()
+  expect_setequal(tables, c(
+    "checkpoint-v2-table", "simple_table_with_checkpoint", "table_failed_last_checkpoint_update",
+    "v2-classic-checkpoint-json", "zl-checkpoint", "zl-checkpoint-no-last", "zl-multipart-checkpoint"
+  ))
+  for (table in tables) {
+    path <- fixture_table(table)
+    commits <- local_commits_only(table)
+    cps <- checkpoint_versions(path)
+    expect_gt(length(cps), 0L)
+    for (version in oracle_versions(table)) {
+      label <- paste(table, version)
+      from_cp <- lake_open(path, version = version)
+      expect_same_state(from_cp, lake_open(commits, version = version), label)
+      expect_oracle(replay_files_frame(from_cp, "path"), table, version, "add_actions")
+      # The checkpoint was read, and no commit at or before it.
+      cp <- cps[cps <= version]
+      reads <- log_reads(path, version)
+      if (length(cp)) {
+        cp <- max(cp)
+        expect_true(any(startsWith(reads, sprintf("%020.0f.checkpoint.", cp))), label = label)
+        read_commits <- as.numeric(substr(reads[grepl("^[0-9]{20}[.]json$", reads)], 1L, 20L))
+        expect_true(all(read_commits > cp | read_commits == version), label = paste(label, paste(reads, collapse = " ")))
+      } else {
+        expect_false(any(grepl("[.]checkpoint[.]", reads)), label = label)
+      }
+    }
+  }
+})
+
+test_that("V2 sidecars are read from _delta_log/_sidecars/", {
+  reads <- log_reads(fixture_table("checkpoint-v2-table"))
+  expect_true(any(grepl("^_sidecars/00000000000000000008[.]checkpoint[.].*[.]parquet$", reads)))
+  reads <- log_reads(fixture_table("v2-classic-checkpoint-json"))
+  expect_true("00000000000000000001.checkpoint.parquet" %in% reads)
+  expect_true(any(startsWith(reads, "_sidecars/00000000000000000001.checkpoint.")))
+  # Every part of a multi-part checkpoint, in part order.
+  reads <- log_reads(fixture_table("zl-multipart-checkpoint"), 4)
+  expect_identical(
+    reads[grepl("checkpoint[.][0-9]{10}", reads)],
+    sprintf("00000000000000000004.checkpoint.%010d.0000000003.parquet", 1:3)
+  )
+})
+
+test_that("a log whose commits before the checkpoint were removed gives the same snapshot", {
+  for (table in checkpoint_tables()) {
+    path <- local_fixture_copy(table)
+    cp <- max(checkpoint_versions(path))
+    log <- file.path(path, "_delta_log")
+    commits <- list.files(log, pattern = "^[0-9]{20}[.]json$")
+    unlink(file.path(log, commits[as.numeric(substr(commits, 1L, 20L)) < cp]))
+    for (version in oracle_versions(table)[oracle_versions(table) >= cp]) {
+      tbl <- lake_open(path, version = version)
+      expect_same_state(tbl, lake_open(fixture_table(table), version = version), paste(table, version))
+      expect_oracle(replay_files_frame(tbl, "path"), table, version, "add_actions")
+    }
+    # A version before the checkpoint is gone with its commits.
+    if (cp > 0) {
+      expect_no_snapshot(lake_open(path, version = cp - 1), "zulake_error_version")
+    }
+    expect_true(lake_is_table(path))
+  }
+})
+
+test_that("a log of checkpoints alone opens, with no commit time", {
   path <- local_fixture_copy("zl-checkpoint")
-  unlink(file.path(path, "_delta_log", sprintf("%020d.json", 0:4)))
+  unlink(file.path(path, "_delta_log", sprintf("%020d.json", 0:12)))
+  tbl <- lake_open(path)
+  expect_identical(lake_version(tbl), 10)
+  expect_identical(tbl$timestamp, as.POSIXct(NA_real_, origin = "1970-01-01", tz = "UTC"))
+  expect_null(tbl$commit_info)
+  expect_same_state(tbl, lake_open(fixture_table("zl-checkpoint"), version = 10), "zl-checkpoint 10")
+  expect_identical(lake_version(lake_open(path, version = 5)), 5)
+  expect_no_snapshot(lake_open(path, version = 4), "zulake_error_version")
+  expect_no_snapshot(lake_open(path, version = 11), "zulake_error_version")
+})
+
+test_that("a checkpoint that cannot be read is passed over for an earlier one or the commits", {
+  base <- lake_open(fixture_table("zl-checkpoint"))
+  # Checkpoint 10 is not Parquet: replay starts at checkpoint 5.
+  path <- local_fixture_copy("zl-checkpoint")
+  writeBin(charToRaw("not parquet"), file.path(path, "_delta_log", "00000000000000000010.checkpoint.parquet"))
+  expect_same_state(lake_open(path), base, "checkpoint 10 unreadable")
+  reads <- log_reads(path)
+  expect_true("00000000000000000005.checkpoint.parquet" %in% reads)
+  expect_false("00000000000000000004.json" %in% reads)
+  # Neither is: replay from commit 0.
+  writeBin(charToRaw("not parquet"), file.path(path, "_delta_log", "00000000000000000005.checkpoint.parquet"))
+  expect_same_state(lake_open(path), base, "both unreadable")
+  expect_true("00000000000000000000.json" %in% log_reads(path))
+  # And without commit 0 the log has neither commit 0 nor a readable checkpoint.
+  unlink(file.path(path, "_delta_log", "00000000000000000000.json"))
   expect_no_snapshot(lake_open(path), "zulake_error_checkpoint_unreadable")
-  expect_no_snapshot(lake_open(path, version = 12), "zulake_error_checkpoint_unreadable")
   err <- tryCatch(lake_open(path), error = identity)
   expect_s3_class(err, "zulake_error")
   expect_identical(err$checkpoint, 10)
-  expect_true(lake_is_table(path))
+  expect_s3_class(err$parent, "zulake_error_checkpoint_unreadable")
 
-  # Only checkpoints, no commit at all.
-  unlink(file.path(path, "_delta_log", sprintf("%020d.json", 5:12)))
+  # A V2 checkpoint whose sidecar is gone.
+  path <- local_fixture_copy("checkpoint-v2-table")
+  unlink(list.files(file.path(path, "_delta_log", "_sidecars"), pattern = "^00000000000000000008", full.names = TRUE))
+  writeLines("{\"version\":6}", file.path(path, "_delta_log", "_last_checkpoint"))
+  expect_same_state(lake_open(path), lake_open(fixture_table("checkpoint-v2-table")), "sidecar gone")
+})
+
+test_that("a multi-part checkpoint with a part missing is not used", {
+  # No _last_checkpoint, so nothing says the parts should be there: the
+  # commits are replayed instead.
+  path <- local_fixture_copy("zl-multipart-checkpoint")
+  unlink(file.path(path, "_delta_log", c("_last_checkpoint", "00000000000000000004.checkpoint.0000000002.0000000003.parquet")))
+  for (version in 0:5) {
+    tbl <- lake_open(path, version = version)
+    expect_oracle(replay_files_frame(tbl, "path"), "zl-multipart-checkpoint", version, "add_actions")
+  }
+  expect_false(any(grepl("[.]checkpoint[.]", log_reads(path))))
+  unlink(file.path(path, "_delta_log", sprintf("%020d.json", 0:3)))
   expect_no_snapshot(lake_open(path), "zulake_error_checkpoint_unreadable")
+  expect_no_snapshot(lake_open(path, version = 4), "zulake_error_checkpoint_unreadable")
+  # No commit at all, and the one checkpoint not whole.
+  unlink(file.path(path, "_delta_log", sprintf("%020d.json", 4:5)))
+  expect_no_snapshot(lake_open(path), "zulake_error_checkpoint_unreadable")
+  expect_identical(tryCatch(lake_open(path), error = identity)$checkpoint, 4)
 })
 
 test_that("a log with a commit missing and no checkpoint is a corrupt log", {
@@ -264,14 +379,53 @@ test_that("a log with a commit missing and no checkpoint is a corrupt log", {
   expect_no_snapshot(lake_open(path, version = 1), "zulake_error_corrupt_log")
 })
 
-test_that("_last_checkpoint is parsed, and replay still starts at commit 0", {
+test_that("replay starts at the latest whole checkpoint, whatever a stale _last_checkpoint names", {
   tbl <- lake_open(fixture_table("zl-checkpoint"))
   expect_identical(tbl$last_checkpoint[["version"]], 10)
-  # A stale _last_checkpoint (version 1, with a checkpoint at 3) changes nothing.
-  tbl <- lake_open(fixture_table("table_failed_last_checkpoint_update"))
+  # A stale _last_checkpoint (version 1, with a checkpoint at 3): checkpoint 3.
+  path <- fixture_table("table_failed_last_checkpoint_update")
+  tbl <- lake_open(path)
   expect_identical(tbl$last_checkpoint[["version"]], 1)
   expect_oracle(replay_files_frame(tbl, "path"), "table_failed_last_checkpoint_update", 3, "add_actions")
-  expect_null(lake_open(fixture_table("zl-checkpoint-no-last"))$last_checkpoint)
+  reads <- log_reads(path)
+  expect_true("00000000000000000003.checkpoint.parquet" %in% reads)
+  expect_false("00000000000000000001.checkpoint.parquet" %in% reads)
+  expect_identical(log_reads(path, 2)[[2L]], "00000000000000000001.checkpoint.parquet")
+  # No _last_checkpoint: the listing finds the checkpoint.
+  path <- fixture_table("zl-checkpoint-no-last")
+  expect_null(lake_open(path)$last_checkpoint)
+  expect_true("00000000000000000002.checkpoint.parquet" %in% log_reads(path))
+})
+
+test_that("a hand-written V2 checkpoint in JSON replays like the commits it stands for", {
+  # Commit 0 adds a and b with a transaction and a domain; commit 1 removes
+  # a and changes both. The checkpoint at 1 says the same, and commit 2
+  # comes after it.
+  p <- protocol_line(3L, 7L, "v2Checkpoint", c("v2Checkpoint", "domainMetadata"))
+  m <- metadata_line(c(id = "long", p = "string"), partition = "p")
+  txn <- function(v) json_line(list(txn = list(appId = "app", version = v, lastUpdated = 5)))
+  dom <- function(k) json_line(list(domainMetadata = list(domain = "d", configuration = k, removed = FALSE)))
+  commits <- list(
+    c(p, m, add_line("a.parquet", list(p = "x")), add_line("b.parquet", list(p = NULL)), txn(1L), dom("1")),
+    c(remove_line("a.parquet"), txn(2L), dom("2")),
+    c(add_line("c.parquet", list(p = "z")))
+  )
+  path <- hand_table(commits[[1L]])
+  write_commit(path, 1, commits[[2L]])
+  write_commit(path, 2, commits[[3L]])
+  full <- local_copy_dir(path)
+  write_json_checkpoint(path, 1, c(
+    json_line(list(checkpointMetadata = list(version = 1L))),
+    p, m, txn(2L), dom("2"), remove_line("a.parquet"),
+    add_line("b.parquet", list(p = NULL))
+  ))
+  unlink(file.path(path, "_delta_log", "00000000000000000000.json"))
+  for (version in 1:2) {
+    expect_same_state(lake_open(path, version = version), lake_open(full, version = version), paste("v2 json", version))
+  }
+  expect_identical(lake_open(path, version = 1)$files$path, "b.parquet")
+  expect_identical(lake_open(path)$files$path, c("b.parquet", "c.parquet"))
+  expect_identical(lake_open(path)$removed$path, "a.parquet")
 })
 
 # ---- time travel by timestamp ---------------------------------------------

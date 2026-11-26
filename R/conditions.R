@@ -14,7 +14,10 @@
 #   zulake_error_not_table             no Delta log at the location
 #   zulake_error_version               a version or timestamp the log lacks
 #   zulake_error_corrupt_log           a log that breaks the protocol
-#   zulake_error_checkpoint_unreadable a log that needs a checkpoint (D14)
+#   zulake_error_checkpoint_unreadable a version that needs a checkpoint
+#                                      zulake cannot read or that is not
+#                                      whole, commit 0 being gone;
+#                                      `checkpoint`, `parent`
 #   zulake_error_unsupported_feature   a reader feature zulake refuses (D7);
 #                                      the condition's `feature` field
 #                                      names it, `protocol` holds the
