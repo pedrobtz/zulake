@@ -1,0 +1,73 @@
+# zulake's own workflow: deltalake 1.7.0 answers again for every fixture
+# table, the hostile logs are made again from the tables, the shipped tar is
+# packed again, and any difference from what is committed fails the run. So
+# the answers the R tests compare against are deltalake's, for exactly the
+# tables the package ships.
+#
+# Gated by the `paths` filter (r-actions README, assurance.yml: a workflow
+# whose pull_request trigger lists `paths` is exempt from the changes gate):
+# only a pull request that touches the harness, the fixture scripts or the
+# fixtures runs it. On demand: `gh workflow run oracle.yaml --ref <branch>`.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths:
+      - "tools/oracle/**"
+      - "tools/fixtures/**"
+      - "tests/testthat/fixtures/**"
+      - ".github/workflows/oracle.yaml"
+  workflow_dispatch:
+
+name: oracle
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  oracle:
+    # Labels are decided here, without a runner (ci.md, Labels).
+    if: >-
+      github.event_name != 'pull_request'
+      || contains(github.event.pull_request.labels.*.name, 'full-ci')
+      || !(contains(github.event.pull_request.labels.*.name, 'ci:docs')
+        || contains(github.event.pull_request.labels.*.name, 'ci:minimal')
+        || contains(github.event.pull_request.labels.*.name, 'skip-ci:oracle'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          # The uv that wrote tools/oracle/uv.lock; Python comes from
+          # tools/oracle/.python-version, deltalake from the lockfile.
+          version: "0.7.11"
+          enable-cache: false
+
+      - uses: r-lib/actions/setup-r@v2.14.0
+        with:
+          r-version: release
+
+      - name: deltalake answers
+        working-directory: tools/oracle
+        run: uv run --frozen python answers.py
+
+      - name: Hostile logs
+        run: Rscript tools/fixtures/hostile.R
+
+      - name: Pack the fixtures
+        working-directory: tools/oracle
+        run: uv run --frozen python ../fixtures/pack.py
+
+      - name: Regenerated equals committed
+        run: |
+          git add --intent-to-add --all tests/testthat/fixtures
+          if ! git diff --exit-code --stat -- tests/testthat/fixtures; then
+            git diff -- tests/testthat/fixtures/answers | head -200
+            echo "::error::regenerated fixtures differ from the committed ones"
+            exit 1
+          fi
