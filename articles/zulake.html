@@ -75,14 +75,14 @@ returns a bearer token:</p>
 <div class="section level2">
 <h2 id="open-a-table">Open a table<a class="anchor" aria-label="anchor" href="#open-a-table"></a>
 </h2>
-<p><code>lake_open()</code> builds a snapshot of one version, the latest
+<p><code><a href="../reference/lake_open.html">lake_open()</a></code> builds a snapshot of one version, the latest
 unless you ask for another. A snapshot never changes;
-<code>lake_load()</code> gives you a new one.</p>
+<code><a href="../reference/lake_open.html">lake_load()</a></code> gives you a new one.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">tbl</span> <span class="op">&lt;-</span> <span class="fu">lake_open</span><span class="op">(</span><span class="va">uri</span>, credentials <span class="op">=</span> <span class="va">token</span><span class="op">)</span></span>
-<span><span class="fu">lake_version</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="va">tbl</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/lake_open.html">lake_open</a></span><span class="op">(</span><span class="va">uri</span>, credentials <span class="op">=</span> <span class="va">token</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/lake_open.html">lake_version</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
 <span><span class="fu">lake_summary</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
-<span><span class="va">old</span> <span class="op">&lt;-</span> <span class="fu">lake_load</span><span class="op">(</span><span class="va">tbl</span>, version <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">old</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/lake_open.html">lake_load</a></span><span class="op">(</span><span class="va">tbl</span>, version <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="the-log-as-data-frames">The log as data frames<a class="anchor" aria-label="anchor" href="#the-log-as-data-frames"></a>
@@ -92,7 +92,7 @@ as a base data frame, unchanged, with nested values in list columns.</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">lake_history</span><span class="op">(</span><span class="va">tbl</span>, limit <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span>
 <span><span class="fu">lake_files</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span></span>
-<span><span class="fu">lake_actions</span><span class="op">(</span><span class="va">tbl</span>, version <span class="op">=</span> <span class="fu">lake_version</span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu">lake_actions</span><span class="op">(</span><span class="va">tbl</span>, version <span class="op">=</span> <span class="fu"><a href="../reference/lake_open.html">lake_version</a></span><span class="op">(</span><span class="va">tbl</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu">lake_changes</span><span class="op">(</span><span class="va">tbl</span>, from <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">

@@ -33,8 +33,13 @@ design decides.
 
 ## Current state
 
-Scaffolded 2026-11-26 with `create-pkg.sh`; no functionality yet. The
-roadmap in
+Scaffolded 2026-11-26 with `create-pkg.sh`. Stage 2 (log replay from
+commit 0, local disk only) is in:
+[`lake_open()`](https://pedrobtz.github.io/zulake/reference/lake_open.md),
+[`lake_is_table()`](https://pedrobtz.github.io/zulake/reference/lake_is_table.md),
+[`lake_load()`](https://pedrobtz.github.io/zulake/reference/lake_open.md),
+[`lake_version()`](https://pedrobtz.github.io/zulake/reference/lake_open.md).
+The roadmap in
 [`.agents/roadmap.md`](https://pedrobtz.github.io/zulake/.agents/roadmap.md)
 takes it to v0.1.0. 0.1.0 waits for `zuhttp` on CRAN and for `zuroar`
 0.1.0 (design §9); local log replay, inspection and reading are built on
@@ -67,8 +72,22 @@ Rscript tools/fixtures/hostile.R                                   # hostile log
 
 ## Architecture
 
-To be written as stages land; see `.agents/design.md`. There is no
-native layer: no `src/`, by design (D1).
+See `.agents/design.md` for the why. There is no native layer: no
+`src/`, by design (D1).
+
+- `R/storage.R`: the internal storage interface (`list`, `get`,
+  `get_range`, `head` over paths relative to the table root) and its
+  local backend; `storage_for()` picks one from the URI.
+- `R/log.R`: what a `_delta_log/` listing holds (`log_entries()`), JSON
+  log files through `zujson`, `_last_checkpoint`.
+- `R/replay.R`: the replay plan (commits, log compaction files) and the
+  reconciliation of actions into a state.
+- `R/protocol.R`: the reader-feature gate (D7) and partition-value
+  checks.
+- `R/timestamp.R`: commit times and time travel by timestamp.
+- `R/open.R`: the exported functions and `snapshot_build()`, which
+  documents the snapshot’s fields.
+- `R/conditions.R`: `zulake_abort()` and the `zulake_error_*` classes.
 
 ## Invariants that are easy to break
 
@@ -96,8 +115,8 @@ native layer: no `src/`, by design (D1).
 its seed, under R CMD check and covr alike; `tools/ci-run-tests.R` runs
 the same file from the source tree. The shuffle reorders every top-level
 expression of a test file, so shared functions go in `helper-*.R`, never
-at file scope. Fixtures (Stage 1, design §8): 25 Delta tables (14 copied
-from `delta-rs`, Apache-2.0; 2 changed from them; 9 `zl-*` written with
+at file scope. Fixtures (Stage 1, design §8): 26 Delta tables (14 copied
+from `delta-rs`, Apache-2.0; 2 changed from them; 10 `zl-*` written with
 `deltalake` 1.7.0) and 8 hostile logs, listed in
 `tests/testthat/fixtures/PROVENANCE.md`. They ship packed in
 `tests/testthat/fixtures/delta-fixtures.tar`, because Delta paths pass

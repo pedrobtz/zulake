@@ -35,7 +35,11 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.0.0.9000" id="zulake-0009000">zulake 0.0.0.9000<a class="anchor" aria-label="anchor" href="#zulake-0009000"></a></h2>
-</div>
+<ul><li>
+<code><a href="../reference/lake_open.html">lake_open()</a></code> opens a Delta Lake table on local disk at its latest version, at a <code>version</code> or at a <code>timestamp</code>, replaying its log from commit 0 as the Delta protocol prescribes: JSON commits, log compaction files, and the reconciliation of <code>add</code>, <code>remove</code>, <code>metaData</code>, <code>protocol</code>, <code>txn</code> and <code>domainMetadata</code> actions. <code><a href="../reference/lake_open.html">lake_load()</a></code> builds another snapshot of the same table, <code><a href="../reference/lake_open.html">lake_version()</a></code> gives a snapshot’s version, and <code><a href="../reference/lake_is_table.html">lake_is_table()</a></code> says whether a location holds a table.</li>
+<li>A table that needs a reader feature zulake does not support (<code>columnMapping</code> in <code>id</code> mode, <code>catalogManaged</code>, or any feature it does not know) is refused with a <code>zulake_error_unsupported_feature</code> that names the feature, before any data file is read.</li>
+<li>Every error is a classed condition inheriting from <code>zulake_error</code>. A log that no longer reaches commit 0 is refused with <code>zulake_error_checkpoint_unreadable</code> until checkpoints can be read; a corrupt log (a commit that is not JSON, a partition value of the wrong type) with <code>zulake_error_corrupt_log</code>.</li>
+</ul></div>
   </main></div>
 
 

@@ -21,9 +21,11 @@ token <- function() my_token()
 
 ## Open a table
 
-`lake_open()` builds a snapshot of one version, the latest unless you
-ask for another. A snapshot never changes; `lake_load()` gives you a new
-one.
+[`lake_open()`](https://pedrobtz.github.io/zulake/reference/lake_open.md)
+builds a snapshot of one version, the latest unless you ask for another.
+A snapshot never changes;
+[`lake_load()`](https://pedrobtz.github.io/zulake/reference/lake_open.md)
+gives you a new one.
 
 ``` r
 
