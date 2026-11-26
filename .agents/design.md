@@ -114,9 +114,10 @@ other Azure authentication (SAS, shared key), Iceberg.
 - **`zuhttp`** is the transport to Azure. It is not on CRAN; `zulake`
   0.1.0 waits for it (D5). Range requests and streamed bodies need
   nothing new from it.
-- **`zuroar`** reads deletion vectors (`roar64_unserialize()`). When its
-  bit vectors land (pedrobtz/zuroar#71), a deletion vector becomes a
-  `zuroar_bits` keep mask with no conversion step.
+- **`zuroar`** reads deletion vectors (`roar64_unserialize()`). Its
+  planned bit vectors (pedrobtz/zuroar#71, zuroar 0.2.0) are 32-bit, so a
+  keep mask built from them is an additive helper after 0.1.0, not the
+  shape `lake_deletion_vectors()` returns (D12).
 - **`zugodb`** calls `zulake`, never the reverse: once its Stage 10
   registered readers exist, an extension registers a `delta` format that
   opens a snapshot with `zulake` and streams the files.
@@ -214,7 +215,7 @@ lake_summary(tbl)        # one row: files, bytes, records, deleted rows
 lake_files(tbl, filter = NULL, stats = TRUE)  # live add actions
 lake_partitions(tbl, filter = NULL)           # distinct partition values
 lake_removed(tbl)        # remove tombstones still in the log
-lake_deletion_vectors(tbl, files = NULL)      # descriptors and row indexes
+lake_deletion_vectors(tbl, files = NULL, rows = TRUE)  # descriptors, rows
 lake_count(tbl)          # records from stats, minus deleted rows
 
 # The log itself
@@ -260,7 +261,7 @@ The read and inspection side of `DeltaTable`, mapped:
 | `get_add_actions()` | `lake_files()` | nested, no `flatten` |
 | `partitions()` | `lake_partitions()` | |
 | `count()` | `lake_count()` | stats minus DVs |
-| `deletion_vectors()` | `lake_deletion_vectors()` | Q2 |
+| `deletion_vectors()` | `lake_deletion_vectors()` | positions, not `selection_vector` (D12) |
 | `transaction_version()` | `lake_transactions()` | every `appId` |
 | `to_pyarrow_table()` | `lake_read()` | (c) |
 | `to_pyarrow_dataset()`, `scan()` | `lake_walk()` | |
@@ -343,10 +344,26 @@ them (D10).
   with a bad checksum, a magic number that differs, a partition value of
   the wrong type. Each is a classed `zulake_error`, never a wrong
   answer.
-- **Azure.** Unit tests replay recorded responses through `zuhttp`'s
-  cassette transport, with tokens redacted. A live suite runs against a
-  real storage account only when `ZULAKE_AZURE_URI` and a token are set;
-  it never runs on CRAN (Q5).
+- **Azure** (D13), in three layers:
+  - *Requests.* A `zu_mock_transport()` fake serves the local fixtures
+    and records every request; tests assert method, path, query, `Range`,
+    `Authorization` and `x-ms-version`. Runs in `R CMD check`.
+  - *Emulator.* `azure-emulator.yaml`, the package's own workflow, needs
+    no secrets: it uploads the fixtures to Azurite over HTTPS with
+    `--oauth basic`, and `zulake` (bearer token) and `deltalake` read the
+    same tables; snapshots and full reads must be equal. Cassettes are
+    recorded from this run with `zu_cassette_transport()` and replayed in
+    `R CMD check`, never written by hand. A cassette checks nothing about
+    the request it answers, so the request assertions stay with the fake.
+    The cassette key ignores `Range` (pedrobtz/zuhttp#353), so each ranged
+    request gets its own cassette until that is fixed.
+  - *Live.* A suite against a real ADLS Gen2 account, run only when
+    `ZULAKE_AZURE_URI` and a token are set, by `azure-live.yaml` on
+    dispatch or by the maintainer locally; it never runs on CRAN.
+
+  Azurite URLs are path-style (`https://127.0.0.1:10000/devstoreaccount1/`),
+  so tests reach it through an internal option, `zulake.azure_endpoint`;
+  the public API still refuses other schemes (D3).
 - **Filters.** A property test: for random filters over the fixtures,
   `lake_read(filter = f)` equals reading everything and subsetting in R.
 
@@ -391,6 +408,25 @@ The order of work, and what 0.1.0 waits for, are in
   for Delta, and a snapshot records its format, so that Iceberg can be
   added without renaming anything. Iceberg needs `zuavro` (RFC 0063) for
   its manifests.
+- **D12 (2026-11-26).** `lake_deletion_vectors(tbl, files = NULL,
+  rows = TRUE)` returns a base data frame with one row per live file
+  that has a deletion vector: `uri`, the descriptor (`storage_type`,
+  `path_or_inline_dv`, `offset`, `size_in_bytes`, `cardinality`) and
+  `rows`, a list column of sorted 0-based Parquet row positions as
+  doubles. A position at or above 2^53 is a classed error (D10).
+  `rows = FALSE` returns the descriptors only, with no I/O and no
+  `zuroar`. Why: a `zuroar64` column is an external pointer that cannot
+  print, compare or be saved without `zuroar`, which is only suggested
+  (D2), and the 32-bit `zuroar_bits` of pedrobtz/zuroar#71 does not hold
+  64-bit vectors. The oracle comparison is `which(!selection_vector) - 1`.
+- **D13 (2026-11-26, provisional).** Azurite over HTTPS with
+  `--oauth basic` is the CI stand-in for Azure; a live ADLS Gen2 run is
+  the release gate (§11, criterion 4b). Why: no storage account or token
+  is available yet, and Azurite is an independent implementation of the
+  Blob REST API. A spike at the start of Stage 6 confirms that Azurite
+  accepts bearer tokens through `zuhttp`; if it does not, the request
+  fake and criterion 4b are the only Azure oracles, and Stage 6 cannot
+  close until a real account exists.
 
 ## 11. Acceptance criteria for v0.1.0
 
@@ -399,17 +435,24 @@ The order of work, and what 0.1.0 waits for, are in
 2. `lake_read(filter = f)` equals a full read subset in R for every
    filter in the property test.
 3. Rows marked by deletion vectors never appear in a read.
-4. The live Azure suite passes against a real ADLS Gen2 account with a
-   bearer token, and no token appears in any output, error or snapshot.
+4. Azure, in two parts (D13):
+   - **4a.** The emulator suite passes against Azurite with a bearer
+     token, and no token appears in any output, error, snapshot or
+     cassette.
+   - **4b.** The live suite passes once against a real ADLS Gen2 account,
+     by a dispatched `azure-live.yaml` run or a maintainer's local run
+     with its log attached to pedrobtz/zulake#24. Dropping 4b is the
+     maintainer's decision; it amends D3, and the README then says
+     "tested against Azurite, not live Azure".
 5. `R CMD check --as-cran` clean on all r-actions legs.
 
 ## 12. Open questions
 
 - **Q1.** Settled 2026-11-25 as D11: `zulake`, Delta now, Iceberg
   later.
-- **Q2.** Should a deletion vector come back as row indexes (doubles),
-  a `zuroar64`, or a `zuroar_bits` keep mask once pedrobtz/zuroar#71
-  lands? `deltalake` returns a keep mask (`selection_vector`).
+- **Q2.** Settled 2026-11-26 as D12: descriptors plus `rows`, 0-based
+  row positions as doubles; a keep mask is an additive helper after
+  pedrobtz/zuroar#71.
 - **Q3.** Settled 2026-11-26 (maintainer): `delta-rs`'s test tables, a
   small subset shipped in the package, under Apache-2.0; no DAT tables,
   because DAT has no licence (no LICENSE file, nothing in its README or
@@ -417,9 +460,9 @@ The order of work, and what 0.1.0 waits for, are in
 - **Q4.** Should downloads be cached across sessions (for example
   through `dazcache`), keyed by path and the `add` action's size and
   modification time, which never change for a Delta data file?
-- **Q5.** Can Azurite stand in for Azure in CI with bearer tokens? It
-  accepts OAuth only over HTTPS with its `--oauth basic` mode, which was
-  not tried.
+- **Q5.** Provisionally settled 2026-11-26 as D13: yes, Azurite over
+  HTTPS with `--oauth basic`, confirmed by a spike at the start of
+  Stage 6.
 - **Q6.** Should `List Blobs` be replaced by probing successive commit
   names after the checkpoint, as Delta kernels can, when listing is
   slow on large logs? Blob listing has no "start after" for an arbitrary

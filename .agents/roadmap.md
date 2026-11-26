@@ -328,7 +328,8 @@ downloading only the files a filter cannot rule out.
 - Deletion vectors of [§4.4](design.md#44-deletion-vectors): descriptors,
   Z85 inline vectors, UUID-relative and absolute paths, range reads, the
   file format with its CRC-32, `zuroar::roar64_unserialize()`.
-- `lake_deletion_vectors()` in the shape Q2 settles; `lake_count()` minus
+- `lake_deletion_vectors()` in the shape of
+  [D12](design.md#10-decisions); `lake_count()` minus
   deleted rows; reads drop marked rows.
 - `columnMapping` in `name` mode and `timestampNtz`.
 - `Suggests: zuroar`, `Remotes: pedrobtz/zuroar`, and a classed error
@@ -380,17 +381,33 @@ with a caller's bearer token, and the token never leaves the request.
 - `credentials()` called before the first request and once more after a
   `401` ([D4](design.md#10-decisions)); redaction from errors and prints.
 - `Imports: zuhttp`, `Remotes: pedrobtz/zuhttp`.
-- Cassettes recorded against a real account with tokens redacted, under
-  `tests/testthat/fixtures/cassettes/`.
+- First, the spike of [D13](design.md#10-decisions): Azurite over HTTPS
+  with `--oauth basic`, a bearer token, `List Blobs` and a ranged
+  `Get Blob` through `zuhttp`. If it fails, stop: the stage needs a real
+  account.
+- The request fake of [§8](design.md#8-testing-and-validation): a
+  `zu_mock_transport()` that serves the local fixtures and records every
+  request.
+- `azure-emulator.yaml`, the package's own workflow, gated per `ci.md`:
+  fixtures uploaded to Azurite, read by `zulake` and by `deltalake`.
+- Cassettes recorded from that Azurite run with tokens redacted, under
+  `tests/testthat/fixtures/cassettes/`, one per ranged request until
+  pedrobtz/zuhttp#353 is fixed.
+- The internal option `zulake.azure_endpoint` for Azurite's path-style
+  URLs.
 - A live suite, skipped unless `ZULAKE_AZURE_URI` and a token are set,
   and `azure-live.yaml`, the package's own workflow, running it on
-  dispatch with repository secrets.
+  dispatch with repository secrets. It is written here and run in
+  Stage 11 ([#24](https://github.com/pedrobtz/zulake/issues/24)).
 
 **Tests.**
 
-- Requests: the bytes `zuhttp`'s cassette transport received (method,
-  path, query, `Range`, `Authorization`, `x-ms-version`), including
-  `List Blobs` pagination across a marker, in `test-azure.R`.
+- Requests: what the request fake recorded (method, path, query,
+  `Range`, `Authorization`, `x-ms-version`), including `List Blobs`
+  pagination across a marker, in `test-azure.R`.
+- Emulator: the snapshot and full read of every fixture uploaded to
+  Azurite equal `deltalake`'s on the same container (acceptance 4a), in
+  `test-azure-emulator.R`.
 - `401`: `credentials()` called exactly twice, then a classed error, with
   `zu_mock_transport`, in `test-azure.R`.
 - Token absence: the token string appears in no print, error message,
@@ -398,12 +415,16 @@ with a caller's bearer token, and the token never leaves the request.
 - URI forms: all three resolve to the same requests; `s3://`, `gs://` and
   others are refused, in `test-azure.R`.
 - Live: the snapshot and full read of a table on ADLS Gen2 equal
-  `deltalake`'s on the same table (acceptance 4), in `test-azure-live.R`.
+  `deltalake`'s on the same table (acceptance 4b), in `test-azure-live.R`;
+  written and skipping cleanly here, run in Stage 11.
 
 **Exit criteria.**
 
 - `R CMD check` passes on the quick r-actions profile.
-- `azure-live.yaml` green on a dispatched run.
+- `azure-emulator.yaml` green on the pull request.
+- `test-azure-live.R` skips cleanly without `ZULAKE_AZURE_URI`.
+- Changed 2026-11-26: the green live run moved to Stage 11, because no
+  storage account or token is available yet (D13).
 - Every `**Tests.**` line exists, compares against the named oracle, and
   was seen to fail.
 - `.agents/assurance.md` has the Azure Blob REST boundary row.
@@ -553,6 +574,9 @@ review, in that order.
 - Every blocking and required review issue closed.
 - The `pkg-cran-review` table clean.
 - `NEWS.md` reflects every user-visible fix.
+- The live Azure suite green once against ADLS Gen2 (acceptance 4b,
+  [#24](https://github.com/pedrobtz/zulake/issues/24)), or the
+  maintainer's recorded decision to drop it.
 - A full-profile run green on the default branch, whose head becomes the
   release commit.
 
@@ -573,10 +597,10 @@ review, in that order.
 
 ## Blocking open questions
 
-- [§12](design.md#12-open-questions) Q2 blocks Stage 5: the shape
-  `lake_deletion_vectors()` returns.
-- [§12](design.md#12-open-questions) Q5 does not block Stage 6 (cassettes
-  and the dispatched live suite carry it), but settles whether CI can run
-  the Azure suite without secrets.
+- [D13](design.md#10-decisions) blocks Stage 6 until its spike confirms
+  that Azurite accepts bearer tokens through `zuhttp`.
+- [§11](design.md#11-acceptance-criteria-for-v010) criterion 4b blocks
+  Stage 11: a real ADLS Gen2 account
+  ([#24](https://github.com/pedrobtz/zulake/issues/24)).
 - [D5](design.md#10-decisions) and [D9](design.md#10-decisions) block Stage 10:
   `zuhttp` and `zuroar` on CRAN.
