@@ -671,6 +671,25 @@ breaking type change for p <= 15 (settled 2026-11-26, Stage 4).
   `inst/COPYRIGHTS` and "The delta-rs authors" are a `cph`. DAT is not
   used: it has no licence. `COVID-19_NYT` is not copied (New York Times
   terms).
+- **Example table (2026-11-26, Stage 7).** The README, the Get started
+  vignette and every example open `inst/extdata/orders/`, a copy of a new
+  fixture `zl-orders` that `tools/fixtures/generate.py` writes with
+  `deltalake` 1.7.0 like the other `zl-*` tables (zulake's own data, MIT,
+  so no licence change) and `pack.py` copies, with `deltalake`'s answers in
+  `answers/` like any fixture. Orders (`order_id` long, `customer` string,
+  `amount` double, `order_date` date, `region` string) partitioned by
+  `region`; five versions: create, two appends, a row delete that rewrites
+  a file, and an append with an application transaction and custom commit
+  metadata; no checkpoint, nested, decimal or timestamp column, or
+  deletion vector. Data files are renamed `region=<r>/part-<n>.parquet` so
+  every path stays under the tarball's 100 bytes, and in-commit timestamps
+  (writer feature, reader version 1) are on from version 0 at fixed days,
+  because an installed package's files carry the install time; the build
+  is deterministic, so `oracle.yaml` rebuilds it. `test-extdata.R` checks
+  the copy is the fixture and equals the answers. Why: a table built for
+  the documentation shows each function on real output in a few kilobytes,
+  and none of the copied `delta-rs` tables is both small and short-pathed
+  with times that survive installation.
 - **Oracle.** `deltalake` 1.7.0, installed with `uv` in a
   development-only workflow, answers the same questions on every
   fixture: version, history, schema, protocol, live file list, partition

@@ -54,6 +54,7 @@ DAT (`delta-incubator/dat`) is not used: it has no licence (design §12, Q3).
 | `zl-domains` | zulake | `deltalake` 1.7.0; edited | 0–4 | `domainMetadata` added, changed and removed, in commits 1–3 written by hand with the `domainMetadata` writer feature |
 | `zl-log-compaction` | zulake | `deltalake` 1.7.0 | 0–5 | a log compaction file for commits 1 to 3 (`compact_logs()`) |
 | `zl-multipart-checkpoint` | zulake | `deltalake` 1.7.0; edited | 0–5 | a three-part checkpoint at 4: the single-part checkpoint `deltalake` wrote, split into three Parquet files by row, `_last_checkpoint` with `parts = 3` |
+| `zl-orders` | zulake | `deltalake` 1.7.0; edited | 0–4 | the example table the package ships, copied to `inst/extdata/orders/` by `pack.py`: orders partitioned by `region` (`long`, `string`, `double`, `date`), created, appended twice, a row delete that rewrites one file, and an append with an application transaction and custom commit metadata (added 2026-11-26, Stage 7). Edits, so that every build is the same bytes: data files renamed `region=<r>/part-<n>.parquet` (by version, then region) and every `add` and `remove` path rewritten to match; `inCommitTimestamp` enabled from version 0 (protocol replaced by reader 1, writer 7, writer feature `inCommitTimestamp`; `delta.enableInCommitTimestamps` in `metaData`), each `commitInfo` given `inCommitTimestamp` and `timestamp` of 09:00 UTC on 2025-01-06 to 2025-01-10 and moved first; `modificationTime`, `deletionTimestamp`, `txn.lastUpdated` and `createdTime` set to those times, the table id and `txnId`s fixed, timing metrics zeroed, statistics and `commitInfo` keys sorted, actions in a fixed order |
 | `zl-partitioned` | zulake | `deltalake` 1.7.0 | 0–2 | string, integer and date partition columns; nulls, spaces, `/`, `=`, `%` and non-ASCII in values; a partition deleted |
 | `zl-types` | zulake | `deltalake` 1.7.0 | 0 | every type the writer has, at its edges: 8 to 64-bit integers at their limits and at 2^53 ± 1, signed zero and infinities, decimals of precision 10 and 38, non-ASCII strings, binary, dates of years 1 and 9999, `timestamp` and `timestamp_ntz`, struct, list and map |
 | `zl-unknown-reader-feature` | zulake | `deltalake` 1.7.0; edited | 0–1 | commit 1 (by hand) upgrades the protocol to reader feature `zulakeUnknownFeature`; every reader must refuse version 1 by that name |
@@ -87,5 +88,6 @@ Rscript tools/fixtures/hostile.R                          # hostile logs
 
 `generate.py` names files by random UUID and stamps commits with the clock,
 so rerunning it changes the `zl-*` tables and every answer for them; run it
-only to change a table. The last three steps are deterministic, and
+only to change a table. `zl-orders` is the exception: its build is
+deterministic, and `oracle.yaml` rebuilds it with `generate.py orders`. The last three steps are deterministic, and
 `.github/workflows/oracle.yaml` reruns them and fails on any difference.
