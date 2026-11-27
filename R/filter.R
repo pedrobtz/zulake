@@ -521,7 +521,19 @@ column_bounds <- function(tbl, parsed, col, type) {
     if (is.list(obj) && !is.null(names(obj))) obj[[key]] else NULL
   }
   leaf_text <- function(v) {
-    if (is.null(v) || is.list(v) || length(v) != 1L) NA_character_ else if (is_marked(v)) marked_text(v) else if (is.character(v)) v else if (is.logical(v) && !is.na(v)) if (v) "1" else "0" else NA_character_
+    if (is.null(v) || is.list(v) || length(v) != 1L) {
+      return(NA_character_)
+    }
+    if (is_marked(v)) {
+      return(marked_text(v))
+    }
+    if (is.character(v)) {
+      return(v)
+    }
+    if (is.logical(v) && !is.na(v)) {
+      return(if (v) "1" else "0")
+    }
+    NA_character_
   }
   count_text <- function(v) {
     t <- leaf_text(v)
