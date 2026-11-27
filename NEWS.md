@@ -138,3 +138,7 @@
   condition; it is now refused as user information without either (#48).
   An Azure URI with an empty path segment (`.../lake//t`) is refused, as
   the design says, instead of opening `t` (#61).
+* Fixed: the log of a table on Azure naming a local path or a `file:` URI
+  (a data file or a deletion vector) was read from the reader's own disk.
+  A table's files now stay on its own storage: such a path is a
+  `zulake_error_uri` (#44).

@@ -487,10 +487,18 @@ storage_azure <- function(parts, handle) {
 
 # The backend and blob name that read an absolute Azure URI found in the
 # log (an `add` path, a deletion vector's path), with the table's
-# credentials; NULL when `path` is not an Azure URI or the table is not on
-# Azure.
+# credentials; NULL for a local path in the log of a local table. A table's
+# files stay on its own backend: an Azure URI in a local table's log, and a
+# local path or file: URI in a remote table's, are a zulake_error_uri (#44).
 storage_for_absolute <- function(storage, path) {
   if (!identical(storage$kind, "azure") || !is_azure_uri(path)) {
+    if (!identical(storage$kind, "local")) {
+      zulake_abort(
+        "uri",
+        sprintf("%s is not a location of this table's storage: a remote table's files are not read from local disk.", format_string(path)),
+        path = path
+      )
+    }
     return(NULL)
   }
   parts <- parse_azure_uri(path)

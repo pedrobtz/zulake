@@ -211,7 +211,10 @@ Settled in Stage 6 (2026-11-26):
   that is one of the three Azure URI forms is read through the Blob
   endpoint of its own account and container with the table's credentials,
   when the table is on Azure; on a local table it stays a
-  `zulake_error_uri`.
+  `zulake_error_uri`. A table's files stay on its own backend: a local
+  path or a `file:` URI in the log of a table on Azure is a
+  `zulake_error_uri` too, never read from the reader's disk (2026-11-27,
+  #44).
 
 ### 4.2 Log replay
 

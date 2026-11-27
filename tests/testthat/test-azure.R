@@ -771,6 +771,50 @@ test_that("a token is checked after its Bearer prefix is dropped, in any case (#
   }
 })
 
+test_that("an Azure table's log naming a local file is refused, and no local file is read (#44)", {
+  dir <- withr::local_tempdir()
+  src <- fixture_table("zl-basic")
+  files <- lake_files(lake_open(src), stats = FALSE)
+  # The table's data files are on this disk too, at the paths its log names.
+  local <- normalizePath(file.path(src, files$path[1L]), winslash = "/")
+  local_uri <- if (startsWith(local, "/")) paste0("file://", local) else paste0("file:///", local)
+  for (path in c(local, local_uri)) {
+    table <- file.path(dir, "abs-local")
+    unlink(table, recursive = TRUE)
+    write_commit(table, 0, c(protocol_line(), metadata_line(c(id = "long", label = "string", x = "double")),
+                             add_line(path, size = files$size_bytes[1L])))
+    log <- new.env()
+    local_azure_fake(azure_fake(dir, log))
+    tbl <- lake_open(fake_uri("abs-local"), credentials = function() "tok")
+    local_empty_download_cache()
+    expect_error(lake_read(tbl), class = "zulake_error_uri", label = path)
+    expect_error(lake_count(tbl, footers = TRUE), class = "zulake_error_uri", label = path)
+    expect_error(fetch_file(tbl, 1L), class = "zulake_error_uri", label = path)
+    # The same log on local disk reads the file.
+    expect_identical(fetch_file(lake_open(table), 1L), local)
+  }
+})
+
+test_that("an Azure table's deletion vector at a local path is refused (#44)", {
+  skip_if_not_installed("zuroar")
+  rows <- c(1, 4, 5)
+  vec <- dv_bytes(rows)
+  local <- normalizePath(withr::local_tempfile(fileext = ".bin"), winslash = "/", mustWork = FALSE)
+  write_dv_file(local, list(vec))
+  local_uri <- if (startsWith(local, "/")) paste0("file://", local) else paste0("file:///", local)
+  for (p in c(local, local_uri)) {
+    dv <- list(storageType = "p", pathOrInlineDv = p, offset = 1L, sizeInBytes = length(vec), cardinality = length(rows))
+    path <- dv_table(dv)
+    log <- new.env()
+    local_azure_fake(azure_fake(dirname(path), log))
+    tbl <- lake_open(fake_uri(basename(path)), credentials = function() "tok")
+    expect_error(lake_deletion_vectors(tbl), class = "zulake_error_uri", label = p)
+    expect_error(lake_read(tbl), class = "zulake_error_uri", label = p)
+    # Read from local disk, the same table applies the vector.
+    expect_identical(lake_deletion_vectors(lake_open(path))$rows[[1L]], rows)
+  }
+})
+
 test_that("NUL and invalid UTF-8 in List Blobs answers are classed errors (#49)", {
   head <- "<?xml version=\"1.0\" encoding=\"utf-8\"?><EnumerationResults><Blobs>"
   blob <- function(name, encoded = TRUE) {
