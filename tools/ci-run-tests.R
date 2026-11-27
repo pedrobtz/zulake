@@ -12,5 +12,8 @@
 if (!file.exists("tests/testthat.R")) {
   stop("run from the package root: Rscript tools/ci-run-tests.R", call. = FALSE)
 }
+# Full counts for the seeded random tests (helper-iterations.R), as in CI;
+# NOT_CRAN=false runs the reduced counts CRAN runs.
+if (!nzchar(Sys.getenv("NOT_CRAN"))) Sys.setenv(NOT_CRAN = "true")
 setwd("tests")
 source("testthat.R", echo = FALSE)

@@ -269,7 +269,7 @@ test_that("a randomly corrupted commit gives a snapshot or a zulake_error, never
   src <- fixture_table("zl-partitioned")
   for (version in c(0, 1)) {
     original <- readBin(file.path(src, "_delta_log", sprintf("%020d.json", version)), "raw", 1e6)
-    for (i in 1:150) {
+    for (i in seq_len(test_iterations(150L, 30L))) {
       path <- local_fixture_copy("zl-partitioned")
       bytes <- original
       at <- sample.int(length(bytes), sample(1:3, 1L))
@@ -298,7 +298,7 @@ test_that("a commit with one value changed to another JSON type gives a snapshot
   for (table in c("zl-partitioned", "deletion_vectors", "zl-domains", "table_with_column_mapping")) {
     src <- fixture_table(table)
     last <- max(oracle_versions(table))
-    for (i in 1:120) {
+    for (i in seq_len(test_iterations(120L, 25L))) {
       path <- local_fixture_copy(table)
       version <- sample(0:last, 1L)
       f <- file.path(path, "_delta_log", sprintf("%020d.json", version))

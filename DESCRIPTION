@@ -1,19 +1,21 @@
 Package: zulake
-Title: Inspect and Read 'Delta Lake' Tables
+Title: Inspect and Read Delta Lake Tables
 Version: 0.0.0.9000
 Authors@R: c(
     person("Pedro", "Baltazar", , "pedrobtz@gmail.com", role = c("aut", "cre", "cph")),
+    person("QP", "Hou", role = "cph",
+           comment = "Copyright holder of the 'delta-rs' test tables in tests/testthat/fixtures"),
     person("The delta-rs authors", role = "cph",
-           comment = "Delta test tables in tests/testthat/fixtures")
+           comment = "Other contributors to the 'delta-rs' test tables in tests/testthat/fixtures")
   )
-Description: Opens a 'Delta Lake' table where it is stored, on 'Azure Data
+Description: Opens a Delta Lake table where it is stored, on 'Azure Data
     Lake Storage Gen2', 'Azure Blob Storage' or local disk, and returns what
     the table's own log records as data frames: its versions and commits,
     the files of each version with their partition values, statistics and
     deletion vectors, its schema, protocol and properties, and the changes
     between two versions. Reads the table's data too, pruning files by
     partition values and statistics before downloading any of them. The log
-    is replayed in R, following the 'Delta Lake' protocol
+    is replayed in 'R', following the Delta Lake protocol
     <https://github.com/delta-io/delta/blob/master/PROTOCOL.md>.
 License: MIT + file LICENSE
 Copyright: See inst/COPYRIGHTS for the 'delta-rs' test tables (Apache

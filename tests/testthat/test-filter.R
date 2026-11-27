@@ -14,7 +14,7 @@ test_that("partition filters keep exactly the files R's evaluation on deltalake'
     parts <- oracle_partition_frame(table, v)
     data_cols <- setdiff(lake_schema(tbl)$name, names(parts))
     n_checked <- 0L
-    for (i in seq_len(150)) {
+    for (i in seq_len(test_iterations(150L, 40L))) {
       expr <- random_filter(parts, data_cols)
       expected <- oracle_filter_paths(expr, parts, data_cols)
       got <- eval(bquote(lake_files(tbl, filter = .(expr), stats = FALSE)))$path
@@ -117,7 +117,7 @@ test_that("lake_read(filter = f) equals the full read subset in R, and no pruned
     pieces <- suppressWarnings(read_each_file(tbl))
     paths <- lake_files(tbl, stats = FALSE)$path
     data <- full[!vapply(full, is.list, NA)]
-    for (i in seq_len(25)) {
+    for (i in seq_len(test_iterations(25L, 8L))) {
       expr <- random_row_filter(data)
       label <- paste(table, paste(deparse(expr), collapse = " "))
       got <- tryCatch(suppressWarnings(eval(bquote(lake_read(tbl, filter = .(expr))))), zulake_error_filter = identity)
@@ -526,7 +526,7 @@ test_that("a filter gives the same rows however the rows are split into files", 
     expect_identical(want, "refused", label = deparse(expr))
     for (tbl in many) expect_identical(outcome(tbl, expr), want, label = deparse(expr))
   }
-  for (i in seq_len(80)) {
+  for (i in seq_len(test_iterations(80L, 10L))) {
     expr <- random_row_filter(data)
     label <- paste(deparse(expr), collapse = " ")
     want <- suppressWarnings(eval(bquote(lake_read(one, filter = .(expr)))))
