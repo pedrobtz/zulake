@@ -372,6 +372,25 @@
   `zulake_error_corrupt_log` with the `file` and the `path`
   ([\#103](https://github.com/pedrobtz/zulake/issues/103)). A file
   removed and added with a new deletion vector is still an update.
+- Fixed: a commit or log compaction file with two adds, or two removes,
+  of one path was opened. Two adds of one path under two deletion
+  vectors kept both live, so the file was read twice. The protocol
+  allows one add and one remove per path in a commit, and such a file is
+  now a `zulake_error_corrupt_log` with the `file` and the `path`,
+  whatever the deletion vectors
+  ([\#106](https://github.com/pedrobtz/zulake/issues/106)).
+- Fixed: a `stats` string with the same key twice (a repeated
+  `maxValues`, or a column repeated in `minValues`) was read with the
+  first value, so a filtered read could prune a file that matches. It is
+  now a `zulake_error_corrupt_log` with `file` and `key` where
+  statistics are used, and a `schemaString` with a repeated key is one
+  when the table is opened
+  ([\#107](https://github.com/pedrobtz/zulake/issues/107)).
+- Fixed: a MAP in a Parquet checkpoint with the same key twice was read
+  with the key’s first value. That checkpoint is now passed over for an
+  earlier one or commit 0, and is a `zulake_error_checkpoint_unreadable`
+  when replay needs it
+  ([\#108](https://github.com/pedrobtz/zulake/issues/108)).
 - An Azure URI with a port, `:443` included, is still refused, but the
   message now says that the port is the reason, and the
   `zulake_error_uri` has a `port` field, instead of “cannot open "abfss"
