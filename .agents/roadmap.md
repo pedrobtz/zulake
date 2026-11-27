@@ -749,6 +749,12 @@ written down (`is.na()` of a `binary` column, design §6). `Depends: R (>=
 **Goal.** The release candidate has passed a critical review and a CRAN
 review, in that order.
 
+*Deviation (2026-11-27, maintainer):* the critical review runs before
+Stage 10. Stage 10 waits on `zuhttp` and `zuroar` reaching CRAN, and on
+`qio` 0.2.0 with nested reading. The review and its fixes go ahead
+meanwhile. `pkg-cran-review` runs again after Stage 10 removes `Remotes:`,
+so that its table describes the commit that is submitted.
+
 **Work.**
 
 - `pkg-critical-review`: its blocking and required findings become
