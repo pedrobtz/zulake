@@ -13,3 +13,9 @@ test_that("a shuffled run does not keep the file's order", {
   expect_false(identical(run_order(20261126L), 1:20))
   expect_false(identical(run_order(20261126L), run_order(1L)))
 })
+
+test_that("seeded random tests run their full counts only off CRAN", {
+  withr::with_envvar(c(NOT_CRAN = "true"), expect_identical(test_iterations(150L, 30L), 150L))
+  withr::with_envvar(c(NOT_CRAN = NA), expect_identical(test_iterations(150L, 30L), 30L))
+  withr::with_envvar(c(NOT_CRAN = "false"), expect_identical(test_iterations(c(1e3, 1e6, 5e6), c(1e3, 1e6)), c(1e3, 1e6)))
+})

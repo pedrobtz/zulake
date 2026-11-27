@@ -18,6 +18,11 @@ if (requireNamespace("testthat", quietly = TRUE)) {
     seed <- sample.int(.Machine$integer.max, 1L)
   }
   cat("zulake test order seed:", seed, "(ZULAKE_TEST_SEED to replay)\n")
+  # Seeded random tests draw their full counts only with NOT_CRAN=true
+  # (helper-iterations.R); a seed replays a failure in the same mode.
+  cat("zulake random test counts:",
+      if (identical(Sys.getenv("NOT_CRAN"), "true")) "full (NOT_CRAN=true)" else "reduced, as on CRAN",
+      "\n")
   set.seed(seed)
 
   test_check("zulake", shuffle = TRUE)

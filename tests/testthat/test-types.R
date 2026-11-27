@@ -384,7 +384,9 @@ test_that("a string that starts with U+001E is a string, never a marked number (
 
 test_that("a long string before a number past 2^53 leaves it exact, and a scan failure is an error (#57)", {
   skip_if_not_installed("bit64")
-  for (n in c(1e3, 1e6, 5e6)) {
+  # 5e6 is the length that once passed PCRE's match limit (#57); CRAN runs
+  # the shorter two.
+  for (n in test_iterations(c(1e3, 1e6, 5e6), c(1e3, 1e6))) {
     path <- hand_table(c(
       json_line(list(commitInfo = list(timestamp = 0, userMetadata = strrep("x", n)))),
       protocol_line(), metadata_line(), add_line("a.parquet"),
