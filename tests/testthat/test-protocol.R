@@ -123,10 +123,35 @@ test_that("column mapping mode is honoured only where the protocol supports colu
       expect_identical(err$feature, "columnMapping")
     }
   }
-  # Reader version 1, or 3 without the feature: the property is ignored.
-  for (p in list(protocol_line(1L, 2L), protocol_line(3L, 7L, "deletionVectors", "deletionVectors"))) {
-    expect_identical(lake_open(hand_table(c(p, meta("id"))))$column_mapping, "none")
+  # Reader version 1, or 3 without the reader feature (as a writer feature
+  # only, too): a mode other than "none" names column mapping the protocol
+  # does not declare, and is refused by name before any data is read, as
+  # deltalake 1.7.0 refuses it (#58); reading by logical names would give
+  # NA for every value.
+  for (p in list(protocol_line(1L, 2L), protocol_line(3L, 7L, "deletionVectors", "deletionVectors"),
+                 protocol_line(3L, 7L, "deletionVectors", c("deletionVectors", "columnMapping")))) {
+    for (mode in c("name", "id", "other")) {
+      err <- tryCatch(lake_open(hand_table(c(p, meta(mode)))), error = identity)
+      expect_s3_class(err, "zulake_error_unsupported_feature")
+      expect_identical(err$feature, "columnMapping")
+    }
+    expect_identical(lake_open(hand_table(c(p, meta("none"))))$column_mapping, "none")
+    expect_identical(lake_open(hand_table(c(p, metadata_line())))$column_mapping, "none")
   }
+})
+
+test_that("a name-mode table whose protocol lacks column mapping reads no data (#58)", {
+  path <- file.path(withr::local_tempdir(), "t")
+  dir.create(path)
+  qio::write_parquet(data.frame(`col-1` = 0:4, check.names = FALSE), file.path(path, "f.parquet"))
+  write_commit(path, 0, c(protocol_line(), metadata_line(c(value = "integer"), physical = c(value = "col-1"),
+                                                         configuration = list(delta.columnMapping.mode = "name")),
+                          add_line("f.parquet", size = file.size(file.path(path, "f.parquet")))))
+  env <- new.env()
+  storage <- recording_storage(storage_local(path), env)
+  expect_error(snapshot_build(storage, path), class = "zulake_error_unsupported_feature")
+  expect_false(any(grepl("f[.]parquet", env$calls)))
+  expect_error(lake_read(lake_open(path)), class = "zulake_error_unsupported_feature")
 })
 
 test_that("the gate looks at the snapshot's own version", {

@@ -880,6 +880,12 @@ The order of work, and what 0.1.0 waits for, are in
   names stay refused, because each obliges the reader to convert or
   decode data. `writerFeatures` is never a reason to refuse (replay reads
   it for in-commit timestamps; reworded 2026-11-26, Stage 4).
+- **D7 amendment (2026-11-27, #58).** A `delta.columnMapping.mode` other
+  than `none` on a table whose protocol does not declare column mapping
+  for readers (reader version 1, or 3 without the reader feature) is
+  refused as `columnMapping`, as `deltalake` 1.7.0 refuses it: the table
+  breaks the protocol, and reading it by logical names returns `NA` for
+  every value of the mapped columns.
 - **D8 (reworded 2026-11-26).** Filters are R expressions, not
   `deltalake`'s DNF tuples. The pruning subset and the row-wise function
   list are fixed and documented; a call outside both is refused, never

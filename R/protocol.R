@@ -46,6 +46,20 @@ check_reader_features <- function(protocol, metadata, version) {
       version, protocol, metadata
     )
   }
+  # A mode set where the protocol does not declare column mapping: the
+  # files hold physical names a reader by logical names would never find,
+  # so every value would read as NA (#58). deltalake refuses it too.
+  set <- metadata[["configuration"]][["delta.columnMapping.mode"]]
+  if (is_string(set) && set != "none" && !column_mapping_declared(protocol)) {
+    refuse_feature(
+      "columnMapping",
+      sprintf(
+        "column mapping (its %s mode is set, but its protocol does not declare the feature)",
+        format_string(set)
+      ),
+      version, protocol, metadata
+    )
+  }
   mode <- column_mapping_mode(protocol, metadata)
   if (!mode %in% c("none", "name")) {
     refuse_feature(
@@ -105,12 +119,18 @@ reader_features <- function(protocol) {
 }
 
 # `delta.columnMapping.mode`, honoured only when the protocol supports
-# column mapping (reader version 2, or 3 with the feature); "none" otherwise.
+# column mapping (reader version 2, or 3 with the feature); "none" otherwise,
+# where check_reader_features() refuses any mode but "none".
 column_mapping_mode <- function(protocol, metadata) {
-  reader <- protocol[["minReaderVersion"]]
-  on <- reader == 2 || (reader == 3 && "columnMapping" %in% reader_features(protocol))
   mode <- metadata[["configuration"]][["delta.columnMapping.mode"]]
-  if (!on || is.null(mode)) "none" else mode
+  if (!column_mapping_declared(protocol) || is.null(mode)) "none" else mode
+}
+
+# Whether the protocol declares column mapping for readers: reader version
+# 2, or 3 with the reader feature.
+column_mapping_declared <- function(protocol) {
+  reader <- protocol[["minReaderVersion"]]
+  reader == 2 || (reader == 3 && "columnMapping" %in% reader_features(protocol))
 }
 
 # ---- partition values ----------------------------------------------------

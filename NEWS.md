@@ -173,3 +173,8 @@
   the value (#56). A commit with a very long string before a number past
   2^53 left that number to round, with only a base R warning; the scan is
   now linear, and a failure of it is a `zulake_error_corrupt_log` (#57).
+* Fixed: a table setting `delta.columnMapping.mode` without declaring
+  column mapping in its protocol was read by logical names, returning
+  `NA` for every value. It is now refused with a
+  `zulake_error_unsupported_feature` naming `columnMapping`, as `deltalake`
+  refuses it (#58).
