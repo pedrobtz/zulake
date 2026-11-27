@@ -170,8 +170,10 @@ error of class <code>zulake_error_column_unreadable</code> with the same fields.
 <p>Data files are read in place on local disk. On Azure, every file left
 after pruning is downloaded to the session's temporary directory
 (<code><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir()</a></code>) before the first piece is read, by <code>lake_walk()</code> too, and
-kept there for the rest of the session, so that a later read of the same
-file downloads nothing. The disk used is the size of the files left after
+kept there for the snapshots of the same <code><a href="lake_open.html">lake_open()</a></code> call (the snapshot
+itself and those <code><a href="lake_open.html">lake_load()</a></code> makes from it), so that their later reads
+of the same file download nothing. Another <code><a href="lake_open.html">lake_open()</a></code> of the table
+downloads its files again. The disk used is the size of the files left after
 pruning: <code>lake_walk()</code> reads tables larger than memory, not larger than
 the temporary directory's disk.</p>
 <p>Rows a deletion vector marks as deleted are never returned (see

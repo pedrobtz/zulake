@@ -152,11 +152,17 @@ decimals of precision above 15 until qio reads them exactly. With
 Data files are read in place on local disk. On Azure, every file left
 after pruning is downloaded to the session's temporary directory
 ([`tempdir()`](https://rdrr.io/r/base/tempfile.html)) before the first
-piece is read, by `lake_walk()` too, and kept there for the rest of the
-session, so that a later read of the same file downloads nothing. The
-disk used is the size of the files left after pruning: `lake_walk()`
-reads tables larger than memory, not larger than the temporary
-directory's disk.
+piece is read, by `lake_walk()` too, and kept there for the snapshots of
+the same
+[`lake_open()`](https://pedrobtz.github.io/zulake/reference/lake_open.md)
+call (the snapshot itself and those
+[`lake_load()`](https://pedrobtz.github.io/zulake/reference/lake_open.md)
+makes from it), so that their later reads of the same file download
+nothing. Another
+[`lake_open()`](https://pedrobtz.github.io/zulake/reference/lake_open.md)
+of the table downloads its files again. The disk used is the size of the
+files left after pruning: `lake_walk()` reads tables larger than memory,
+not larger than the temporary directory's disk.
 
 Rows a deletion vector marks as deleted are never returned (see
 [`lake_deletion_vectors()`](https://pedrobtz.github.io/zulake/reference/lake_deletion_vectors.md));
