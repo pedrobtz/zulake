@@ -539,7 +539,11 @@ column_bounds <- function(tbl, parsed, col, type) {
     out$hi <- hi
   } else {
     out$lo <- ifelse(is.na(lo_text), NA_character_, enc2utf8(lo_text))
-    out$hi <- ifelse(is.na(hi_text), NA_character_, enc2utf8(hi_text))
+    # Delta Spark ends a truncated maximum with U+FFFD as a tie-breaker,
+    # which sorts below every supplementary character in UTF-8 byte order:
+    # the prefix is what comes before it (#78).
+    hi_text <- ifelse(is.na(hi_text), NA_character_, sub("\uFFFD+$", "", enc2utf8(hi_text)))
+    out$hi <- hi_text
     out$hi_prefix <- TRUE
   }
   out

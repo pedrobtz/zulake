@@ -208,6 +208,40 @@ test_that("a string maximum is never taken as exact: it may be a truncated prefi
   expect_identical(lake_read(tbl, filter = label == top), full[full$label == top, , drop = FALSE], ignore_attr = TRUE)
 })
 
+test_that("a string maximum ending in U+FFFD is only a prefix, so no value above it is pruned (#78)", {
+  # The premise: Delta Spark's truncated maximum appends U+FFFD as a
+  # tie-breaker, and in UTF-8 byte order U+FFFD (EF BF BD) sorts below
+  # every supplementary character (F0 ...), so the maximum "abc<U+FFFD>" sorts
+  # below the value "abc<U+1F600>".
+  fffd <- "\uFFFD"
+  emoji <- "\U0001F600"
+  expect_identical(charToRaw(enc2utf8(fffd)), as.raw(c(0xEF, 0xBF, 0xBD)))
+  expect_identical(charToRaw(enc2utf8(emoji))[1L], as.raw(0xF0))
+  expect_identical(zulake:::bytes_cmp(paste0("abc", fffd), paste0("abc", emoji)), -1L)
+  path <- file.path(withr::local_tempdir(), "t")
+  dir.create(file.path(path, "_delta_log"), recursive = TRUE)
+  rows <- data.frame(s = c("abc", paste0("abc", emoji), paste0("abc", fffd, fffd, emoji)))
+  qio::write_parquet(rows, file.path(path, "a.parquet"))
+  for (max in c("abc\\\\uFFFD", "abc\\\\uFFFD\\\\uFFFD")) {
+    stats <- sprintf('{\\"numRecords\\":3,\\"minValues\\":{\\"s\\":\\"abc\\"},\\"maxValues\\":{\\"s\\":\\"%s\\"},\\"nullCount\\":{\\"s\\":0}}', max)
+    writeLines(c(raw_header(c(s = "string")), raw_add("a.parquet", stats = stats)),
+               file.path(path, "_delta_log", "00000000000000000000.json"), useBytes = TRUE)
+    tbl <- lake_open(path)
+    expect_true(endsWith(lake_files(tbl)$max[[1L]]$s, fffd))
+    keeps <- function(expr) nrow(eval(bquote(lake_files(tbl, filter = .(expr))))) == 1L
+    for (v in c(paste0("abc", emoji), paste0("abc", fffd, emoji), paste0("abc", fffd, fffd, emoji), "abc\U0010FFFF")) {
+      for (expr in list(bquote(s == .(v)), bquote(s >= .(v)), bquote(s %in% .(v)))) {
+        expect_true(keeps(expr), label = deparse(expr))
+        expect_identical(eval(bquote(lake_read(tbl, filter = .(expr)))), r_subset(rows, expr), ignore_attr = TRUE, label = deparse(expr))
+      }
+    }
+    # Below the minimum, and past every string the prefix starts, a file
+    # is still pruned.
+    expect_false(keeps(quote(s < "abc")))
+    expect_false(keeps(quote(s == "abd")))
+  }
+})
+
 test_that("decimal statistics are bounds only when exact: missing, past precision 15, or past the scale they are unknown", {
   stats <- function(lo, hi) sprintf('{\\"numRecords\\":1,\\"minValues\\":{\\"d\\":%s},\\"maxValues\\":{\\"d\\":%s},\\"nullCount\\":{\\"d\\":0}}', lo, hi)
   kept <- function(type, lo, hi, expr) {

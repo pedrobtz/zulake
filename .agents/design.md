@@ -696,7 +696,11 @@ statistics and on rows, so pruning and the row filter cannot disagree:
   an offset is given) as well as a `Date` or `POSIXct`.
 - *Strings* compare in UTF-8 byte order on rows too, whatever the
   session's collation; a string maximum is taken as a prefix the true
-  maximum may extend.
+  maximum may extend. A maximum ending in U+FFFD is taken as the prefix
+  before its trailing U+FFFD characters (2026-11-27, #78: Delta Spark
+  ends a truncated maximum with U+FFFD as a tie-breaker, which sorts below
+  every supplementary character in UTF-8 byte order, so `x == "<prefix>😀"`
+  would otherwise be pruned).
 - *Null counts.* A file whose `nullCount` equals `numRecords` holds only
   nulls, and one with `numRecords` 0 nothing; a missing count is
   unknown. On a column read as a list (`binary`), `is.na()` is `TRUE`

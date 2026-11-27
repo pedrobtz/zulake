@@ -195,3 +195,7 @@
   `delta.columnMapping.physicalName` is now a `zulake_error_corrupt_log`
   naming the field, instead of being read by its logical name, which after
   a rename could be another column's data (#77).
+* Fixed: a string maximum ending in U+FFFD, the tie-breaker Delta Spark
+  appends to a truncated maximum, is now taken as the prefix before it, so
+  a filter on a value with a character above U+FFFD (an emoji) no longer
+  prunes the file that holds it (#78).
