@@ -319,7 +319,7 @@ parse_stats <- function(stats, paths) {
   for (k in seq_along(idx)) {
     i <- idx[k]
     x <- tryCatch(
-      seal_marks(zujson::json_parse(marked[k])),
+      seal_marks(zujson::json_parse(marked[k], simplify = FALSE)),
       zujson_error = function(e) {
         zulake_abort(
           "corrupt_log",

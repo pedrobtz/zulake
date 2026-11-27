@@ -31,6 +31,13 @@ the protocol resolves a timestamp to a version by modification time when
 `inCommitTimestamp` is off, and git keeps no modification times. A test of
 timestamp lookup does the same to its copy.
 
+`hostile-answers.json` (next to `answers/`, written when `answers.py` runs
+with no table named, after `tools/fixtures/hostile.R` and
+`hostile_parquet.py`): for each hostile log, `{"refusal": null}` when
+`deltalake` opens it, lists its files and reads it whole, or the first
+refusal as `{"class", "message"}`, with any path in the message cut to
+`<table>` (#112).
+
 ## Fields
 
 | Field | What | From |

@@ -180,7 +180,9 @@ oracle_tokens <- function(x) {
     whole <- fin & x == trunc(x) & abs(x) < 1e21
     out[whole] <- sprintf("%.0f", x[whole])
     out[whole & x == 0 & 1 / x < 0] <- "-0"
-    out[fin & !whole] <- sprintf("%.17g", x[fin & !whole])
+    # chartr(): the C library's decimal point is "," under a comma
+    # LC_NUMERIC (#114).
+    out[fin & !whole] <- chartr(",", ".", sprintf("%.17g", x[fin & !whole]))
     out[is.nan(x)] <- "NaN"
     out[x %in% Inf] <- "Infinity"
     out[x %in% -Inf] <- "-Infinity"

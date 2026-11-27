@@ -1,0 +1,134 @@
+{
+ "add-then-remove-same-file": {
+  "refusal": null
+ },
+ "checkpoint-map-repeated-key": {
+  "refusal": null
+ },
+ "column-mapping-no-physical-name": {
+  "refusal": null
+ },
+ "corrupt-commit": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: Json error: Encountered unexpected '{' whilst parsing object"
+  }
+ },
+ "decimal-partition-exponent": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: Failed to parse value '1e2' as 'decimal(10,2)'"
+  }
+ },
+ "decimal-partition-negative-no-integer-digit": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: Failed to parse value '-.5' as 'decimal(10,2)'"
+  }
+ },
+ "decimal-partition-no-fraction-digit": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: Failed to parse value '5.' as 'decimal(10,2)'"
+  }
+ },
+ "decimal-partition-no-integer-digit": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: Failed to parse value '.5' as 'decimal(10,2)'"
+  }
+ },
+ "decimal-partition-past-precision": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: Failed to parse value '123456789.00' as 'decimal(10,2)'"
+  }
+ },
+ "decimal-partition-past-precision-small": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: Failed to parse value '123.45' as 'decimal(4,2)'"
+  }
+ },
+ "decimal-partition-past-scale": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: Failed to parse value '12.345' as 'decimal(10,2)'"
+  }
+ },
+ "duplicate-action-key": {
+  "refusal": null
+ },
+ "duplicate-key-in-add": {
+  "refusal": {
+   "class": "ArrowInvalid",
+   "message": "C Data interface error: External error: Parquet error: Parquet error: Failed to fetch metadata for file <table>/part-00000-8d16a499-c579-4a11-8219-2a6315388180-c000.snappy.parquet: Parquet error: Parquet error: Invalid Parquet file. Corrupt footer"
+  }
+ },
+ "dv-bad-checksum": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "External error: Kernel error: Deletion Vector error: CRC32 checksum mismatch for <table>/deletion_vector_61d16c75-6994-46b7-a15b-8b538852e50e.bin. Got: 711399609, expected: 711399494"
+  }
+ },
+ "dv-bad-magic": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "External error: Kernel error: Deletion Vector error: Invalid magic 0 for <table>/deletion_vector_61d16c75-6994-46b7-a15b-8b538852e50e.bin"
+  }
+ },
+ "dv-size-past-file": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "External error: Kernel error: Deletion Vector error: DV size mismatch for <table>/deletion_vector_61d16c75-6994-46b7-a15b-8b538852e50e.bin. Log indicates 4096, file says: 36"
+  }
+ },
+ "last-checkpoint-past-log": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: Invalid Checkpoint: Had a _last_checkpoint hint but didn't find any checkpoints"
+  }
+ },
+ "missing-checkpoint-part": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: Invalid Checkpoint: Had a _last_checkpoint hint but didn't find any checkpoints"
+  }
+ },
+ "partition-value-wrong-type": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: Failed to parse value 'one' as 'integer'"
+  }
+ },
+ "remove-then-add-same-file": {
+  "refusal": null
+ },
+ "schema-repeated-key": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: duplicate field `type` at line 1 column 62"
+  }
+ },
+ "stats-repeated-column": {
+  "refusal": null
+ },
+ "stats-repeated-key": {
+  "refusal": null
+ },
+ "truncated-commit": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: Json error: Truncated record whilst reading string"
+  }
+ },
+ "two-adds-same-file": {
+  "refusal": null
+ },
+ "two-adds-same-path-new-dv": {
+  "refusal": null
+ },
+ "two-removes-same-file": {
+  "refusal": null
+ }
+}

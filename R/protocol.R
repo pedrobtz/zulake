@@ -276,8 +276,24 @@ partition_value_ok <- function(x, type) {
     date = !is.na(parse_date_text(x)),
     timestamp = !is.na(parse_time_text(x, zone = TRUE)),
     timestamp_ntz = !is.na(parse_time_text(x, zone = FALSE)),
-    if (grepl("^decimal[(]", type)) grepl(number, x) else TRUE
+    if (grepl("^decimal[(]", type)) decimal_value_ok(x, type) else TRUE
   )
+}
+
+# Whether `x` is a decimal(p, s) partition value: digits, with a fraction
+# of at most s digits after a point, an optional sign, and at most p - s
+# digits before the point once leading zeros are dropped. No exponent, and
+# a point has digits on both sides: what the comparator reads (compare.R),
+# and a value the type holds (#112).
+decimal_value_ok <- function(x, type) {
+  ps <- decimal_ps(type)
+  m <- regmatches(x, regexec("^[+-]?([0-9]+)(?:[.]([0-9]+))?$", x))[[1L]]
+  if (is.null(ps) || length(m) != 3L) {
+    return(FALSE)
+  }
+  int <- sub("^0+", "", m[2L])
+  nchar(m[3L]) <= ps[["scale"]] &&
+    nchar(int) <= ps[["precision"]] - ps[["scale"]]
 }
 
 # Decimal digits within [lo, hi], compared as text so no value rounds.

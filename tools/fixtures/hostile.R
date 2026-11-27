@@ -122,6 +122,28 @@ stopifnot(sum(grepl("\"p_int\":\"1\"", lines, fixed = TRUE)) == 1L)
 lines <- sub("\"p_int\":\"1\"", "\"p_int\":\"one\"", lines, fixed = TRUE)
 write_lines(f, lines)
 
+# Decimal partition values the comparator cannot read, or that the column's
+# type cannot hold: zl-decimal-partitions' file of id 0 has pdec 12.30 in a
+# decimal(10,2) and pd4 12.34 in a decimal(4,2). deltalake 1.7.0 refuses
+# each of these tables (#112).
+decimal_partition <- function(name, from, to) {
+  d <- copy_table("zl-decimal-partitions", name)
+  f <- commit_path(d, 0L)
+  lines <- read_lines(f)
+  stopifnot(sum(grepl(from, lines, fixed = TRUE)) == 1L)
+  lines <- sub(from, to, lines, fixed = TRUE)
+  write_lines(f, lines)
+}
+pdec <- "\"pdec\":\"12.30\""
+pd4 <- "\"pd4\":\"12.34\""
+decimal_partition("decimal-partition-no-integer-digit", pdec, "\"pdec\":\".5\"")
+decimal_partition("decimal-partition-no-fraction-digit", pdec, "\"pdec\":\"5.\"")
+decimal_partition("decimal-partition-negative-no-integer-digit", pdec, "\"pdec\":\"-.5\"")
+decimal_partition("decimal-partition-exponent", pdec, "\"pdec\":\"1e2\"")
+decimal_partition("decimal-partition-past-scale", pdec, "\"pdec\":\"12.345\"")
+decimal_partition("decimal-partition-past-precision", pdec, "\"pdec\":\"123456789.00\"")
+decimal_partition("decimal-partition-past-precision-small", pd4, "\"pd4\":\"123.45\"")
+
 # A name-mode column mapping table whose field `letter` has no physical
 # name in commit 0's schema; commit 2's schema has it again (#77).
 d <- copy_table("column_mapping", "column-mapping-no-physical-name")
