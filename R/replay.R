@@ -161,25 +161,31 @@ replay <- function(plan, read, checkpoint = NULL) {
   state$txns <- list()
   state$domains <- list()
   if (!is.null(checkpoint)) {
-    apply_file(state, checkpoint$name, checkpoint$actions, commit = FALSE)
+    apply_file(state, checkpoint$name, checkpoint$actions, "checkpoint")
   }
   for (i in seq_len(nrow(plan))) {
+    name <- plan$name[i]
     commits <- plan$fallback[[i]]
-    actions <- if (is.null(commits)) {
-      read(plan$name[i])
-    } else {
-      # A compaction file that cannot be read is passed over for the
-      # commits it covers, which hold the same actions (#69).
-      tryCatch(read(plan$name[i]), zulake_error = function(e) {
-        if (inherits(e, "zulake_error_auth")) stop(e) else NULL
-      })
+    kind <- if (is_compaction_name(name)) "compaction" else "commit"
+    if (is.null(commits)) {
+      apply_checked(state, check_file(name, read(name), kind))
+      next
     }
-    if (is.null(actions) && !is.null(commits)) {
-      for (name in commits) {
-        apply_file(state, name, read(name))
+    # A compaction file that cannot be read, or whose actions its checks
+    # refuse, is passed over for the commits it covers, which hold the same
+    # actions (#69, #117).
+    checked <- tryCatch(
+      check_file(name, read(name), kind),
+      zulake_error = function(e) {
+        if (inherits(e, "zulake_error_auth")) stop(e) else NULL
+      }
+    )
+    if (is.null(checked)) {
+      for (commit in commits) {
+        apply_file(state, commit, read(commit))
       }
     } else {
-      apply_file(state, plan$name[i], actions)
+      apply_checked(state, checked)
     }
   }
   if (is.null(state$protocol)) {
@@ -191,80 +197,109 @@ replay <- function(plan, read, checkpoint = NULL) {
   state
 }
 
-# One commit, compaction or checkpoint file. Actions inside one file have no
-# order, and the protocol forbids an add and a remove of one logical file
-# (`(path, deletionVector.uniqueId)`) in one commit: in a commit or a
-# compaction file that is a corrupt log (#103). The same path with another
-# deletion vector is another logical file, the legal update of its vector.
-# Two adds, or two removes, of one path are a corrupt log there too, whatever
-# their deletion vectors (#106). Removes are then applied before adds. A
-# checkpoint (`commit = FALSE`) is the reconciled state, and is not checked
-# here.
-apply_file <- function(st, name, actions, commit = TRUE) {
-  adds <- list()
-  removes <- list()
-  seen_protocol <- FALSE
-  seen_metadata <- FALSE
+# Whether a log file name is a log compaction file's.
+is_compaction_name <- function(name) {
+  grepl("[.]compacted[.]json$", name)
+}
+
+# One commit, compaction or checkpoint file (`kind`), checked, then applied
+# to the replay state `st`.
+apply_file <- function(st, name, actions, kind = "commit") {
+  apply_checked(st, check_file(name, actions, kind))
+}
+
+# The actions of one log file, checked, as list(name, adds, removes,
+# protocol, metadata, txns, domains): what apply_checked() applies. Nothing
+# is applied here, so a compaction file these checks refuse can still be
+# passed over for its commits (#117).
+#
+# Actions inside one file have no order, and the protocol forbids an add
+# and a remove of one logical file (`(path, deletionVector.uniqueId)`) in
+# one version: in a commit or a compaction file that is a corrupt log
+# (#103). The same path with another deletion vector is another logical
+# file, the legal update of its vector. In a commit, two adds, or two
+# removes, of one path are a corrupt log too, whatever their deletion
+# vectors (#106); a compaction file holds a reconciled range of versions,
+# in which a path can change its deletion vector more than once, so there
+# only two actions of one type for one logical file are (#117). A
+# checkpoint (`kind = "checkpoint"`) is the reconciled state, and is not
+# checked here.
+check_file <- function(name, actions, kind = "commit") {
+  out <- list(
+    name = name,
+    adds = list(),
+    removes = list(),
+    protocol = NULL,
+    metadata = NULL,
+    txns = list(),
+    domains = list()
+  )
   for (a in actions) {
     if (!is.null(a[["add"]])) {
-      adds[[length(adds) + 1L]] <- check_add(a[["add"]], name)
+      out$adds[[length(out$adds) + 1L]] <- check_add(a[["add"]], name)
     }
     if (!is.null(a[["remove"]])) {
-      removes[[length(removes) + 1L]] <- check_remove(a[["remove"]], name)
+      out$removes[[length(out$removes) + 1L]] <- check_remove(
+        a[["remove"]],
+        name
+      )
     }
     if (!is.null(a[["protocol"]])) {
-      if (seen_protocol) {
+      if (!is.null(out$protocol)) {
         zulake_abort(
           "corrupt_log",
           sprintf(
             "log file %s has two `protocol` actions.",
             format_string(name)
-          )
+          ),
+          file = name
         )
       }
-      seen_protocol <- TRUE
-      st$protocol <- check_protocol(a[["protocol"]], name)
+      out$protocol <- check_protocol(a[["protocol"]], name)
     }
     if (!is.null(a[["metaData"]])) {
-      if (seen_metadata) {
+      if (!is.null(out$metadata)) {
         zulake_abort(
           "corrupt_log",
           sprintf(
             "log file %s has two `metaData` actions.",
             format_string(name)
-          )
+          ),
+          file = name
         )
       }
-      seen_metadata <- TRUE
-      st$metadata <- check_metadata(a[["metaData"]], name)
+      out$metadata <- check_metadata(a[["metaData"]], name)
     }
     if (!is.null(a[["txn"]])) {
-      txn <- check_txn(a[["txn"]], name)
-      st$txns[[txn[["appId"]]]] <- txn
+      out$txns[[length(out$txns) + 1L]] <- check_txn(a[["txn"]], name)
     }
     if (!is.null(a[["domainMetadata"]])) {
-      dm <- check_domain(a[["domainMetadata"]], name)
-      if (isTRUE(dm[["removed"]])) {
-        st$domains[[dm[["domain"]]]] <- NULL
-      } else {
-        st$domains[[dm[["domain"]]]] <- dm
-      }
+      out$domains[[length(out$domains) + 1L]] <- check_domain(
+        a[["domainMetadata"]],
+        name
+      )
     }
   }
-  if (commit) {
-    check_one_per_path(adds, name, "adds")
-    check_one_per_path(removes, name, "removes")
+  if (kind == "checkpoint") {
+    return(out)
   }
-  if (commit && length(adds) && length(removes)) {
-    added <- vapply(adds, file_key, "")
-    both <- match(vapply(removes, file_key, ""), added)
+  key <- if (kind == "commit") {
+    function(x) x[["path"]]
+  } else {
+    file_key
+  }
+  check_once(out$adds, name, "adds", key, kind)
+  check_once(out$removes, name, "removes", key, kind)
+  if (length(out$adds) && length(out$removes)) {
+    added <- vapply(out$adds, file_key, "")
+    both <- match(vapply(out$removes, file_key, ""), added)
     both <- both[!is.na(both)]
     if (length(both)) {
-      path <- adds[[both[1L]]][["path"]]
+      path <- out$adds[[both[1L]]][["path"]]
       zulake_abort(
         "corrupt_log",
         sprintf(
-          "log file %s both adds and removes %s, which the protocol forbids in one commit.",
+          "log file %s both adds and removes %s, which the protocol forbids in one version.",
           format_string(name),
           format_string(path)
         ),
@@ -273,44 +308,69 @@ apply_file <- function(st, name, actions, commit = TRUE) {
       )
     }
   }
-  for (r in removes) {
+  out
+}
+
+# Applies a check_file() result to the replay state `st`: removes before
+# adds, then the protocol, metadata, transactions and domains.
+apply_checked <- function(st, checked) {
+  for (r in checked$removes) {
     key <- file_symbol(st, file_key(r))
     if (exists(key, envir = st$adds, inherits = FALSE)) {
       rm(list = key, envir = st$adds)
     }
     assign(key, r, envir = st$removes)
   }
-  for (a in adds) {
+  for (a in checked$adds) {
     key <- file_symbol(st, file_key(a))
     if (exists(key, envir = st$removes, inherits = FALSE)) {
       rm(list = key, envir = st$removes)
     }
     assign(key, a, envir = st$adds)
   }
+  if (!is.null(checked$protocol)) {
+    st$protocol <- checked$protocol
+  }
+  if (!is.null(checked$metadata)) {
+    st$metadata <- checked$metadata
+  }
+  for (txn in checked$txns) {
+    st$txns[[txn[["appId"]]]] <- txn
+  }
+  for (dm in checked$domains) {
+    if (isTRUE(dm[["removed"]])) {
+      st$domains[[dm[["domain"]]]] <- NULL
+    } else {
+      st$domains[[dm[["domain"]]]] <- dm
+    }
+  }
   invisible(st)
 }
 
-# The protocol allows a commit at most one action of a type (add or remove)
-# for any path, whatever its deletion vector (#106): two adds of one path
-# under two deletion vectors would otherwise both be live, and the file
-# read twice. Refused whether or not the two actions differ.
-check_one_per_path <- function(actions, name, what) {
+# At most one action of a type (add or remove) per `key` in one log file:
+# in a commit the key is the path, whatever its deletion vector (#106): two
+# adds of one path under two deletion vectors would otherwise both be live,
+# and the file read twice. In a compaction file it is the logical file
+# (#117). Refused whether or not the two actions differ.
+check_once <- function(actions, name, what, key, kind) {
   if (length(actions) < 2L) {
     return(invisible())
   }
-  paths <- vapply(actions, `[[`, "", "path")
-  d <- anyDuplicated(paths)
+  keys <- vapply(actions, key, "")
+  d <- anyDuplicated(keys)
   if (d) {
+    path <- actions[[d]][["path"]]
     zulake_abort(
       "corrupt_log",
       sprintf(
-        "log file %s %s %s twice, which the protocol forbids in one commit.",
+        "log file %s %s %s twice, which the protocol forbids in one %s.",
         format_string(name),
         what,
-        format_string(paths[d])
+        format_string(path),
+        if (kind == "commit") "commit" else "compaction file"
       ),
       file = name,
-      path = paths[d]
+      path = path
     )
   }
   invisible()

@@ -277,6 +277,58 @@ lines <- sub(
 )
 write_lines(f, lines)
 
+# A line holding two actions: zl-basic's commit 2 with its add (line 2) and
+# its remove (line 3) on one line. The protocol stores every action on a
+# line of its own (#121).
+d <- copy_table("zl-basic", "two-actions-one-line")
+f <- commit_path(d, 2L)
+lines <- read_lines(f)
+stopifnot(
+  length(lines) == 3L,
+  startsWith(lines[2L], first),
+  endsWith(lines[2L], "}}"),
+  startsWith(lines[3L], "{\"remove\":{")
+)
+lines[2L] <- paste0(substr(lines[2L], 1L, nchar(lines[2L]) - 1L), ",", substring(lines[3L], 2L))
+write_lines(f, lines[1:2])
+
+# Schemas zulake cannot read as written, each made from zl-basic's commit 0
+# (fields id long, label string, x double) by one edit of its schemaString
+# (#120).
+schema_edit <- function(name, from, to) {
+  d <- copy_table("zl-basic", name)
+  f <- commit_path(d, 0L)
+  lines <- read_lines(f)
+  stopifnot(sum(grepl(from, lines, fixed = TRUE)) == 1L)
+  lines <- sub(from, to, lines, fixed = TRUE)
+  write_lines(f, lines)
+}
+label <- "{\\\"name\\\":\\\"label\\\",\\\"type\\\":\\\"string\\\","
+x_name <- "{\\\"name\\\":\\\"x\\\","
+schema_edit("schema-unknown-type", label, "{\\\"name\\\":\\\"label\\\",\\\"type\\\":\\\"varchar(10)\\\",")
+schema_edit("schema-upper-case-type", label, "{\\\"name\\\":\\\"label\\\",\\\"type\\\":\\\"STRING\\\",")
+schema_edit("schema-field-without-type", label, "{\\\"name\\\":\\\"label\\\",")
+schema_edit("schema-variant-without-feature", label, "{\\\"name\\\":\\\"label\\\",\\\"type\\\":\\\"variant\\\",")
+schema_edit("schema-timestamp-ntz-without-feature", label, "{\\\"name\\\":\\\"label\\\",\\\"type\\\":\\\"timestamp_ntz\\\",")
+schema_edit("schema-duplicate-name", x_name, "{\\\"name\\\":\\\"label\\\",")
+schema_edit("schema-field-without-name", x_name, "{")
+schema_edit("schema-empty-name", x_name, "{\\\"name\\\":\\\"\\\",")
+
+# A name-mode table whose fields `letter` and `int` have one physical name
+# in commit 0's schema; commit 2's schema has `int`'s own again (#120).
+d <- copy_table("column_mapping", "column-mapping-duplicate-physical-name")
+f <- commit_path(d, 0L)
+lines <- read_lines(f)
+int_physical <- '\\"delta.columnMapping.physicalName\\":\\"col-12668372-ff50-41ae-9571-41f0cb9ad88f\\"'
+stopifnot(sum(grepl(int_physical, lines, fixed = TRUE)) == 1L)
+lines <- sub(
+  int_physical,
+  '\\"delta.columnMapping.physicalName\\":\\"col-4ef4d1f5-5d3c-4aad-b4db-405ac3f186e6\\"',
+  lines,
+  fixed = TRUE
+)
+write_lines(f, lines)
+
 # checkpoint-map-repeated-key needs a Parquet writer: hostile_parquet.py
 # writes it after this script.
 

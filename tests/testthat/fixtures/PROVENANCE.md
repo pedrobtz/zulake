@@ -74,6 +74,7 @@ DAT (`delta-incubator/dat`) is not used: it has no licence (design §12, Q3).
 | --- | --- | --- |
 | `add-then-remove-same-file` | `zl-basic` | commit 2 ends with a `remove` of the file its `add` (line 2) adds, which the protocol forbids in one commit (#103) |
 | `checkpoint-map-repeated-key` | `zl-checkpoint-no-last` | the checkpoint at 2, rewritten by pyarrow 22.0.0 (`hostile_parquet.py`, uncompressed): its first `add` has the `partitionValues` MAP `[x: 1, x: 2]`, a key twice (#108). The one hostile log that opens: the checkpoint is passed over for the commits, and is unreadable once commit 0 is gone |
+| `column-mapping-duplicate-physical-name` | `column_mapping` | field `int` given `letter`'s `delta.columnMapping.physicalName` in commit 0's schema; commit 2's schema has its own (#120) |
 | `column-mapping-no-physical-name` | `column_mapping` | the `delta.columnMapping.physicalName` of field `letter` removed from commit 0's schema; commit 2's schema has it (#77) |
 | `corrupt-commit` | `zl-basic` | line 2 of commit 2 is not JSON |
 | `decimal-partition-exponent` | `zl-decimal-partitions` | the `pdec` partition value `12.30` in commit 0 written `1e2` (#112) |
@@ -92,10 +93,19 @@ DAT (`delta-incubator/dat`) is not used: it has no licence (design §12, Q3).
 | `missing-checkpoint-part` | `zl-multipart-checkpoint` | part 2 of the three-part checkpoint deleted |
 | `partition-value-wrong-type` | `zl-partitioned` | an integer partition value `"one"` in commit 1 |
 | `remove-then-add-same-file` | `zl-basic` | commit 2 has a `remove` of the file its `add` adds, on the line before it (#103) |
+| `schema-duplicate-name` | `zl-basic` | field `x` of commit 0's schema renamed `label`, so two fields are named `label` (#120) |
+| `schema-empty-name` | `zl-basic` | field `x` of commit 0's schema renamed `""` (#120) |
+| `schema-field-without-name` | `zl-basic` | the `name` of field `x` removed from commit 0's schema (#120) |
+| `schema-field-without-type` | `zl-basic` | the `type` of field `label` removed from commit 0's schema (#120) |
 | `schema-repeated-key` | `zl-basic` | the `schemaString` of commit 0 gives field `id` a second `type` key, `"string"` before `"long"` (#107) |
+| `schema-timestamp-ntz-without-feature` | `zl-basic` | field `label` of commit 0's schema typed `timestamp_ntz`; the protocol (reader 1) has no `timestampNtz` (#120) |
+| `schema-unknown-type` | `zl-basic` | field `label` of commit 0's schema typed `varchar(10)` (#120) |
+| `schema-upper-case-type` | `zl-basic` | field `label` of commit 0's schema typed `STRING` (#120) |
+| `schema-variant-without-feature` | `zl-basic` | field `label` of commit 0's schema typed `variant`; the protocol (reader 1) has no `variantType` (#120) |
 | `stats-repeated-column` | `zl-basic` | the statistics of commit 4's `add` hold `id` twice in `minValues`, 13 before 12 (#107) |
 | `stats-repeated-key` | `zl-basic` | the statistics of commit 4's `add` hold `maxValues` twice, `{"id":11}` before the writer's (#107) |
 | `truncated-commit` | `zl-basic` | commit 4 cut to its first half, mid-line |
+| `two-actions-one-line` | `zl-basic` | commit 2's `add` (line 2) and `remove` (line 3) joined into one line, `{"add":{...},"remove":{...}}` (#121) |
 | `two-adds-same-file` | `zl-basic` | commit 2's `add` (line 2) repeated on line 3 with `minValues.id` 0 instead of 1 (#106) |
 | `two-adds-same-path-new-dv` | `table-with-dv-small` | commit 1 ends with a second `add` of its file, with `table-with-dv-small-inline`'s inline deletion vector (#106) |
 | `two-removes-same-file` | `zl-basic` | commit 3's `remove` of `part-...e10fff6f...` repeated on the next line, with `deletionTimestamp` one millisecond later (#106) |

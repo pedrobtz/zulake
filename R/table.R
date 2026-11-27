@@ -112,7 +112,7 @@ lake_history <- function(tbl, limit = NULL, int64 = c("double", "integer64")) {
     commits <- commits[seq_len(limit), , drop = FALSE]
   }
   info <- lapply(commits$name, function(name) {
-    for (a in read_actions(tbl$storage, name)) {
+    for (a in read_actions(tbl$storage, name, listed_size(tbl$log, name))) {
       if (!is.null(a[["commitInfo"]])) {
         return(unmark_tree(
           a[["commitInfo"]],
@@ -296,7 +296,9 @@ snapshot_commits <- function(tbl) {
 # the snapshot's commits.
 commit_times <- function(tbl, commits) {
   ict <- ict_info(tbl$protocol, tbl$metadata)
-  read <- function(name) read_actions(tbl$storage, name)
+  read <- function(name) {
+    read_actions(tbl$storage, name, listed_size(tbl$log, name))
+  }
   commits_all <- snapshot_commits(tbl)
   ms <- commit_times_ms(
     commits_all,

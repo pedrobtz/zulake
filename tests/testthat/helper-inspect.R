@@ -123,15 +123,21 @@ raw_table <- function(lines, env = parent.frame()) {
 }
 
 # The protocol and metadata lines of a hand-written table with columns
-# `columns` (named Delta types), as raw JSON text.
+# `columns` (named Delta types), as raw JSON text. A `timestamp_ntz` column
+# comes with the reader feature it needs (#120).
 raw_header <- function(columns = c(id = "long"), partition = character()) {
   fields <- paste0(
     sprintf('{\\"name\\":\\"%s\\",\\"type\\":\\"%s\\",\\"nullable\\":true,\\"metadata\\":{}}', names(columns), columns),
     collapse = ","
   )
   pcols <- if (length(partition)) paste0('"', partition, '"', collapse = ",") else ""
+  protocol <- if ("timestamp_ntz" %in% columns) {
+    '{"protocol":{"minReaderVersion":3,"minWriterVersion":7,"readerFeatures":["timestampNtz"],"writerFeatures":["timestampNtz"]}}'
+  } else {
+    '{"protocol":{"minReaderVersion":1,"minWriterVersion":2}}'
+  }
   c(
-    '{"protocol":{"minReaderVersion":1,"minWriterVersion":2}}',
+    protocol,
     paste0(
       '{"metaData":{"id":"t","format":{"provider":"parquet","options":{}},"schemaString":"{\\"type\\":\\"struct\\",\\"fields\\":[',
       fields, ']}","partitionColumns":[', pcols, '],"configuration":{}}}'

@@ -5,6 +5,9 @@
  "checkpoint-map-repeated-key": {
   "refusal": null
  },
+ "column-mapping-duplicate-physical-name": {
+  "refusal": null
+ },
  "column-mapping-no-physical-name": {
   "refusal": null
  },
@@ -104,10 +107,55 @@
  "remove-then-add-same-file": {
   "refusal": null
  },
+ "schema-duplicate-name": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: Schema error: Duplicate field name (case-insensitive): 'label'"
+  }
+ },
+ "schema-empty-name": {
+  "refusal": null
+ },
+ "schema-field-without-name": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: missing field `name` at line 1 column 195"
+  }
+ },
+ "schema-field-without-type": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: missing field `type` at line 1 column 131"
+  }
+ },
  "schema-repeated-key": {
   "refusal": {
    "class": "DeltaError",
    "message": "Kernel error: duplicate field `type` at line 1 column 62"
+  }
+ },
+ "schema-timestamp-ntz-without-feature": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: Unsupported: Table contains TIMESTAMP_NTZ columns but does not have the required 'timestampNtz' feature in reader and writer features"
+  }
+ },
+ "schema-unknown-type": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: Schema error: Unsupported Delta table type: 'varchar(10)' at line 1 column 121"
+  }
+ },
+ "schema-upper-case-type": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: Schema error: Unsupported Delta table type: 'STRING' at line 1 column 116"
+  }
+ },
+ "schema-variant-without-feature": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: Unsupported: Table contains VARIANT columns but does not have the required 'variantType' feature in reader and writer features"
   }
  },
  "stats-repeated-column": {
@@ -121,6 +169,9 @@
    "class": "DeltaError",
    "message": "Kernel error: Json error: Truncated record whilst reading string"
   }
+ },
+ "two-actions-one-line": {
+  "refusal": null
  },
  "two-adds-same-file": {
   "refusal": null

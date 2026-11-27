@@ -311,3 +311,36 @@
   was used as a bound, so a filter could prune a file holding matching
   rows. It is now unknown and the file is kept, as with a missing
   statistic (#115).
+* Fixed: a log compaction file over a range in which one path changes its
+  deletion vector more than once, which holds two tombstones of that path
+  as reconciliation requires, was refused as a corrupt log. In a
+  compaction file only two adds, or two removes, of one logical file
+  (`(path, deletionVector.uniqueId)`) are refused now; the rule of one
+  per path whatever the deletion vector stays for a commit. A compaction
+  file these checks refuse is passed over for the commits it covers, as
+  an unreadable one is, and is a `zulake_error_corrupt_log` only when
+  replay needs it (#117).
+* Changed: the schema is checked when a table is opened. A type the
+  protocol does not define (`varchar(10)`, `STRING`, `void`, `decimal`
+  without its precision), a field without a `type`, a field without a
+  `name` or with an empty one, two fields of one struct with one name, and
+  in `name` column mapping mode two fields with one physical name are a
+  `zulake_error_corrupt_log` naming the field. A `variant` or
+  `timestamp_ntz` column in a table whose protocol does not declare its
+  reader feature is a `zulake_error_unsupported_feature` naming the
+  feature. Such schemas opened, and then read whatever the files held,
+  read two fields as one column, or failed with a base R error (#120).
+* Fixed: a log line holding two actions (`{"add":{...},"remove":{...}}`)
+  applied both, where `deltalake` applies one. The protocol stores one
+  action per line, so such a line is now a `zulake_error_corrupt_log` with
+  the `file` and the `line`, in a commit, a compaction file or a JSON V2
+  checkpoint (#121).
+* Fixed: a log file whose body ended early, as a server that closes the
+  connection without a `Content-Length` sends it, was replayed as if
+  whole: on Azure, a commit cut by a line gave other rows with no error.
+  Each log file (commits, checkpoints and their parts, V2 sidecars,
+  compaction files, `_last_checkpoint`) must now have the size the listing
+  gives (for a sidecar, its action's `sizeInBytes`); a difference is a
+  `zulake_error_storage` with the `path`, the `size` read and the
+  `listed_size`. A checkpoint so cut is passed over for an earlier one or
+  the commits, as an unreadable one is (#122).

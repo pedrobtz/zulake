@@ -89,7 +89,7 @@ lake_actions <- function(tbl, version, int64 = c("double", "integer64")) {
     )
   }
   name <- log$name[hit][1L]
-  actions <- read_actions(tbl$storage, name)
+  actions <- read_actions(tbl$storage, name, log$size[hit][1L])
   rows <- lapply(seq_along(actions), function(i) {
     a <- actions[[i]]
     list(line = rep(i, length(a)), type = names(a), action = unname(as.list(a)))

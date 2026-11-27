@@ -79,7 +79,7 @@ test_that("a null struct is NULL, and a struct of nulls an object without its nu
 
 test_that("a checkpoint's rows are its actions, in row order, without the others", {
   path <- file.path(fixture_table("zl-checkpoint"), "_delta_log", "00000000000000000010.checkpoint.parquet")
-  actions <- zulake:::log_parquet_actions(zulake:::storage_local(dirname(dirname(path))), "_delta_log/00000000000000000010.checkpoint.parquet")
+  actions <- zulake:::log_parquet_actions(zulake:::storage_local(dirname(dirname(path))), "_delta_log/00000000000000000010.checkpoint.parquet", NA)
   data <- qio::read_parquet(path)
   kinds <- vapply(actions, names, "")
   expect_identical(length(actions), nrow(data))
@@ -99,7 +99,7 @@ test_that("statistics as structs are not read; partitionValues and stats are", {
   path <- fixture_table("table_failed_last_checkpoint_update")
   plan <- qio::read_plan(file.path(path, "_delta_log", "00000000000000000003.checkpoint.parquet"))
   expect_true(any(startsWith(plan$path, "add.stats_parsed.")))
-  actions <- zulake:::log_parquet_actions(zulake:::storage_local(path), "_delta_log/00000000000000000003.checkpoint.parquet")
+  actions <- zulake:::log_parquet_actions(zulake:::storage_local(path), "_delta_log/00000000000000000003.checkpoint.parquet", NA)
   adds <- Filter(Negate(is.null), lapply(actions, `[[`, "add"))
   expect_gt(length(adds), 0L)
   for (a in adds) {
@@ -205,7 +205,7 @@ test_that("a Parquet checkpoint with no action column has no protocol, and is a 
   write_commit(path, 1, add_line("part-1.parquet"))
   name <- "_delta_log/00000000000000000001.checkpoint.parquet"
   qio::write_parquet(data.frame(foo = 1), file.path(path, name))
-  expect_identical(zulake:::log_parquet_actions(storage_local(path), name), list())
+  expect_identical(zulake:::log_parquet_actions(storage_local(path), name, NA), list())
   expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
 })
 

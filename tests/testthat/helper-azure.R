@@ -426,6 +426,30 @@ fake_list <- function(root, query, page_size) {
   zuhttp::zu_response(200L, c(`Content-Type` = "application/xml"), charToRaw(enc2utf8(body)))
 }
 
+# An azure_fake() override that serves the blob whose path ends with
+# `suffix` cut short, as a server that closes the connection early sends
+# it, with no Content-Length (zuhttp accepts that body): without its last
+# line, or its first half for a file of one line or a Parquet file (#122).
+cut_blob <- function(root, suffix) {
+  function(r) {
+    if (r$method != "GET" || identical(r$query$comp, "list") || !endsWith(r$path, suffix)) {
+      return(NULL)
+    }
+    f <- file.path(root, r$path)
+    bytes <- readBin(f, "raw", file.size(f))
+    ends <- which(bytes == as.raw(10L))
+    keep <- if (length(ends) >= 2L && !endsWith(f, ".parquet")) ends[length(ends) - 1L] else length(bytes) %/% 2L
+    zuhttp::zu_response(200L, c(`Last-Modified` = http_date(file.mtime(f))), bytes[seq_len(keep)])
+  }
+}
+
+# The first condition in the `parent` chain of `e` (itself included) of
+# class `class`, or NULL.
+cause_of_class <- function(e, class) {
+  while (!is.null(e) && !inherits(e, class)) e <- e$parent
+  e
+}
+
 # The fake's URI for a fixture table, in one of the three forms, account
 # "acct" and container "lake".
 fake_uri <- function(table, form = "abfss") {
