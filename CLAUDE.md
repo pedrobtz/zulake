@@ -124,6 +124,7 @@ See `.agents/design.md` for the why. There is no native layer: no
   [`lake_read()`](https://pedrobtz.github.io/zulake/reference/lake_read.md),
   [`lake_walk()`](https://pedrobtz.github.io/zulake/reference/lake_read.md),
   the read pipeline (`read_scan()`, `read_piece()`, `bind_pieces()`),
+  each file’s Parquet types against the schema (`parquet_type_fit()`),
   `fetch_file()` and the session cache.
 - `R/table.R`, `R/files.R`, `R/log-inspect.R`, `R/print.R`: the
   inspection functions and the print method.
@@ -161,9 +162,9 @@ See `.agents/design.md` for the why. There is no native layer: no
 its seed, under R CMD check and covr alike; `tools/ci-run-tests.R` runs
 the same file from the source tree. The shuffle reorders every top-level
 expression of a test file, so shared functions go in `helper-*.R`, never
-at file scope. Fixtures (Stage 1, design §8): 33 Delta tables (14 copied
-from `delta-rs`, Apache-2.0; 2 changed from them; 17 `zl-*` written with
-`deltalake` 1.7.0) and 37 hostile logs, listed in
+at file scope. Fixtures (Stage 1, design §8): 37 Delta tables (14 copied
+from `delta-rs`, Apache-2.0; 2 changed from them; 21 `zl-*` written with
+`deltalake` 1.7.0) and 41 hostile logs, listed in
 `tests/testthat/fixtures/PROVENANCE.md`. They ship packed in
 `tests/testthat/fixtures/delta-fixtures.tar`, because Delta paths pass
 the 100 bytes a package tarball allows; the unpacked `tables/` and

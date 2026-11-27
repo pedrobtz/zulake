@@ -159,18 +159,32 @@ too. A <code>float</code> or <code>double</code> column takes only numbers: text
 as <code>amount &gt; "100"</code>, is an error, since R would compare it with the
 column as strings. A date or timestamp column takes a <code>Date</code> or
 <code>POSIXct</code>, or text such as <code>"2024-01-31"</code> or
-<code>"2024-01-31 12:00:00"</code> (UTC unless it gives an offset).</p>
-<p>Columns are typed as qio returns them (see <code><a href="https://pedrobtz.github.io/qio/reference/read_parquet.html" class="external-link">qio::read_parquet()</a></code>), and
-partition columns as <code><a href="lake_files.html">lake_files()</a></code> types them, except that a <code>decimal</code>
-of precision 15 or less, data or partition, is a double, which holds it
-exactly. An <code>integer</code> data value of -2^31 reads as <code>NA</code>, R's integer
-<code>NA</code>, with a warning from qio: <code><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na()</a></code> is <code>TRUE</code> for it and a comparison
+<code>"2024-01-31 12:00:00"</code> (UTC unless it gives an offset), to the
+microsecond: text with a non-zero digit past it is an error.</p>
+<p>Columns are typed as qio returns them (see <code><a href="https://pedrobtz.github.io/qio/reference/read_parquet.html" class="external-link">qio::read_parquet()</a></code>), and a
+partition column as a data column of its type: a <code>decimal</code> of precision
+15 or less is a double, which holds it exactly; a <code>float</code> is the double
+of its single-precision value; an <code>integer</code> is an R integer; a <code>binary</code>
+value is a raw vector of the UTF-8 bytes of the log's text (<code>NULL</code> for
+null); and a time with digits past the microsecond loses them. A <code>void</code>
+column is all <code>NA</code>, and is never read from a file. Each data file's
+Parquet type for each column read must be one its type in the schema
+reads: an INT32 file of a <code>long</code> column is widened to the <code>long</code> mapping,
+and a file whose type the schema's does not read (strings in a <code>long</code>
+column, INT64 in an <code>integer</code> one) is an error of class
+<code>zulake_error_corrupt_log</code> naming the file and the column, with fields
+<code>type</code>, <code>physical_type</code> and <code>logical_type</code>. An error qio raises on a data
+file is a <code>zulake_error_storage</code> whose <code>path</code> names it. An <code>integer</code>
+value of -2^31, data or partition, reads as <code>NA</code>, R's integer <code>NA</code>, with
+a warning in qio's words: <code><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na()</a></code> is <code>TRUE</code> for it and a comparison
 such as <code>x &lt; 1</code> is not, and a file whose minimum may be -2^31 is never
 pruned on its null count. So is a <code>long</code> data value past 2^53 - 1 in
 magnitude with <code>int64 = "double"</code>, or -2^63 with <code>"integer64"</code>, and a
 file whose bounds may hold one is never pruned on its null count. Columns zulake does not return are not lost silently: nested
-columns (<code>struct</code>, <code>array</code>, <code>map</code>), and decimals of precision above 15
-until qio reads them exactly. With <code>columns = NULL</code> they are left out, each named in a
+columns (<code>struct</code>, <code>array</code>, <code>map</code>), decimals of precision above 15
+until qio reads them exactly, and a flat column whose dotted name a
+nested column's path also has (<code>a.b</code> beside a struct <code>a</code> with a field
+<code>b</code>), which qio cannot select apart from it. With <code>columns = NULL</code> they are left out, each named in a
 warning of class <code>zulake_warning_column_skipped</code> (fields <code>column</code> and
 <code>reason</code>); named in <code>columns</code> or used in <code>filter</code>, such a column is an
 error of class <code>zulake_error_column_unreadable</code> with the same fields.</p>

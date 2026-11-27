@@ -136,7 +136,8 @@ deletion vector and no <code>numRecords</code> breaks the protocol:
     <p>Partition values are typed by the column's Delta type: <code>byte</code> and
 <code>short</code> as integers, <code>integer</code> as doubles (an R integer cannot hold
 -2^31), <code>long</code> as 64-bit values (see <code>int64</code>), <code>float</code> and <code>double</code> as
-doubles, <code>boolean</code> as logicals, <code>date</code> as <code>Date</code>,
+doubles (a <code>float</code> rounded through single precision, as its data
+column reads), <code>boolean</code> as logicals, <code>date</code> as <code>Date</code>,
 <code>timestamp</code> and <code>timestamp_ntz</code> as <code>POSIXct</code> in UTC, and <code>decimal</code>,
 <code>string</code> and <code>binary</code> as the text the log holds. A null partition value
 is <code>NA</code>.</p>

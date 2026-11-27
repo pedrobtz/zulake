@@ -134,26 +134,40 @@ too. A `float` or `double` column takes only numbers: text there, such
 as `amount > "100"`, is an error, since R would compare it with the
 column as strings. A date or timestamp column takes a `Date` or
 `POSIXct`, or text such as `"2024-01-31"` or `"2024-01-31 12:00:00"`
-(UTC unless it gives an offset).
+(UTC unless it gives an offset), to the microsecond: text with a
+non-zero digit past it is an error.
 
 Columns are typed as qio returns them (see
 [`qio::read_parquet()`](https://pedrobtz.github.io/qio/reference/read_parquet.html)),
-and partition columns as
-[`lake_files()`](https://pedrobtz.github.io/zulake/reference/lake_files.md)
-types them, except that a `decimal` of precision 15 or less, data or
-partition, is a double, which holds it exactly. An `integer` data value
-of -2^31 reads as `NA`, R's integer `NA`, with a warning from qio:
+and a partition column as a data column of its type: a `decimal` of
+precision 15 or less is a double, which holds it exactly; a `float` is
+the double of its single-precision value; an `integer` is an R integer;
+a `binary` value is a raw vector of the UTF-8 bytes of the log's text
+(`NULL` for null); and a time with digits past the microsecond loses
+them. A `void` column is all `NA`, and is never read from a file. Each
+data file's Parquet type for each column read must be one its type in
+the schema reads: an INT32 file of a `long` column is widened to the
+`long` mapping, and a file whose type the schema's does not read
+(strings in a `long` column, INT64 in an `integer` one) is an error of
+class `zulake_error_corrupt_log` naming the file and the column, with
+fields `type`, `physical_type` and `logical_type`. An error qio raises
+on a data file is a `zulake_error_storage` whose `path` names it. An
+`integer` value of -2^31, data or partition, reads as `NA`, R's integer
+`NA`, with a warning in qio's words:
 [`is.na()`](https://rdrr.io/r/base/NA.html) is `TRUE` for it and a
 comparison such as `x < 1` is not, and a file whose minimum may be -2^31
 is never pruned on its null count. So is a `long` data value past 2^53 -
 1 in magnitude with `int64 = "double"`, or -2^63 with `"integer64"`, and
 a file whose bounds may hold one is never pruned on its null count.
 Columns zulake does not return are not lost silently: nested columns
-(`struct`, `array`, `map`), and decimals of precision above 15 until qio
-reads them exactly. With `columns = NULL` they are left out, each named
-in a warning of class `zulake_warning_column_skipped` (fields `column`
-and `reason`); named in `columns` or used in `filter`, such a column is
-an error of class `zulake_error_column_unreadable` with the same fields.
+(`struct`, `array`, `map`), decimals of precision above 15 until qio
+reads them exactly, and a flat column whose dotted name a nested
+column's path also has (`a.b` beside a struct `a` with a field `b`),
+which qio cannot select apart from it. With `columns = NULL` they are
+left out, each named in a warning of class
+`zulake_warning_column_skipped` (fields `column` and `reason`); named in
+`columns` or used in `filter`, such a column is an error of class
+`zulake_error_column_unreadable` with the same fields.
 
 Data files are read in place on local disk. On Azure, every file left
 after pruning is downloaded to the session's temporary directory
