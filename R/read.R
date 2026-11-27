@@ -148,7 +148,7 @@ lake_walk <- function(tbl, FUN, columns = NULL, filter = NULL, int64 = c("double
   invisible(NULL)
 }
 
-# ---- the read pipeline ------------------------------------------------------
+# ---- the read pipeline ---------------------------------------------------
 #
 # read_scan() decides everything before a row is read: refusals, the filter
 # plan, the files that survive pruning (fetched to local paths: on Azure
@@ -385,7 +385,7 @@ bind_pieces <- function(pieces, scan) {
   new_data_frame_n(cols, n)
 }
 
-# ---- files on disk ----------------------------------------------------------
+# ---- files on disk -------------------------------------------------------
 
 # The download cache of one lake_open() (design section 4.3): an
 # environment created there, carried in the snapshot as `downloads` and

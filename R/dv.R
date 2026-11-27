@@ -122,7 +122,7 @@ lake_deletion_vectors <- function(tbl, files = NULL, rows = TRUE) {
   new_data_frame_n(out, length(pick))
 }
 
-# ---- the rows of deletion vectors -------------------------------------------
+# ---- the rows of deletion vectors ----------------------------------------
 
 # The deleted row positions (sorted, 0-based doubles) of live files `idx`,
 # each of which has a deletion vector. Every vector is read and checked
@@ -315,7 +315,7 @@ be_uint32 <- function(b) {
   sum(as.numeric(b) * 256^(3:0))
 }
 
-# ---- Z85 (ZeroMQ RFC 32) -------------------------------------------------------
+# ---- Z85 (ZeroMQ RFC 32) -------------------------------------------------
 
 z85_alphabet <- utf8ToInt("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#")
 
@@ -347,7 +347,7 @@ z85_decode <- function(text) {
   as.raw(as.vector(bytes))
 }
 
-# ---- CRC-32 (IEEE 802.3, as zlib and java.util.zip compute it) -----------------
+# ---- CRC-32 (IEEE 802.3, as zlib and java.util.zip compute it) -----------
 
 # The table, as 16-bit halves so that no value reaches R's NA_integer_.
 crc32_table <- local({

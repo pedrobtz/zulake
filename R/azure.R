@@ -34,7 +34,7 @@
 # deltalake's storage layer, sends.
 azure_version <- "2023-11-03"
 
-# ---- URIs ------------------------------------------------------------------
+# ---- URIs ----------------------------------------------------------------
 
 # Whether `uri` is one of the three Azure forms, by scheme and host only.
 is_azure_uri <- function(uri) {
@@ -136,7 +136,7 @@ url_encode <- function(x) {
 
 unreserved_bytes <- charToRaw("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
 
-# ---- credentials -----------------------------------------------------------
+# ---- credentials ---------------------------------------------------------
 
 # Made in .onLoad(), not here: an environment made when the package is
 # built is stored in its lazy-load database, and the loader's own
@@ -255,7 +255,7 @@ credential_token <- function(handle, refresh = FALSE) {
   token
 }
 
-# ---- requests --------------------------------------------------------------
+# ---- requests ------------------------------------------------------------
 
 azure_env <- new.env(parent = emptyenv())
 
@@ -340,7 +340,7 @@ azure_fail <- function(resp, what, path) {
   )
 }
 
-# ---- the backend -----------------------------------------------------------
+# ---- the backend ---------------------------------------------------------
 
 # The Azure backend for a parsed URI (parse_azure_uri()) and a credential
 # handle. Its functions hold the location and the handle, nothing else.
@@ -520,7 +520,7 @@ storage_for_absolute <- function(storage, path) {
   list(storage = storage_azure(parts, storage$location$handle), rel = name)
 }
 
-# ---- responses -------------------------------------------------------------
+# ---- responses -----------------------------------------------------------
 
 # One page of a List Blobs answer (EnumerationResults): `blobs` (full names,
 # sizes, modification times in seconds) and `next_marker` (NA on the last

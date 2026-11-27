@@ -45,7 +45,7 @@ decimal_ps <- function(type) {
 # 2^53 (design section 7).
 max_double_precision <- 15
 
-# ---- exact decimal text ----------------------------------------------------
+# ---- exact decimal text --------------------------------------------------
 
 exact_pattern <- "^([+-]?)([0-9]+)(?:[.]([0-9]+))?(?:[eE]([+-]?[0-9]+))?$"
 
@@ -145,7 +145,7 @@ bytes_starts_with <- function(x, prefix) {
   out
 }
 
-# ---- filter values as comparison keys --------------------------------------
+# ---- filter values as comparison keys ------------------------------------
 
 # The values of a filter literal compared with a column of `kind` (and Delta
 # type `type`), as keys: parsed decimal text for "exact", doubles for

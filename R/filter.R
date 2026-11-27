@@ -73,7 +73,7 @@ filter_error <- function(expr, problem, strict = TRUE) {
   )
 }
 
-# ---- the plan ----------------------------------------------------------------
+# ---- the plan ------------------------------------------------------------
 
 # Functions a filter may apply to columns, besides the pruning subset
 # (design section 5, D8). Each gives one value per row, from that row alone,
@@ -370,7 +370,7 @@ plan_columns <- function(plan) {
   plan$columns
 }
 
-# ---- one node on values ---------------------------------------------------------
+# ---- one node on values --------------------------------------------------
 
 # An atom or is.na() node on a column's values `x` (rows of a piece, or one
 # partition value per file): TRUE, FALSE or NA per value.
@@ -408,7 +408,7 @@ op_sign <- function(c, op) {
   )
 }
 
-# ---- rows -----------------------------------------------------------------------
+# ---- rows ----------------------------------------------------------------
 
 # The filter on the rows of `data` (a data frame of the columns it uses):
 # TRUE, FALSE or NA per row. Nodes R evaluates see the columns first, then
@@ -439,7 +439,7 @@ filter_rows <- function(plan, data, env) {
   )
 }
 
-# ---- pruning --------------------------------------------------------------------
+# ---- pruning -------------------------------------------------------------
 
 # What pruning needs to know about the live files, for the columns `plan`
 # uses: `n` files; `part`, the partition values as atoms compare them
@@ -511,7 +511,7 @@ filter_outcomes <- function(plan, info) {
   )
 }
 
-# ---- statistics -----------------------------------------------------------------
+# ---- statistics ----------------------------------------------------------
 
 # What the statistics of each file allow for data column `col` of Delta type
 # `type`: `lo` and `hi` as keys of the column's kind (NA where unknown),
