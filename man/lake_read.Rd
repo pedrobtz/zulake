@@ -16,7 +16,7 @@ lake_walk(
 )
 }
 \arguments{
-\item{tbl}{A snapshot, from \code{\link[=lake_open]{lake_open()}}.}
+\item{tbl}{A snapshot, from \code{\link[=lake_open]{lake_open()}} or \code{\link[=lake_load]{lake_load()}}.}
 
 \item{columns}{Columns to return, a character vector of column names, in
 that order. \code{NULL}, the default, returns every column qio can return.}
@@ -92,10 +92,10 @@ that is not the number its 15-digit form reads back as (\code{1/3},
 \code{0.1 + 0.2}) is an error asking for the value as text. R has already
 rounded a literal such as \code{9007199254740993} to a double
 (9007199254740992) before zulake sees it, so give such a value as text
-too. A \code{float} or \code{double} column takes
-only numbers: text there, such as \code{amount > "100"}, is an error, since R
-would compare it with the column as strings. A date or timestamp column takes a
-\code{Date} or \code{POSIXct}, or text such as \code{"2024-01-31"} or
+too. A \code{float} or \code{double} column takes only numbers: text there, such
+as \code{amount > "100"}, is an error, since R would compare it with the
+column as strings. A date or timestamp column takes a \code{Date} or
+\code{POSIXct}, or text such as \code{"2024-01-31"} or
 \code{"2024-01-31 12:00:00"} (UTC unless it gives an offset).
 
 Columns are typed as qio returns them (see \code{\link[qio:read_parquet]{qio::read_parquet()}}), and

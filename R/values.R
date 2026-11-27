@@ -133,9 +133,10 @@ parse_date_text <- function(x) {
 # Partition values (character, NA for null) of one column as its Delta type
 # says (the protocol's "Partition Value Serialization"): integers (`byte`,
 # `short`) and doubles (`integer`, which an R integer cannot hold at -2^31,
-# `float`, `double`), logicals, Dates and POSIXct; `long` as 64-bit values (int64.R); decimals,
-# strings and binary as their text. Stage 2 checked every live value against
-# its type, so a value that does not parse here is a corrupt log.
+# `float`, `double`), logicals, Dates and POSIXct; `long` as 64-bit values
+# (int64.R); decimals, strings and binary as their text. snapshot_build()
+# has checked every live value against its type (check_partition_values()),
+# so a value that does not parse here is a corrupt log.
 parse_partition_values <- function(x, type, int64, column) {
   what <- sprintf("partition column %s", format_string(column))
   out <- switch(type,

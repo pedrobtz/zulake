@@ -28,7 +28,7 @@ lake_protocol(tbl)
 lake_summary(tbl, int64 = c("double", "integer64"))
 }
 \arguments{
-\item{tbl}{A snapshot, from \code{\link[=lake_open]{lake_open()}}.}
+\item{tbl}{A snapshot, from \code{\link[=lake_open]{lake_open()}} or \code{\link[=lake_load]{lake_load()}}.}
 
 \item{limit}{The number of commits to return, newest first. \code{NULL}, the
 default, returns all of them.}

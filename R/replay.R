@@ -16,7 +16,7 @@
 replay_plan <- function(entries, version, start = 0, failed = list()) {
   commits <- entries[entries$kind == "commit", , drop = FALSE]
   compactions <- entries[entries$kind == "compaction" & entries$end_version <= version, , drop = FALSE]
-  names <- character()
+  files <- character()
   from <- numeric()
   to <- numeric()
   fallback <- list()
@@ -27,10 +27,10 @@ replay_plan <- function(entries, version, start = 0, failed = list()) {
       best <- hit[which.max(compactions$end_version[hit])]
       end <- compactions$end_version[best]
       covered <- match(seq(at, end), commits$version)
-      names <- c(names, compactions$name[best])
+      files <- c(files, compactions$name[best])
       from <- c(from, at)
       to <- c(to, end)
-      fallback[[length(names)]] <- if (!anyNA(covered)) commits$name[covered]
+      fallback[[length(files)]] <- if (!anyNA(covered)) commits$name[covered]
       at <- end + 1
       next
     }
@@ -38,14 +38,14 @@ replay_plan <- function(entries, version, start = 0, failed = list()) {
     if (is.na(hit)) {
       missing_commit(entries, at, start, version, failed)
     }
-    names <- c(names, commits$name[hit])
+    files <- c(files, commits$name[hit])
     from <- c(from, at)
     to <- c(to, at)
-    fallback[length(names)] <- list(NULL)
+    fallback[length(files)] <- list(NULL)
     at <- at + 1
   }
-  length(fallback) <- length(names)
-  new_data_frame(list(name = names, from = from, to = to, fallback = fallback))
+  length(fallback) <- length(files)
+  new_data_frame(list(name = files, from = from, to = to, fallback = fallback))
 }
 
 # A commit replay needs is not in the log. From commit 0, with a checkpoint
@@ -126,16 +126,16 @@ replay_state <- function(entries, sets, version, read, read_cp) {
 # `plan`'s files in order: protocol, metadata, live files, tombstones,
 # transactions and domains. `read` returns a file's actions by name.
 replay <- function(plan, read, checkpoint = NULL) {
-  st <- new.env(parent = emptyenv())
-  st$protocol <- NULL
-  st$metadata <- NULL
-  st$adds <- new.env(parent = emptyenv())
-  st$removes <- new.env(parent = emptyenv())
-  st$odd_keys <- character()
-  st$txns <- list()
-  st$domains <- list()
+  state <- new.env(parent = emptyenv())
+  state$protocol <- NULL
+  state$metadata <- NULL
+  state$adds <- new.env(parent = emptyenv())
+  state$removes <- new.env(parent = emptyenv())
+  state$odd_keys <- character()
+  state$txns <- list()
+  state$domains <- list()
   if (!is.null(checkpoint)) {
-    apply_file(st, checkpoint$name, checkpoint$actions)
+    apply_file(state, checkpoint$name, checkpoint$actions)
   }
   for (i in seq_len(nrow(plan))) {
     commits <- plan$fallback[[i]]
@@ -147,18 +147,18 @@ replay <- function(plan, read, checkpoint = NULL) {
       tryCatch(read(plan$name[i]), zulake_error = function(e) if (inherits(e, "zulake_error_auth")) stop(e) else NULL)
     }
     if (is.null(actions) && !is.null(commits)) {
-      for (name in commits) apply_file(st, name, read(name))
+      for (name in commits) apply_file(state, name, read(name))
     } else {
-      apply_file(st, plan$name[i], actions)
+      apply_file(state, plan$name[i], actions)
     }
   }
-  if (is.null(st$protocol)) {
+  if (is.null(state$protocol)) {
     zulake_abort("corrupt_log", "the log has no `protocol` action.")
   }
-  if (is.null(st$metadata)) {
+  if (is.null(state$metadata)) {
     zulake_abort("corrupt_log", "the log has no `metaData` action.")
   }
-  st
+  state
 }
 
 # One commit (or compaction) file. File actions are applied removes first,

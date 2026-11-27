@@ -153,12 +153,12 @@ lake_schema <- function(tbl) {
   fields <- schema_fields(tbl)
   mode <- tbl$column_mapping
   physical <- vapply(fields, field_physical, "", mode = mode)
-  names_ <- vapply(fields, field_name, "")
+  logical_names <- vapply(fields, field_name, "")
   new_data_frame(list(
-    name = names_,
+    name = logical_names,
     type = vapply(fields, field_type, ""),
     nullable = vapply(fields, function(f) isTRUE(f[["nullable"]]), NA),
-    partition = names_ %in% tbl$metadata[["partitionColumns"]],
+    partition = logical_names %in% tbl$metadata[["partitionColumns"]],
     physical_name = if (mode == "none") rep(NA_character_, length(fields)) else physical,
     metadata = lapply(fields, function(f) if (is.list(f[["metadata"]])) f[["metadata"]] else named_list()),
     type_detail = lapply(fields, function(f) if (is.list(f[["type"]])) f[["type"]] else NULL)
@@ -192,10 +192,10 @@ lake_properties <- function(tbl) {
   check_table(tbl)
   conf <- tbl$metadata[["configuration"]]
   set <- if (length(conf)) vapply(conf, function(v) if (is.null(v)) NA_character_ else v, "") else character()
-  missing <- setdiff(names(property_defaults), names(set))
-  key <- c(names(set), missing)
-  value <- c(unname(set), unname(property_defaults[missing]))
-  default <- c(rep(FALSE, length(set)), rep(TRUE, length(missing)))
+  absent <- setdiff(names(property_defaults), names(set))
+  key <- c(names(set), absent)
+  value <- c(unname(set), unname(property_defaults[absent]))
+  default <- c(rep(FALSE, length(set)), rep(TRUE, length(absent)))
   ord <- order(key, method = "radix")
   new_data_frame(list(key = key[ord], value = value[ord], default = default[ord]))
 }
@@ -249,7 +249,7 @@ snapshot_commits <- function(tbl) {
 commit_times <- function(tbl, commits) {
   ict <- ict_info(tbl$protocol, tbl$metadata)
   read <- function(name) read_actions(tbl$storage, name)
-  all <- snapshot_commits(tbl)
-  ms <- commit_times_ms(all, ict, read, match(commits$version, all$version))
+  commits_all <- snapshot_commits(tbl)
+  ms <- commit_times_ms(commits_all, ict, read, match(commits$version, commits_all$version))
   ms_to_posixct(ms)
 }

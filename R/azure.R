@@ -138,12 +138,9 @@ unreserved_bytes <- charToRaw("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvw
 
 # ---- credentials ---------------------------------------------------------
 
-# Made in .onLoad() (zulake-package.R), not here: an environment made when
-# the package is built is stored in its lazy-load database, and the
-# loader's own environments keep a reference to it, which a srcref or a
-# byte-code constant in a snapshot can reach (seen with the source kept,
-# Stage 6). `credential_env` holds the entries and nothing else;
-# `credential_state` the session's nonce and counter.
+# Made in .onLoad() (zulake-package.R, which says why), not here.
+# `credential_env` holds the entries and nothing else; `credential_state`
+# the session's nonce and counter.
 credential_env <- NULL
 credential_state <- NULL
 
@@ -322,9 +319,9 @@ azure_fail <- function(resp, what, path) {
   status <- zuhttp::zu_resp_status(resp)
   code <- zuhttp::zu_resp_header(resp, "x-ms-error-code")
   code <- if (length(code)) code[1L] else NA_character_
-  class <- if (status %in% c(401L, 403L)) "auth" else "storage"
+  kind <- if (status %in% c(401L, 403L)) "auth" else "storage"
   zulake_abort(
-    class,
+    kind,
     sprintf(
       "cannot %s %s: Azure answered HTTP %s%s.",
       what, format_string(path), format_number(status),
@@ -384,11 +381,11 @@ storage_azure <- function(parts, handle) {
       marker <- page$next_marker
       seen <- c(seen, marker)
     }
-    names <- unlist(lapply(pages, function(p) p$name), use.names = FALSE) %||% character()
+    blob_names <- unlist(lapply(pages, function(p) p$name), use.names = FALSE) %||% character()
     size <- unlist(lapply(pages, function(p) p$size), use.names = FALSE) %||% numeric()
     mtime <- unlist(lapply(pages, function(p) p$modification_time), use.names = FALSE) %||% numeric()
-    rel <- substr(names, nchar(full) + 1L, nchar(names))
-    keep <- startsWith(names, full) & nzchar(rel) & !grepl("/", rel, fixed = TRUE)
+    rel <- substr(blob_names, nchar(full) + 1L, nchar(blob_names))
+    keep <- startsWith(blob_names, full) & nzchar(rel) & !grepl("/", rel, fixed = TRUE)
     if (!is.null(after)) {
       keep <- keep & sorts_after(rel, after)
     }

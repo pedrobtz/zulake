@@ -57,20 +57,20 @@ storage_local <- function(root) {
 
   list_files <- function(prefix, after = NULL) {
     dir <- full(prefix)
-    names <- if (dir.exists(dir)) list.files(dir, all.files = TRUE, no.. = TRUE) else character()
-    info <- file.info(file.path(dir, names), extra_cols = FALSE)
+    files <- if (dir.exists(dir)) list.files(dir, all.files = TRUE, no.. = TRUE) else character()
+    info <- file.info(file.path(dir, files), extra_cols = FALSE)
     keep <- !is.na(info$isdir) & !info$isdir
-    names <- names[keep]
+    files <- files[keep]
     info <- info[keep, , drop = FALSE]
     if (!is.null(after)) {
       check_string(after, "after")
-      later <- sorts_after(names, after)
-      names <- names[later]
+      later <- sorts_after(files, after)
+      files <- files[later]
       info <- info[later, , drop = FALSE]
     }
-    ord <- order(names, method = "radix")
+    ord <- order(files, method = "radix")
     new_data_frame(list(
-      name = names[ord],
+      name = files[ord],
       size = as.numeric(info$size[ord]),
       modification_time = as_utc(info$mtime[ord])
     ))
@@ -138,9 +138,9 @@ sorts_after <- function(x, y) {
   if (!length(x)) {
     return(logical())
   }
-  all <- unique(c(y, x))
-  rank <- match(all, all[order(all, method = "radix")])
-  rank[match(x, all)] > rank[1L]
+  values <- unique(c(y, x))
+  rank <- match(values, values[order(values, method = "radix")])
+  rank[match(x, values)] > rank[1L]
 }
 
 as_utc <- function(x) {

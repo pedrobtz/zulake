@@ -76,14 +76,15 @@
 #'   or value, such as a `version` that is not a whole number),
 #'   `zulake_error_not_table` (no Delta log at `uri`),
 #'   `zulake_error_version` (no such version, or one no longer in the log),
-#'   `zulake_error_uri` (a URI zulake cannot open), `zulake_error_storage` (a file that cannot be
-#'   read; from Azure with the HTTP `status` and Azure's error `code`),
+#'   `zulake_error_uri` (a URI zulake cannot open), `zulake_error_storage`
+#'   (a file that cannot be read; from Azure with the HTTP `status` and
+#'   Azure's error `code`),
 #'   `zulake_error_auth` (credentials refused), `zulake_error_corrupt_log`
 #'   (a log that breaks the protocol, such as a commit that is not JSON or a
 #'   partition value of the wrong type, or a `_last_checkpoint` naming a
 #'   checkpoint the log does not hold whole),
-#'   `zulake_error_checkpoint_unreadable` (its `checkpoint` field gives the version, `parent` the read failure)
-#'   and `zulake_error_unsupported_feature`, whose `feature` field names the
+#'   `zulake_error_checkpoint_unreadable` (its `checkpoint` field gives the
+#'   version, `parent` the read failure) and `zulake_error_unsupported_feature`, whose `feature` field names the
 #'   feature.
 #' @seealso [lake_is_table()] to check a location first.
 #' @export
@@ -116,7 +117,7 @@ lake_open <- function(uri, version = NULL, timestamp = NULL, credentials = NULL)
 }
 
 #' @rdname lake_open
-#' @param tbl A snapshot, from `lake_open()` or `lake_load()`.
+#' @param tbl A snapshot, from [lake_open()] or [lake_load()].
 #' @export
 lake_load <- function(tbl, version = NULL, timestamp = NULL) {
   check_table(tbl)

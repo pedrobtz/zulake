@@ -37,7 +37,7 @@
 #' `zulake_error_filter` error, since there are no rows here to apply it
 #' to.
 #'
-#' @param tbl A snapshot, from [lake_open()].
+#' @param tbl A snapshot, from [lake_open()] or [lake_load()].
 #' @param filter An expression over column names; see Details. `NULL`, the
 #'   default, keeps every file.
 #' @param stats Whether to parse the files' statistics into `num_records`,
@@ -75,8 +75,9 @@
 #'   `numRecords` the count is unknown: `NA_real_`, with a warning of class
 #'   `zulake_warning_count_unknown` whose `files` field gives the number of
 #'   such files, unless `footers = TRUE` reads those files' row counts from
-#'   their Parquet footers. It is never a partial sum. A file with a deletion vector
-#'   and no `numRecords` breaks the protocol: `zulake_error_corrupt_log`.
+#'   their Parquet footers. It is never a partial sum. A file with a
+#'   deletion vector and no `numRecords` breaks the protocol:
+#'   `zulake_error_corrupt_log`.
 #' @seealso [lake_summary()] for the totals in one row, [lake_changes()] for
 #'   the files added and removed between two versions.
 #' @export

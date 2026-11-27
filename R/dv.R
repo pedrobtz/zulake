@@ -93,7 +93,8 @@ lake_deletion_vectors <- function(tbl, files = NULL, rows = TRUE) {
     if (!is.character(files) || anyNA(files)) {
       zulake_abort("argument", "`files` must be NULL or a character vector of file paths or URIs.")
     }
-    at <- ifelse(is.na(match(files, paths)), match(files, uris), match(files, paths))
+    at <- match(files, paths)
+    at[is.na(at)] <- match(files[is.na(at)], uris)
     if (anyNA(at)) {
       zulake_abort(
         "argument",
@@ -234,7 +235,7 @@ dv_rows <- function(tbl, i, versions) {
     return(numeric())
   }
   top <- max(bitmap)
-  if (nchar(top) > 16L || nchar(top) == 16L && sorts_after(top, "9007199254740991")) {
+  if (nchar(top) > 16L || (nchar(top) == 16L && sorts_after(top, "9007199254740991"))) {
     zulake_abort(
       "int64",
       sprintf(

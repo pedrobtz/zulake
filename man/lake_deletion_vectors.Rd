@@ -7,7 +7,7 @@
 lake_deletion_vectors(tbl, files = NULL, rows = TRUE)
 }
 \arguments{
-\item{tbl}{A snapshot, from \code{\link[=lake_open]{lake_open()}}.}
+\item{tbl}{A snapshot, from \code{\link[=lake_open]{lake_open()}} or \code{\link[=lake_load]{lake_load()}}.}
 
 \item{files}{\code{NULL}, the default, for every live file, or a character
 vector of files, each a \code{path} or \code{uri} as \code{\link[=lake_files]{lake_files()}} gives them.}

@@ -31,7 +31,7 @@ file (checkpoints alone) has no commit times, and is a
 for Azure Storage, as a string (see the Azure section), or \code{NULL} for
 anonymous requests. Not used for local paths.}
 
-\item{tbl}{A snapshot, from \code{lake_open()} or \code{lake_load()}.}
+\item{tbl}{A snapshot, from \code{\link[=lake_open]{lake_open()}} or \code{\link[=lake_load]{lake_load()}}.}
 }
 \value{
 \code{lake_open()} and \code{lake_load()} return a snapshot, an object of
@@ -43,14 +43,15 @@ that says why: \code{zulake_error_argument} (an argument of the wrong type
 or value, such as a \code{version} that is not a whole number),
 \code{zulake_error_not_table} (no Delta log at \code{uri}),
 \code{zulake_error_version} (no such version, or one no longer in the log),
-\code{zulake_error_uri} (a URI zulake cannot open), \code{zulake_error_storage} (a file that cannot be
-read; from Azure with the HTTP \code{status} and Azure's error \code{code}),
+\code{zulake_error_uri} (a URI zulake cannot open), \code{zulake_error_storage}
+(a file that cannot be read; from Azure with the HTTP \code{status} and
+Azure's error \code{code}),
 \code{zulake_error_auth} (credentials refused), \code{zulake_error_corrupt_log}
 (a log that breaks the protocol, such as a commit that is not JSON or a
 partition value of the wrong type, or a \verb{_last_checkpoint} naming a
 checkpoint the log does not hold whole),
-\code{zulake_error_checkpoint_unreadable} (its \code{checkpoint} field gives the version, \code{parent} the read failure)
-and \code{zulake_error_unsupported_feature}, whose \code{feature} field names the
+\code{zulake_error_checkpoint_unreadable} (its \code{checkpoint} field gives the
+version, \code{parent} the read failure) and \code{zulake_error_unsupported_feature}, whose \code{feature} field names the
 feature.
 }
 \description{

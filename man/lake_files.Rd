@@ -16,7 +16,7 @@ lake_removed(tbl, int64 = c("double", "integer64"))
 lake_count(tbl, footers = FALSE)
 }
 \arguments{
-\item{tbl}{A snapshot, from \code{\link[=lake_open]{lake_open()}}.}
+\item{tbl}{A snapshot, from \code{\link[=lake_open]{lake_open()}} or \code{\link[=lake_load]{lake_load()}}.}
 
 \item{filter}{An expression over column names; see Details. \code{NULL}, the
 default, keeps every file.}
@@ -63,8 +63,9 @@ delete (each descriptor's \code{cardinality}). When a live file has no
 \code{numRecords} the count is unknown: \code{NA_real_}, with a warning of class
 \code{zulake_warning_count_unknown} whose \code{files} field gives the number of
 such files, unless \code{footers = TRUE} reads those files' row counts from
-their Parquet footers. It is never a partial sum. A file with a deletion vector
-and no \code{numRecords} breaks the protocol: \code{zulake_error_corrupt_log}.
+their Parquet footers. It is never a partial sum. A file with a
+deletion vector and no \code{numRecords} breaks the protocol:
+\code{zulake_error_corrupt_log}.
 }
 \description{
 \code{lake_files()} lists the snapshot's live files, one row per \code{add} action

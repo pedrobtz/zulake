@@ -117,10 +117,10 @@ lake_changes <- function(tbl, from, to = lake_version(tbl), int64 = c("double", 
   key <- function(s) {
     if (!nrow(s$files)) character() else paste0(s$files$path, "\x1f", s$files$deletion_vector_id)
   }
-  ka <- key(a)
-  kb <- key(b)
-  added <- add_frame(b, b$files$action[!kb %in% ka], FALSE, int64)
-  removed <- add_frame(a, a$files$action[!ka %in% kb], FALSE, int64)
+  keys_from <- key(a)
+  keys_to <- key(b)
+  added <- add_frame(b, b$files$action[!keys_to %in% keys_from], FALSE, int64)
+  removed <- add_frame(a, a$files$action[!keys_from %in% keys_to], FALSE, int64)
   out <- rbind_frames(added, removed)
   out <- c(list(change = rep(c("added", "removed"), c(nrow(added), nrow(removed)))), out)
   new_data_frame(out, nrow(added) + nrow(removed))

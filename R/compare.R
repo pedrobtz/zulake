@@ -61,12 +61,12 @@ is_exact_text <- function(x) {
 # parts.
 exact_parse <- function(x) {
   n <- length(x)
-  sign <- rep(NA_real_, n)
-  exp <- rep(NA_real_, n)
+  signs <- rep(NA_real_, n)
+  exps <- rep(NA_real_, n)
   digits <- rep(NA_character_, n)
   inf <- !is.na(x) & x %in% c("Inf", "-Inf")
-  sign[inf] <- ifelse(x[inf] == "Inf", 1, -1)
-  exp[inf] <- Inf
+  signs[inf] <- ifelse(x[inf] == "Inf", 1, -1)
+  exps[inf] <- Inf
   digits[inf] <- ""
   ok <- is_exact_text(x)
   if (any(ok)) {
@@ -75,16 +75,16 @@ exact_parse <- function(x) {
     int <- part(2)
     frac <- part(3)
     e <- part(4)
-    all <- paste0(int, frac)
-    lead <- nchar(all) - nchar(sub("^0+", "", all))
-    d <- sub("0+$", "", substring(all, lead + 1L))
+    all_digits <- paste0(int, frac)
+    lead <- nchar(all_digits) - nchar(sub("^0+", "", all_digits))
+    d <- sub("0+$", "", substring(all_digits, lead + 1L))
     e_num <- ifelse(nzchar(e), suppressWarnings(as.numeric(e)), 0)
     zero <- !nzchar(d)
-    sign[ok] <- ifelse(zero, 0, ifelse(part(1) == "-", -1, 1))
-    exp[ok] <- ifelse(zero, 0, nchar(int) + e_num - lead)
+    signs[ok] <- ifelse(zero, 0, ifelse(part(1) == "-", -1, 1))
+    exps[ok] <- ifelse(zero, 0, nchar(int) + e_num - lead)
     digits[ok] <- d
   }
-  list(sign = sign, exp = exp, digits = digits)
+  list(sign = signs, exp = exps, digits = digits)
 }
 
 # Digits after the decimal point in each parsed value (0 for an integer).

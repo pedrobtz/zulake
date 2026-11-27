@@ -211,7 +211,7 @@ filter_plan <- function(expr, types, env, strict = TRUE) {
       lhs <- x[[2L]]
       rhs <- x[[3L]]
       bare <- function(s) is.symbol(s) && as.character(s) %in% columns
-      if (bare(lhs) && !has_column(rhs) || name != "%in%" && bare(rhs) && !has_column(lhs)) {
+      if ((bare(lhs) && !has_column(rhs)) || (name != "%in%" && bare(rhs) && !has_column(lhs))) {
         return(atom_node(x, name, types, env, expr))
       }
       if (has_column(lhs) && has_column(rhs)) {
@@ -397,14 +397,14 @@ atom_values <- function(node, x) {
 }
 
 # A comparison's result from -1, 0, 1 (NA stays NA).
-op_sign <- function(c, op) {
+op_sign <- function(cmp, op) {
   switch(op,
-    `==` = c == 0L,
-    `!=` = c != 0L,
-    `<` = c < 0L,
-    `<=` = c <= 0L,
-    `>` = c > 0L,
-    `>=` = c >= 0L
+    `==` = cmp == 0L,
+    `!=` = cmp != 0L,
+    `<` = cmp < 0L,
+    `<=` = cmp <= 0L,
+    `>` = cmp > 0L,
+    `>=` = cmp >= 0L
   )
 }
 

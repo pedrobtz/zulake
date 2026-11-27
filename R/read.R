@@ -50,10 +50,10 @@
 #' `0.1 + 0.2`) is an error asking for the value as text. R has already
 #' rounded a literal such as `9007199254740993` to a double
 #' (9007199254740992) before zulake sees it, so give such a value as text
-#' too. A `float` or `double` column takes
-#' only numbers: text there, such as `amount > "100"`, is an error, since R
-#' would compare it with the column as strings. A date or timestamp column takes a
-#' `Date` or `POSIXct`, or text such as `"2024-01-31"` or
+#' too. A `float` or `double` column takes only numbers: text there, such
+#' as `amount > "100"`, is an error, since R would compare it with the
+#' column as strings. A date or timestamp column takes a `Date` or
+#' `POSIXct`, or text such as `"2024-01-31"` or
 #' `"2024-01-31 12:00:00"` (UTC unless it gives an offset).
 #'
 #' Columns are typed as qio returns them (see [qio::read_parquet()]), and
@@ -162,12 +162,12 @@ lake_walk <- function(tbl, FUN, columns = NULL, filter = NULL, int64 = c("double
 
 read_scan <- function(tbl, columns, expr, env, int64) {
   types <- column_types(tbl)
-  all <- names(types)
+  all_cols <- names(types)
   if (!is.null(columns)) {
     if (!is.character(columns) || anyNA(columns)) {
       zulake_abort("argument", "`columns` must be NULL or a character vector of column names.")
     }
-    unknown <- setdiff(columns, all)
+    unknown <- setdiff(columns, all_cols)
     if (length(unknown)) {
       zulake_abort("argument", sprintf("`columns` names %s, which the table does not have.", format_string(unknown[1L])))
     }
@@ -177,12 +177,12 @@ read_scan <- function(tbl, columns, expr, env, int64) {
   }
   plan <- if (!is.null(expr)) filter_plan(expr, types, env, strict = FALSE)
   keep <- prune_files(tbl, plan, int64)
-  out_cols <- if (is.null(columns)) all else columns
+  out_cols <- if (is.null(columns)) all_cols else columns
   filter_cols <- plan_columns(plan)
-  need <- all[all %in% c(out_cols, filter_cols)]
+  need <- all_cols[all_cols %in% c(out_cols, filter_cols)]
   pcols <- tbl$metadata[["partitionColumns"]]
   fields <- schema_fields(tbl)
-  physical <- stats::setNames(vapply(fields, field_physical, "", mode = tbl$column_mapping), all)
+  physical <- stats::setNames(vapply(fields, field_physical, "", mode = tbl$column_mapping), all_cols)
 
   reasons <- list()
   for (col in need) {
@@ -534,9 +534,9 @@ absolute_local_path <- function(path) {
 
 # The number of rows of live file `i`, from its Parquet footer.
 footer_rows <- function(tbl, i, where = resolve_file(tbl, i)) {
-  pf <- qio::open_parquet(fetch_file(tbl, i, where))
-  on.exit(qio::close_parquet(pf))
-  as.numeric(dim(pf)[1L])
+  parquet <- qio::open_parquet(fetch_file(tbl, i, where))
+  on.exit(qio::close_parquet(parquet))
+  as.numeric(dim(parquet)[1L])
 }
 
 # A message handler for the one message qio emits per read when it returns

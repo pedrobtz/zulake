@@ -34,9 +34,9 @@ checkpoint_sets <- function(entries) {
 
 # Versions that have a checkpoint file but no whole checkpoint.
 incomplete_checkpoints <- function(entries, sets) {
-  all <- unique(entries$version[entries$kind == "checkpoint"])
+  versions <- unique(entries$version[entries$kind == "checkpoint"])
   whole <- vapply(sets, function(s) s$version[1L], 0)
-  setdiff(all, whole)
+  setdiff(versions, whole)
 }
 
 # The actions of one checkpoint (`set`, from checkpoint_sets()): every part,

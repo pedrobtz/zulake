@@ -27,7 +27,7 @@ lake_domains(tbl)
 lake_checkpoints(tbl)
 }
 \arguments{
-\item{tbl}{A snapshot, from \code{\link[=lake_open]{lake_open()}}.}
+\item{tbl}{A snapshot, from \code{\link[=lake_open]{lake_open()}} or \code{\link[=lake_load]{lake_load()}}.}
 
 \item{version}{The version of the commit to return, a whole number. Its
 commit file must still be in the log.}
