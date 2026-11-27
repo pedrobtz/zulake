@@ -234,7 +234,7 @@ dv_rows <- function(tbl, i, versions) {
     return(numeric())
   }
   top <- max(bitmap)
-  if (nchar(top) > 16L || nchar(top) == 16L && top >= "9007199254740992") {
+  if (nchar(top) > 16L || nchar(top) == 16L && sorts_after(top, "9007199254740991")) {
     zulake_abort(
       "int64",
       sprintf(

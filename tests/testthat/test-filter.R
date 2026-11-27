@@ -696,3 +696,14 @@ test_that("equivalent filters agree on an int32 of -2^31, which qio reads as NA 
   # Other integer types hold their minimum in R: their null count prunes.
   for (type in c("byte", "short", "long")) expect_false(kept('\\"i32\\":-128', type), label = type)
 })
+
+test_that("a quoted filter in a variable is refused with how to pass it (#92)", {
+  tbl <- lake_open(system.file("extdata", "orders", package = "zulake"))
+  q <- quote(amount > 100)
+  for (call in list(quote(lake_read(tbl, filter = q)), quote(lake_files(tbl, filter = q)))) {
+    err <- tryCatch(eval(call), error = identity)
+    expect_s3_class(err, "zulake_error_filter")
+    expect_match(conditionMessage(err), "eval(bquote(", fixed = TRUE)
+  }
+  expect_identical(eval(bquote(lake_read(tbl, filter = .(q)))), lake_read(tbl, filter = amount > 100))
+})

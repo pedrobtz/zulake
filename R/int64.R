@@ -224,7 +224,22 @@ int64_values <- function(x, int64, what) {
 # `int64 = "integer64"`.
 int64_sum <- function(x, int64, what) {
   if (int64 == "integer64") {
-    return(sum(x))
+    # bit64 gives NA, with a warning, for a sum past 2^63 - 1 (#92).
+    over <- FALSE
+    total <- withCallingHandlers(sum(x), warning = function(w) {
+      if (grepl("overflow", conditionMessage(w), fixed = TRUE)) {
+        over <<- TRUE
+        invokeRestart("muffleWarning")
+      }
+    })
+    if (over || (is.na(total) && !anyNA(x))) {
+      zulake_abort(
+        "int64",
+        sprintf("%s is more than 2^63 - 1, which integer64 cannot hold.", what),
+        value = NA_character_
+      )
+    }
+    return(total)
   }
   total <- sum(x)
   if (!is.na(total) && total > max_exact) {

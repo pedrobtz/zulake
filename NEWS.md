@@ -1,9 +1,10 @@
 # zulake 0.0.0.9000
 
-* `lake_open()` opens a Delta Lake table on local disk at its latest
-  version, at a `version` or at a `timestamp`, replaying its log from
-  commit 0 as the Delta protocol prescribes: JSON commits, log compaction
-  files, and the reconciliation of `add`, `remove`, `metaData`,
+* `lake_open()` opens a Delta Lake table on local disk or on Azure at its
+  latest version, at a `version` or at a `timestamp`, replaying its log
+  from the latest checkpoint (or commit 0) as the Delta protocol
+  prescribes: JSON commits, log compaction files, and the reconciliation
+  of `add`, `remove`, `metaData`,
   `protocol`, `txn` and `domainMetadata` actions. `lake_load()` builds
   another snapshot of the same table, `lake_version()` gives a
   snapshot's version, and `lake_is_table()` says whether a location holds
@@ -242,3 +243,9 @@
   serves a file only to the credentials that downloaded it; a copy is
   written whole or not at all, and one changed on disk is downloaded
   again (#72).
+* Fixed: with `int64 = "integer64"`, a size or record count summed past
+  2^63 - 1 is now a `zulake_error_int64` instead of `NA` with a bit64
+  warning (#92).
+* `filter = q`, with `q` a quoted expression, is now refused with a
+  message that says how to pass one (`eval(bquote(...))`), instead of "a
+  value must be a vector" (#92).

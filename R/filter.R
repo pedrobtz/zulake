@@ -168,6 +168,10 @@ filter_plan <- function(expr, types, env, strict = TRUE) {
     list(op = "r", call = call, columns = intersect(all.vars(call), columns))
   }
   const_node <- function(x) {
+    if (is.symbol(x) && identical(x, expr) &&
+        is.language(tryCatch(eval(x, env), error = function(e) NULL))) {
+      quoted_filter_error(x, expr, strict)
+    }
     if (strict) {
       filter_error(expr, "it names no column", strict = TRUE)
     }
@@ -325,10 +329,26 @@ filter_value <- function(x, env, expr) {
   value <- tryCatch(eval(x, env), error = function(e) {
     filter_error(expr, sprintf("evaluating %s failed (%s)", deparse_one(x), conditionMessage(e)), strict = FALSE)
   })
+  if (is.language(value)) {
+    quoted_filter_error(x, expr, strict = FALSE)
+  }
   if (!is.atomic(value) || is.null(value)) {
     filter_error(expr, "a value must be a vector", strict = FALSE)
   }
   value
+}
+
+# filter = q, with q <- quote(x == 1): the filter is the expression written
+# in the call, so `q` is a value, one that is itself an expression (#92).
+quoted_filter_error <- function(x, expr, strict) {
+  filter_error(
+    expr,
+    sprintf(
+      "%s is an expression, and `filter` takes the expression written in the call; to pass a quoted one, write eval(bquote(lake_read(tbl, filter = .(%s))))",
+      deparse_one(x), deparse_one(x)
+    ),
+    strict = strict
+  )
 }
 
 call_label <- function(name) {

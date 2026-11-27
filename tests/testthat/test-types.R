@@ -435,3 +435,20 @@ test_that("double and float partition values inf, -inf and NaN read as deltalake
     expect_identical(lake_files(t)$partition[[1L]]$p, want, label = x)
   }
 })
+
+test_that("a sum past 2^63 - 1 in integer64 is a classed error, not NA (#92)", {
+  skip_if_not_installed("bit64")
+  half <- "4611686018427387904"
+  stats <- sprintf('{\\"numRecords\\":%s}', half)
+  tbl <- lake_open(raw_table(c(raw_header(), raw_add("a.parquet", stats = stats, size = half),
+                               raw_add("b.parquet", stats = stats, size = half))))
+  expect_warning(expect_error(lake_summary(tbl, int64 = "integer64"), class = "zulake_error_int64"), NA)
+  # One below the limit sums.
+  below <- "4611686018427387903"
+  stats <- sprintf('{\\"numRecords\\":%s}', below)
+  tbl <- lake_open(raw_table(c(raw_header(), raw_add("a.parquet", stats = stats, size = below),
+                               raw_add("b.parquet", stats = stats, size = half))))
+  s <- lake_summary(tbl, int64 = "integer64")
+  expect_identical(as.character(s$bytes), "9223372036854775807")
+  expect_identical(as.character(s$records), "9223372036854775806")
+})
