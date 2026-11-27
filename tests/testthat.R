@@ -7,7 +7,9 @@
 # order.
 #
 # The seed line reaches the CI log through check-r-package's "Show testthat
-# output" step, which prints this file's .Rout on every run.
+# output" step, which prints this file's .Rout on every run. It is printed
+# again after the tests, failed or not, because the container legs show only
+# the tail of a failing .Rout.fail, which drops the first line (#84).
 
 if (requireNamespace("testthat", quietly = TRUE)) {
   library(testthat)
@@ -17,7 +19,8 @@ if (requireNamespace("testthat", quietly = TRUE)) {
   if (is.na(seed)) {
     seed <- sample.int(.Machine$integer.max, 1L)
   }
-  cat("zulake test order seed:", seed, "(ZULAKE_TEST_SEED to replay)\n")
+  say_seed <- function() cat("zulake test order seed:", seed, "(ZULAKE_TEST_SEED to replay)\n")
+  say_seed()
   # Seeded random tests draw their full counts only with NOT_CRAN=true
   # (helper-iterations.R); a seed replays a failure in the same mode.
   cat("zulake random test counts:",
@@ -25,5 +28,5 @@ if (requireNamespace("testthat", quietly = TRUE)) {
       "\n")
   set.seed(seed)
 
-  test_check("zulake", shuffle = TRUE)
+  tryCatch(test_check("zulake", shuffle = TRUE), finally = say_seed())
 }

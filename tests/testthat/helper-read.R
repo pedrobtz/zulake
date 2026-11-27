@@ -221,10 +221,11 @@ split_table <- function(data, k, env = parent.frame()) {
   path
 }
 
-# The rows of `data` for which R makes `expr` TRUE (in the C collation, so
-# that strings compare in byte order, as zulake's filters do).
+# The rows of `data` for which R makes `expr` TRUE, evaluated in the
+# oracles' locale whatever the session's (with_oracle_locale(): strings
+# compare in byte order, as zulake's filters do).
 r_subset <- function(data, expr) {
-  keep <- eval(expr, as.list(data), baseenv())
+  keep <- with_oracle_locale(eval(expr, as.list(data), baseenv()))
   keep <- rep_len(keep, nrow(data)) %in% TRUE
   structure(lapply(data, function(x) x[keep]), class = "data.frame", row.names = .set_row_names(sum(keep)))
 }

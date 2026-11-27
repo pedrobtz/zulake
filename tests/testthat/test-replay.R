@@ -572,11 +572,10 @@ test_that("lake_load() builds another snapshot of the same table", {
 
 test_that("the snapshot is the same in a hostile session and under a non-ASCII path", {
   base <- lake_open(fixture_table("zl-partitioned"), version = 1)
-  withr::local_envvar(LC_ALL = "C")
-  withr::local_options(OutDec = ",", scipen = -5, digits = 3)
-  withr::local_collate("C")
-  # The variable alone does not change the running session's locale (#50).
-  hostile <- withr::with_locale(c(LC_CTYPE = "C"), lake_open(fixture_table("zl-partitioned"), version = 1))
+  hostile <- local({
+    local_hostile_locale()
+    lake_open(fixture_table("zl-partitioned"), version = 1)
+  })
   expect_identical(hostile$files, base$files)
   expect_identical(hostile$version, base$version)
 

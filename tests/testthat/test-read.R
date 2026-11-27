@@ -150,7 +150,7 @@ test_that("name-mode column mapping reads physical columns under logical names, 
   }
   # Filters by logical name: pruning uses statistics and partition values
   # keyed by physical name, and the rows equal R's subset.
-  withr::local_collate("C")
+  local_hostile_locale()
   tbl <- lake_open(fixture_table("column_mapping"))
   full <- lake_read(tbl)
   schema <- lake_schema(tbl)
@@ -356,6 +356,10 @@ test_that("data files at absolute paths and file: URIs are read; other schemes a
   expect_error(lake_count(lake_open(path), footers = TRUE), class = "zulake_error_storage")
   gone <- file.path(normalizePath(withr::local_tempdir(), winslash = "/"), "gone.parquet")
   write_commit(path, 8, c(remove_line("no-such-file.parquet"), add_line(gone)))
+  expect_error(lake_read(lake_open(path)), class = "zulake_error_storage")
+  # A directory named in the log is not a data file.
+  folder <- normalizePath(withr::local_tempdir(), winslash = "/")
+  write_commit(path, 9, c(remove_line(gone), add_line(folder)))
   expect_error(lake_read(lake_open(path)), class = "zulake_error_storage")
 })
 
