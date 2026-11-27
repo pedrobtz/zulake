@@ -167,10 +167,13 @@ Settled in Stage 6 (2026-11-26):
   empty, so `list()` sees only the directory's own files; a blob whose
   metadata says `hdi_isfolder=true` (a directory of a hierarchical
   namespace) is not a file, and neither is a `BlobPrefix`. A marker that
-  repeats is an error, not a loop. `after` is applied to the listing, as
+  repeats, any marker seen before in the listing and not only the last
+  one, is an error, not a loop (2026-11-27, #45). `after` is applied to the listing, as
   Q6 says Blob listing cannot start after a name. `ContainerNotFound`
-  lists nothing, as a missing local directory does, so `lake_is_table()`
-  is `FALSE` and `lake_open()` a `zulake_error_not_table`. `Get Blob` is
+  on the first page lists nothing, as a missing local directory does, so
+  `lake_is_table()` is `FALSE` and `lake_open()` a
+  `zulake_error_not_table`; on a later page it is a `zulake_error_storage`,
+  since the listing would hold part of the log (2026-11-27, #46). `Get Blob` is
   sent with `decode = FALSE` (the stored bytes, whatever their
   `Content-Encoding`), no body limit and a 600-second timeout. A range
   needs `206` with exactly `to - from + 1` bytes; a short body or `416` is

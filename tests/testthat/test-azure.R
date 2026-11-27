@@ -704,3 +704,38 @@ test_that("two sessions' handle ids differ, and the session's random stream is u
     expect_false(exists(".Random.seed", envir = globalenv(), inherits = FALSE))
   })
 })
+
+test_that("a listing whose markers cycle is an error, not a loop, whatever the cycle's length (#45)", {
+  body <- function(marker) {
+    paste0(
+      "<?xml version=\"1.0\" encoding=\"utf-8\"?><EnumerationResults><Blobs></Blobs>",
+      "<NextMarker>", marker, "</NextMarker></EnumerationResults>"
+    )
+  }
+  for (k in 1:3) {
+    markers <- paste0("m", seq_len(k))
+    log <- new.env()
+    local_azure_fake(azure_fake(fake_root(), log, max_requests = 50L, override = function(r) {
+      at <- if (is.null(r$query$marker)) 0L else match(r$query$marker, markers)
+      zuhttp::zu_response(200L, body = body(markers[at %% k + 1L]))
+    }))
+    storage <- storage_for(fake_uri("zl-basic"), function() "tok")
+    expect_error(storage$list("_delta_log/"), class = "zulake_error_storage", label = k)
+    # Every marker asked for once, then the repeat seen and refused.
+    expect_length(log$requests, k + 1L)
+  }
+})
+
+test_that("ContainerNotFound after the first page fails the listing, not ends it (#46)", {
+  log <- new.env()
+  local_azure_fake(azure_fake(fake_root(), log, page_size = 2L, override = function(r) {
+    if (!is.null(r$query$marker)) zuhttp::zu_response(404L, c(`x-ms-error-code` = "ContainerNotFound"))
+  }))
+  storage <- storage_for(fake_uri("zl-basic"), function() "tok")
+  e <- expect_error(storage$list("_delta_log/"), class = "zulake_error_storage")
+  expect_identical(e$status, 404L)
+  expect_identical(e$code, "ContainerNotFound")
+  expect_error(lake_open(fake_uri("zl-basic"), credentials = function() "tok"), class = "zulake_error_storage")
+  # On the first page it is still a container with nothing in it.
+  expect_false(lake_is_table("abfss://other@acct.dfs.core.windows.net/zl-basic"))
+})

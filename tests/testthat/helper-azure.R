@@ -304,14 +304,25 @@ url_decode <- function(x) {
 # decoded), headers (named, lower-case names) and timeout (the seconds
 # zuhttp was given)).
 #
-#   page_size  blobs per List Blobs page; NextMarker is opaque ("page-<n>")
-#   auth       function(authorization header or NULL) returning NULL to
-#              serve, or a status to answer with (401, 403)
-#   override   function(request record) returning a zu_response to send
-#              instead, or NULL
-azure_fake <- function(root, log, container = "lake", page_size = 1000L, auth = NULL, override = NULL) {
+#   page_size     blobs per List Blobs page; NextMarker is opaque ("page-<n>")
+#   auth          function(authorization header or NULL), or function(header,
+#                 host), returning NULL to serve, or a status to answer
+#                 with (401, 403)
+#   override      function(request record) returning a zu_response to send
+#                 instead, or NULL
+#   max_requests  requests the fake serves; one more is an R error, so a
+#                 loop that never ends fails its test instead of hanging it
+#                 (#45)
+#
+# A path segment that is empty, "." or ".." is an R error too: Azure would
+# not serve it as the file under `root` it names (#62).
+azure_fake <- function(root, log, container = "lake", page_size = 1000L, auth = NULL, override = NULL,
+                       max_requests = 10000L) {
   log$requests <- list()
   zuhttp::zu_mock_transport(function(req) {
+    if (length(log$requests) >= max_requests) {
+      stop(sprintf("the Azure fake was sent more than %d requests", max_requests), call. = FALSE)
+    }
     url <- req$url
     m <- regmatches(url, regexec("^https://([^/]+)(/[^?]*)?(?:[?](.*))?$", url, perl = TRUE))[[1L]]
     host <- m[2L]

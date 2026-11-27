@@ -344,6 +344,7 @@ storage_azure <- function(parts, handle) {
     full <- blob(prefix)
     pages <- list()
     marker <- NULL
+    seen <- character()
     repeat {
       query <- list(restype = "container", comp = "list", prefix = full, delimiter = "/", include = "metadata")
       if (!is.null(marker)) {
@@ -351,7 +352,10 @@ storage_azure <- function(parts, handle) {
       }
       resp <- azure_request(loc, "GET", "", query = query, path = prefix)
       status <- zuhttp::zu_resp_status(resp)
-      if (status == 404L && identical(zuhttp::zu_resp_header(resp, "x-ms-error-code"), "ContainerNotFound")) {
+      # No container lists nothing, as a missing directory does; but a
+      # container gone after the first page would list part of the log (#46).
+      if (status == 404L && is.null(marker) &&
+          identical(zuhttp::zu_resp_header(resp, "x-ms-error-code"), "ContainerNotFound")) {
         break
       }
       if (status != 200L) {
@@ -362,10 +366,12 @@ storage_azure <- function(parts, handle) {
       if (is.na(page$next_marker)) {
         break
       }
-      if (identical(page$next_marker, marker)) {
+      # Any marker seen before, not only the last one, would loop (#45).
+      if (page$next_marker %in% seen) {
         zulake_abort("storage", sprintf("Azure returned the same listing marker twice for %s.", format_string(prefix)), path = prefix)
       }
       marker <- page$next_marker
+      seen <- c(seen, marker)
     }
     names <- unlist(lapply(pages, function(p) p$name), use.names = FALSE) %||% character()
     size <- unlist(lapply(pages, function(p) p$size), use.names = FALSE) %||% numeric()

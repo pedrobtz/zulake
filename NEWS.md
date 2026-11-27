@@ -120,3 +120,8 @@
   ids now start with a random per-session nonce, and a handle reaches only
   the entry made for its own table; a restored snapshot is a
   `zulake_error_auth` asking for `lake_open()` again (#43).
+* Fixed: a List Blobs answer whose markers cycle (A, B, A, ...) made
+  `lake_open()` send requests forever. Any marker seen before is now a
+  `zulake_error_storage` (#45). `ContainerNotFound` after the first page
+  is a `zulake_error_storage` too, instead of ending the listing and
+  opening an older version (#46).
