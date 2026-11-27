@@ -172,10 +172,11 @@ integer_limits <- list(
   long = c("-9223372036854775808", "9223372036854775807")
 )
 
+# Whether a partition value parses as its column's type; dates and times
+# through the parsers that later convert them, so that a value accepted here
+# always converts (#53).
 partition_value_ok <- function(x, type) {
   number <- "^[+-]?([0-9]+[.]?[0-9]*|[.][0-9]+)([eE][+-]?[0-9]+)?$"
-  date <- "[0-9]{4,}-[0-9]{1,2}-[0-9]{1,2}"
-  time <- "[0-9]{1,2}:[0-9]{2}:[0-9]{2}([.][0-9]{1,9})?"
   if (type %in% names(integer_limits)) {
     return(integer_in_range(x, integer_limits[[type]]))
   }
@@ -185,9 +186,9 @@ partition_value_ok <- function(x, type) {
     boolean = tolower(x) %in% c("true", "false"),
     float = ,
     double = grepl(number, x) || x %in% c("NaN", "Infinity", "-Infinity", "+Infinity"),
-    date = grepl(paste0("^", date, "$"), x) && date_parts_ok(x),
-    timestamp = grepl(paste0("^", date, "[ T]", time, "(Z|[+-][0-9]{2}:?[0-9]{2})?$"), x) && date_parts_ok(x),
-    timestamp_ntz = grepl(paste0("^", date, "[ T]", time, "$"), x) && date_parts_ok(x),
+    date = !is.na(parse_date_text(x)),
+    timestamp = !is.na(parse_time_text(x, zone = TRUE)),
+    timestamp_ntz = !is.na(parse_time_text(x, zone = FALSE)),
     if (grepl("^decimal[(]", type)) grepl(number, x) else TRUE
   )
 }
@@ -201,12 +202,4 @@ integer_in_range <- function(x, limits) {
   digits <- sub("^[+-]?0*", "", x)
   bound <- sub("^-", "", limits[if (neg) 1L else 2L])
   nchar(digits) < nchar(bound) || (nchar(digits) == nchar(bound) && !sorts_after(digits, bound))
-}
-
-# Month 1-12 and day 1-31 in a value that starts YYYY-MM-DD.
-date_parts_ok <- function(x) {
-  parts <- strsplit(sub("[ T].*$", "", x), "-", fixed = TRUE)[[1L]]
-  month <- as.integer(parts[2L])
-  day <- as.integer(parts[3L])
-  month >= 1L && month <= 12L && day >= 1L && day <= 31L
 }

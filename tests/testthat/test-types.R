@@ -270,3 +270,74 @@ test_that("a time field that is not a whole number is a corrupt log", {
   lines <- c(raw_header(), raw_add("a.parquet"), '{"txn":{"appId":"a","version":1,"lastUpdated":1.5}}')
   expect_error(lake_transactions(lake_open(raw_table(lines))), class = "zulake_error_corrupt_log")
 })
+
+test_that("time text is range-checked by one parser, at open and in filters (#53)", {
+  bad <- list(
+    date = c("2024-02-30", "2023-02-29", "2024-13-01", "2024-00-10", "2024-04-31"),
+    timestamp = c("2024-01-01 24:00:00", "2024-01-01 12:60:00", "2024-01-01 12:00:60", "2024-01-01 12:00:61",
+                  "2024-01-01 25:61:61", "2024-01-01 12:00:00+99:99", "2024-01-01 12:00:00+01:60",
+                  "2024-01-01 12:00:00+19:00", "2024-02-30 00:00:00"),
+    timestamp_ntz = c("2024-01-01 24:00:00", "2024-01-01 12:60:00", "2024-01-01 12:00:61", "2024-02-30 00:00:00")
+  )
+  good <- list(
+    date = c("2024-02-29", "2024-12-31", "1970-01-01"),
+    timestamp = c("2024-01-01 23:59:59", "2024-01-01 00:00:00", "2024-01-01T23:59:59.999999Z",
+                  "2024-01-01 12:00:00+18:00", "2024-01-01 12:00:00-05:30"),
+    timestamp_ntz = c("2024-01-01 23:59:59.999999", "2024-02-29 00:00:00")
+  )
+  for (type in names(bad)) {
+    for (x in bad[[type]]) {
+      expect_false(partition_value_ok(x, type), label = paste(type, x))
+      expect_true(is.na(if (type == "date") parse_date_text(x) else parse_time_text(x, zone = type == "timestamp")),
+                  label = paste(type, x))
+      path <- hand_table(c(protocol_line(), metadata_line(c(id = "long", p = type), partition = "p"),
+                           add_line("a.parquet", partition = list(p = x))))
+      expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
+      # As a filter literal, against a column of the same type.
+      tbl <- lake_open(hand_table(c(protocol_line(), metadata_line(c(id = "long", p = type), partition = "p"),
+                                    add_line("a.parquet", partition = list(p = good[[type]][1L])))))
+      expect_error(lake_files(tbl, filter = p > x), class = "zulake_error_filter", label = paste(type, x))
+    }
+    for (x in good[[type]]) {
+      expect_true(partition_value_ok(x, type), label = paste(type, x))
+      path <- hand_table(c(protocol_line(), metadata_line(c(id = "long", p = type), partition = "p"),
+                           add_line("a.parquet", partition = list(p = x))))
+      expect_identical(nrow(lake_files(lake_open(path))), 1L, label = paste(type, x))
+    }
+  }
+})
+
+test_that("timestamp text becomes the double qio reads for the same microseconds (#54)", {
+  withr::local_seed(54)
+  us <- c(-1, 1, -1.5e6, -999999, 999999, -86400e6 + 1, sample(-2e6:2e6, 200),
+          round(runif(50, -2^53, 2^53)), 2^53 - 1, -(2^53 - 1), -62135596800000000)
+  text <- us_time_text(us)
+  want <- qio_read_us(us)
+  got <- as.numeric(parse_time_text(text, zone = TRUE))
+  expect_identical(got, want)
+  expect_identical(as.numeric(parse_time_text(text, zone = FALSE)), want)
+  expect_identical(as.numeric(parse_time_text(paste0(sub(" ", "T", text), "Z"))), want)
+  # Past 2^53 microseconds the count is rounded once, as a 64-bit count
+  # converted to double is: 253402300799999999 is 253402300800000000.
+  expect_identical(as.numeric(parse_time_text("9999-12-31 23:59:59.999999")), 253402300800)
+  # With an offset: the same instant.
+  shifted <- us_time_text(us + 3600e6)
+  expect_identical(as.numeric(parse_time_text(paste0(shifted, "+01:00"))), want)
+  # A filter on the column, and on a partition, finds the value qio reads.
+  path <- file.path(withr::local_tempdir(), "t")
+  dir.create(path)
+  ts_us <- c(-1, 0, 1, -1.5e6)
+  qio::write_parquet(data.frame(id = as.numeric(seq_along(ts_us)), ts = .POSIXct(ts_us / 1e6, tz = "UTC")),
+                     file.path(path, "a.parquet"))
+  write_commit(path, 0, c(protocol_line(), metadata_line(c(id = "double", ts = "timestamp")),
+                          add_line("a.parquet", size = file.size(file.path(path, "a.parquet")))))
+  tbl <- lake_open(path)
+  expect_identical(lake_read(tbl, filter = ts == "1969-12-31 23:59:59.999999")$id, 1)
+  expect_identical(lake_read(tbl, filter = ts <= "1969-12-31 23:59:59.999999")$id, c(1, 4))
+  expect_identical(lake_read(tbl, filter = ts != "1969-12-31 23:59:59.999999")$id, c(2, 3, 4))
+  expect_identical(lake_read(tbl, filter = ts %in% "1969-12-31 23:59:58.5")$id, 4)
+  part <- hand_table(c(protocol_line(), metadata_line(c(id = "long", p = "timestamp"), partition = "p"),
+                       add_line("a.parquet", partition = list(p = "1969-12-31 23:59:59.999999"))))
+  expect_identical(nrow(lake_files(lake_open(part), filter = p == as.POSIXct(-1e-6, origin = "1970-01-01", tz = "UTC"))), 1L)
+  expect_identical(nrow(lake_files(lake_open(part), filter = p == -1e-6)), 1L)
+})

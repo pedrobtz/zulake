@@ -335,7 +335,11 @@ a choice:
 - *Partition values* of live files are checked against their column's
   type (the protocol's "Partition Value Serialization"; by physical name
   under column mapping) when the snapshot is built; a value that does
-  not parse is a corrupt log. An empty string or a missing key is null.
+  not parse is a corrupt log. Dates and times are checked by the parser
+  that converts them (calendar dates, hours 0-23, minutes and seconds
+  0-59, offsets to 18:00), which statistics and filter literals use too,
+  and a time is the double qio reads for the same microseconds: the count
+  rounded once, then divided by 1e6 (2026-11-27, #53, #54). An empty string or a missing key is null.
 
 ### 4.3 Reading
 

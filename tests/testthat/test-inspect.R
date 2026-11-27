@@ -442,13 +442,11 @@ test_that("statistics that break the protocol are a corrupt log, and stats = FAL
   expect_identical(lake_files(lake_open(raw_table(lines)))$min[[1L]], list(gone = 12, also = "x", f = 1.5))
 })
 
-test_that("a partition value Stage 2's check lets through but no type holds is a corrupt log", {
+test_that("a partition value no calendar holds is a corrupt log when the snapshot is built (#53)", {
   for (case in list(c("date", "2024-02-31"), c("timestamp", "2024-02-30 10:00:00"))) {
     path <- hand_table(c(protocol_line(), metadata_line(c(id = "long", p = case[1L]), partition = "p"),
                          add_line("a.parquet", partition = list(p = case[2L]))))
-    tbl <- lake_open(path)
-    expect_error(lake_files(tbl), class = "zulake_error_corrupt_log")
-    expect_error(lake_partitions(tbl), class = "zulake_error_corrupt_log")
+    expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
   }
 })
 

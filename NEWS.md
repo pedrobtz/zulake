@@ -155,3 +155,10 @@
   report the same times (#52). Timestamp travel on a log of checkpoints
   alone is a `zulake_error_version` instead of a warning and a false
   corrupt-log error (#51).
+* Fixed: date and time text (partition values, statistics, filter
+  literals) is checked by one parser with calendar, hour, minute, second
+  and offset ranges, so `"2024-02-30"` is refused when the table is opened
+  rather than later, and `"2024-01-01 25:61:61"` or a filter on
+  `"... 99:99:99"` is refused instead of moved to another day (#53). A time
+  is now the same double qio reads for those microseconds, so a filter on
+  a time within seconds of 1970-01-01 finds its rows (#54).
