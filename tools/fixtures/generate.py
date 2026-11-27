@@ -122,6 +122,16 @@ def types():
     write_deltalake(p, t, name="types")
 
 
+def int32_min():
+    """An int32 column holding -2^31 and no null, in one file (#79)."""
+    p = fresh("zl-int32-min")
+    t = pa.table({
+        "id": pa.array([0, 1, 2], pa.int64()),
+        "i32": pa.array([-(2**31), 1, 5], pa.int32()),
+    })
+    write_deltalake(p, t, name="int32-min")
+
+
 def partitioned():
     """Partitioned by string, integer and date; nulls and characters that need escaping."""
     p = fresh("zl-partitioned")
@@ -464,7 +474,7 @@ def main():
         wanted = set(sys.argv[1:])
     else:
         wanted = None
-    for fn in (basic, types, partitioned, checkpointed, checkpoint_no_last, multipart_checkpoint, compacted, file_times, domains,
+    for fn in (basic, types, int32_min, partitioned, checkpointed, checkpoint_no_last, multipart_checkpoint, compacted, file_times, domains,
                unknown_feature, catalog_managed, vacuum_protocol_check, inline_dv, column_mapping_id, orders):
         if wanted is None or fn.__name__ in wanted:
             fn()

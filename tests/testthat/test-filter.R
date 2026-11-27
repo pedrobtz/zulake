@@ -666,3 +666,33 @@ test_that("text functions of a timestamp column are refused on R before 4.3 (#74
     expect_identical(read(expr), r_subset(rows, expr), ignore_attr = TRUE, label = deparse(expr))
   }
 })
+
+test_that("equivalent filters agree on an int32 of -2^31, which qio reads as NA (#79)", {
+  # zl-int32-min: one file, i32 = -2^31, 1, 5 and nullCount 0. qio reads
+  # -2^31 as NA (R's integer NA), so is.na() is TRUE on that row, and the
+  # null count of 0 must not prune it.
+  tbl <- lake_open(fixture_table("zl-int32-min"))
+  rows <- suppressWarnings(lake_read(tbl))
+  expect_identical(rows$i32, c(NA, 1L, 5L))
+  expect_identical(lake_files(tbl)$null_count[[1L]]$i32, 0)
+  for (expr in list(quote(i32 < 1), quote(i32 == -2147483648), quote(is.na(i32)), quote(i32 %in% NA),
+                    quote(i32 %in% c(1, 5, NA)), quote(is.na(i32 + 0L)), quote(!is.na(i32)), quote(!(i32 %in% NA)))) {
+    got <- suppressWarnings(eval(bquote(lake_read(tbl, filter = .(expr)))))
+    expect_identical(got, r_subset(rows, expr), ignore_attr = TRUE, label = deparse(expr))
+  }
+  expect_identical(nrow(lake_files(tbl, filter = is.na(i32))), 1L)
+  expect_identical(nrow(lake_files(tbl, filter = i32 %in% NA)), 1L)
+  # A file whose minimum is known and above -2^31 is still pruned on its
+  # null count; a missing minimum, or one of -2^31, is not.
+  stats <- function(min) sprintf('{\\"numRecords\\":2,\\"minValues\\":{%s},\\"maxValues\\":{\\"i32\\":5},\\"nullCount\\":{\\"i32\\":0}}', min)
+  kept <- function(min, type = "integer") {
+    t <- lake_open(raw_table(c(raw_header(c(i32 = type)), raw_add("a.parquet", stats = stats(min)))))
+    nrow(lake_files(t, filter = is.na(i32))) == 1L
+  }
+  expect_false(kept('\\"i32\\":-2147483647'))
+  expect_false(kept('\\"i32\\":0'))
+  expect_true(kept('\\"i32\\":-2147483648'))
+  expect_true(kept(""))
+  # Other integer types hold their minimum in R: their null count prunes.
+  for (type in c("byte", "short", "long")) expect_false(kept('\\"i32\\":-128', type), label = type)
+})

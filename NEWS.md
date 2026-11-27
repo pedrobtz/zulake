@@ -207,3 +207,7 @@
   `tolower()` and `grepl()` of a timestamp column in a filter are a
   `zulake_error_filter`, since there a time's text depends on the other
   rows of its file (#74).
+* Fixed: an `integer` value of -2^31, which qio reads as `NA`, was missed
+  by `is.na()` and `%in% NA` filters whenever its file's null count was 0;
+  such a file is now kept unless its minimum is known and above -2^31, so
+  equivalent filters agree. `?lake_read` documents the `NA` (#79).

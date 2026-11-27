@@ -55,7 +55,10 @@
 #' Columns are typed as qio returns them (see [qio::read_parquet()]), and
 #' partition columns as [lake_files()] types them, except that a `decimal`
 #' of precision 15 or less, data or partition, is a double, which holds it
-#' exactly. Columns zulake does not return are not lost silently: nested
+#' exactly. An `integer` data value of -2^31 reads as `NA`, R's integer
+#' `NA`, with a warning from qio: `is.na()` is `TRUE` for it and a comparison
+#' such as `x < 1` is not, and a file whose minimum may be -2^31 is never
+#' pruned on its null count. Columns zulake does not return are not lost silently: nested
 #' columns (`struct`, `array`, `map`), and decimals of precision above 15
 #' until qio reads them exactly. With `columns = NULL` they are left out, each named in a
 #' warning of class `zulake_warning_column_skipped` (fields `column` and

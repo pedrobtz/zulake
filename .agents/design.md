@@ -713,7 +713,12 @@ statistics and on rows, so pruning and the row filter cannot disagree:
   would otherwise be pruned).
 - *Null counts.* A file whose `nullCount` equals `numRecords` holds only
   nulls, and one with `numRecords` 0 nothing; a missing count is
-  unknown. On a column read as a list (`binary`), `is.na()` is `TRUE`
+  unknown. On an `integer` column, a null count says no row is `NA` only
+  when the file's minimum is known and above -2^31: `qio` reads an int32
+  of -2^31 as `NA`, R's integer `NA` (with a warning), which the null
+  count does not count, and that `NA` is kept rather than converted
+  (2026-11-27, #79: `is.na(i32)` was pruned while `is.na(i32 + 0L)` was
+  not; a lossless read is asked of `qio`; fixture `zl-int32-min`). On a column read as a list (`binary`), `is.na()` is `TRUE`
   for a null value (`NULL`), as the null count means it, where base R's
   `is.na()` on a list is `FALSE` (settled 2026-11-26, Stage 8, on a
   design adviser's recommendation: R's answer would contradict the

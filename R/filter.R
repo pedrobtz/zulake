@@ -551,6 +551,13 @@ column_bounds <- function(tbl, parsed, col, type) {
     }
     out$lo <- exact_parse(ok(lo_text))
     out$hi <- exact_parse(ok(hi_text))
+    if (type == "integer") {
+      # qio reads an int32 of -2^31 as NA, R's integer NA, where the null
+      # count does not count it: a file may hold such an NA unless its
+      # minimum is known and above -2^31 (#79).
+      above <- exact_cmp(out$lo, exact_parse("-2147483648")) %in% 1L
+      out$null <- out$null | (out$nonnull & !above)
+    }
   } else if (kind == "number") {
     num <- function(t) {
       x <- switch(type,

@@ -1,0 +1,230 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "clientVersion": "delta-rs.py-1.7.0",
+    "engineInfo": "delta-rs:py-1.7.0",
+    "operation": "WRITE",
+    "operationMetrics": {
+     "execution_time_ms": 66,
+     "num_added_files": 1,
+     "num_added_rows": 3,
+     "num_partitions": 0,
+     "num_removed_files": 0,
+     "num_retries": 0
+    },
+    "operationParameters": {
+     "mode": "ErrorIfExists"
+    },
+    "timestamp": 1795761491458,
+    "txnId": "86d3b8c4-1f7b-4141-ad09-f85436376b7d"
+   }
+  },
+  {
+   "protocol": {
+    "minReaderVersion": 1,
+    "minWriterVersion": 2
+   }
+  },
+  {
+   "metaData": {
+    "configuration": {},
+    "createdTime": 1795761491395,
+    "description": null,
+    "format": {
+     "options": {},
+     "provider": "parquet"
+    },
+    "id": "b9d0f02b-75a4-4867-9d9e-52e8d83e028c",
+    "name": "int32-min",
+    "partitionColumns": [],
+    "schemaString": "{\"type\":\"struct\",\"fields\":[{\"name\":\"id\",\"type\":\"long\",\"nullable\":true,\"metadata\":{}},{\"name\":\"i32\",\"type\":\"integer\",\"nullable\":true,\"metadata\":{}}]}"
+   }
+  },
+  {
+   "add": {
+    "baseRowId": null,
+    "clusteringProvider": null,
+    "dataChange": true,
+    "defaultRowCommitVersion": null,
+    "modificationTime": 1795761491458,
+    "partitionValues": {},
+    "path": "part-00000-6ec4d8dc-02ea-405e-948d-faff55e130f8-c000.snappy.parquet",
+    "size": 771,
+    "stats": "{\"numRecords\":3,\"minValues\":{\"i32\":-2147483648,\"id\":0},\"maxValues\":{\"id\":2,\"i32\":5},\"nullCount\":{\"i32\":0,\"id\":0}}",
+    "tags": null
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [
+    {
+     "i32": 5,
+     "id": "2"
+    }
+   ],
+   "min": [
+    {
+     "i32": -2147483648,
+     "id": "0"
+    }
+   ],
+   "modification_time": [
+    "1795761491458"
+   ],
+   "null_count": [
+    {
+     "i32": "0",
+     "id": "0"
+    }
+   ],
+   "num_records": [
+    "3"
+   ],
+   "path": [
+    "part-00000-6ec4d8dc-02ea-405e-948d-faff55e130f8-c000.snappy.parquet"
+   ],
+   "size_bytes": [
+    "771"
+   ]
+  },
+  "num_rows": 1,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<id: int64, i32: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<id: int64, i32: int32>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<id: int64, i32: int32>"
+   }
+  ]
+ },
+ "count": 3,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "clientVersion": "delta-rs.py-1.7.0",
+   "engineInfo": "delta-rs:py-1.7.0",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "execution_time_ms": 66,
+    "num_added_files": 1,
+    "num_added_rows": 3,
+    "num_partitions": 0,
+    "num_removed_files": 0,
+    "num_retries": 0
+   },
+   "operationParameters": {
+    "mode": "ErrorIfExists"
+   },
+   "timestamp": 1795761491458,
+   "txnId": "86d3b8c4-1f7b-4141-ad09-f85436376b7d",
+   "version": 0
+  }
+ ],
+ "loaded_version": 0,
+ "metadata": {
+  "configuration": {},
+  "created_time": 1795761491395,
+  "description": null,
+  "id": "b9d0f02b-75a4-4867-9d9e-52e8d83e028c",
+  "name": "int32-min",
+  "partition_columns": []
+ },
+ "partitions": [],
+ "protocol": {
+  "min_reader_version": 1,
+  "min_writer_version": 2,
+  "reader_features": null,
+  "writer_features": null
+ },
+ "read": {
+  "columns": {
+   "i32": [
+    -2147483648,
+    1,
+    5
+   ],
+   "id": [
+    "0",
+    "1",
+    "2"
+   ]
+  },
+  "num_rows": 3,
+  "schema": [
+   {
+    "name": "id",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "i32",
+    "nullable": true,
+    "type": "int32"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {},
+    "name": "id",
+    "nullable": true,
+    "type": "long"
+   },
+   {
+    "metadata": {},
+    "name": "i32",
+    "nullable": true,
+    "type": "integer"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "zl-int32-min",
+ "timestamp_lookup": [
+  {
+   "at": "2026-11-27T06:38:11.457Z",
+   "version": 0
+  },
+  {
+   "at": "2026-11-27T06:38:11.458Z",
+   "version": 0
+  }
+ ],
+ "transactions": {},
+ "version": 0
+}
