@@ -4,19 +4,24 @@
 
 - **Pedro Baltazar**. Author, maintainer, copyright holder.
 
+- **QP Hou**. Copyright holder.  
+  Copyright holder of the 'delta-rs' test tables in
+  tests/testthat/fixtures
+
 - **The delta-rs authors**. Copyright holder.  
-  Delta test tables in tests/testthat/fixtures
+  Other contributors to the 'delta-rs' test tables in
+  tests/testthat/fixtures
 
 ## Citation
 
 Source:
 [`DESCRIPTION`](https://github.com/pedrobtz/zulake/blob/main/DESCRIPTION)
 
-Baltazar P (2026). *zulake: Inspect and Read 'Delta Lake' Tables*. R
+Baltazar P (2026). *zulake: Inspect and Read Delta Lake Tables*. R
 package version 0.0.0.9000, <https://pedrobtz.github.io/zulake/>.
 
     @Manual{,
-      title = {zulake: Inspect and Read 'Delta Lake' Tables},
+      title = {zulake: Inspect and Read Delta Lake Tables},
       author = {Pedro Baltazar},
       year = {2026},
       note = {R package version 0.0.0.9000},
