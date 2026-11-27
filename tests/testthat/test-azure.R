@@ -8,13 +8,11 @@
 test_that("an Azure table makes the same storage calls as a local one, as the fake received them", {
   for (table in c("zl-basic", "zl-partitioned", "table-with-dv-small", "v2-classic-checkpoint-json")) {
     if (table == "table-with-dv-small" && !requireNamespace("zuroar", quietly = TRUE)) next
-    local_empty_download_cache()
     env <- new.env()
     storage <- remote_storage(storage_local(fixture_table(table)), env)
     want <- lake_read(snapshot_build(storage, fixture_table(table)))
     want_calls <- env$calls
 
-    local_empty_download_cache()
     log <- new.env()
     local_azure_fake(azure_fake(fake_root(), log))
     got <- lake_read(lake_open(fake_uri(table), credentials = function() "tok-1"))
@@ -284,11 +282,11 @@ test_that("the token is in no print, condition, field, serialized snapshot or ca
     if (!identical(h, paste("Bearer", token))) 401L
   }))
   tbl <- lake_open(fake_uri("table-with-dv-small"), credentials = credentials)
-  # A saved snapshot writes two environments: its backend's frame and the
-  # credential handle, whether or not the package keeps its source (with
-  # it kept, srcrefs once reached the loader's environments and the
-  # credential registry: CI, Stage 6).
-  expect_identical(serialized_envs(tbl), "blob,get,get_range,handle,head,list_files,loc,name | id,root")
+  # A saved snapshot writes three environments: its backend's frame, the
+  # credential handle and its download cache (file paths only), whether or
+  # not the package keeps its source (with it kept, srcrefs once reached
+  # the loader's environments and the credential registry: CI, Stage 6).
+  expect_identical(serialized_envs(tbl), "blob,get,get_range,handle,head,list_files,loc,name | id,root | files")
   expect_no_token(tbl, token, "the snapshot")
   expect_no_token(lake_load(tbl, version = 0), token, "a reloaded snapshot")
   expect_no_token(utils::capture.output(print(tbl), format(tbl), str(tbl)), token, "the print")
@@ -378,7 +376,6 @@ test_that("the three URI forms make the same requests", {
   requests <- lapply(c("abfss", "dfs", "blob"), function(form) {
     log <- new.env()
     local_azure_fake(azure_fake(fake_root(), log))
-    local_empty_download_cache()
     lake_read(lake_open(paste0(fake_uri("zl-partitioned", form), "/"), credentials = function() "tok"))
     lapply(log$requests, function(r) r[c("method", "url", "headers")])
   })
@@ -534,7 +531,6 @@ test_that("an absolute Azure path is read only on the table's own account and co
     "https://Acct.Blob.Core.Windows.Net/lake/"
   )
   for (k in seq_along(same)) {
-    local_empty_download_cache()
     table_at(paste0("same", k), same[k])
     log$requests <- list()
     expect_identical(nrow(lake_read(lake_open(fake_uri(paste0("same", k)), credentials = function() "tok"))), nrow(lake_read(lake_open(src))),
@@ -551,7 +547,6 @@ test_that("an absolute Azure path is read only on the table's own account and co
     "abfss://other@otheracct.dfs.core.windows.net/"
   )
   for (k in seq_along(other)) {
-    local_empty_download_cache()
     table_at(paste0("other", k), other[k])
     for (credentials in list(function() "tok", NULL)) {
       tbl <- lake_open(fake_uri(paste0("other", k)), credentials = credentials)
@@ -735,7 +730,6 @@ test_that("a snapshot restored in another session never sends that session's tok
     local_fresh_credential_registry()
     saved <- serialize(lake_open(fake_uri("zl-basic"), credentials = saved_credentials), NULL)
     local_fresh_credential_registry()
-    local_empty_download_cache()
     other <- lake_open(other_uri, credentials = function() "tok-other")
     log$requests <- list()
     copy <- unserialize(saved)
@@ -855,7 +849,6 @@ test_that("an Azure table's log naming a local file is refused, and no local fil
     log <- new.env()
     local_azure_fake(azure_fake(dir, log))
     tbl <- lake_open(fake_uri("abs-local"), credentials = function() "tok")
-    local_empty_download_cache()
     expect_error(lake_read(tbl), class = "zulake_error_uri", label = path)
     expect_error(lake_count(tbl, footers = TRUE), class = "zulake_error_uri", label = path)
     expect_error(fetch_file(tbl, 1L), class = "zulake_error_uri", label = path)
@@ -967,32 +960,79 @@ test_that("on Azure, a relative log path with a \"..\" segment sends no request 
   }
 })
 
-test_that("the download cache is keyed on the blob and served only to the credentials that fetched it (#72)", {
-  local_empty_download_cache()
+test_that("the snapshots of one lake_open() download each file once, and keep no token (#72)", {
   log <- new.env()
-  deny <- FALSE
-  local_azure_fake(azure_fake(fake_root(), log, auth = function(h) if (deny) 401L))
+  local_azure_fake(azure_fake(fake_root(), log))
+  parquet_gets <- function() sum(vapply(log$requests, function(r) r$method == "GET" && endsWith(r$path, ".parquet"), NA))
+  token <- "tok-cache-72"
+  tbl <- lake_open(fake_uri("zl-basic"), credentials = function() token)
+  first <- lake_read(tbl)
+  n <- parquet_gets()
+  expect_identical(n, nrow(tbl$files))
+  # lake_load() derives snapshots that share the cache: the latest version
+  # and an earlier one download nothing they share with it.
+  log$requests <- list()
+  expect_identical(lake_read(lake_load(tbl)), first)
+  expect_identical(parquet_gets(), 0L)
+  older <- lake_load(tbl, version = 0)
+  expect_identical(older$downloads, tbl$downloads)
+  log$requests <- list()
+  lake_read(older)
+  expect_identical(parquet_gets(), sum(!older$files$path %in% tbl$files$path))
+  # The cache holds paths under tempdir() only, never the token.
+  cached <- unlist(tbl$downloads$files, use.names = FALSE)
+  expect_true(is.character(cached) && length(cached) >= n)
+  expect_true(all(startsWith(cached, file.path(tempdir(), "zulake-cache"))))
+  expect_identical(ls(tbl$downloads, all.names = TRUE), "files")
+  expect_no_token(tbl$downloads, token, "the download cache")
+  expect_no_token(tbl, token, "the snapshot after a read")
+  # A copy that is not the log's size on disk is downloaded again, and so
+  # is one outside this session's cache directory (a snapshot restored in
+  # another session names that session's files).
+  writeBin(as.raw(1:3), tbl$downloads$files[[1L]])
+  log$requests <- list()
+  expect_identical(lake_read(tbl), first)
+  expect_identical(parquet_gets(), 1L)
+  elsewhere <- withr::local_tempfile(fileext = ".parquet")
+  file.copy(tbl$downloads$files[[1L]], elsewhere)
+  tbl$downloads$files[[1L]] <- elsewhere
+  log$requests <- list()
+  expect_identical(lake_read(tbl), first)
+  expect_identical(parquet_gets(), 1L)
+})
+
+test_that("another lake_open() of the same table downloads again, even with the identical credentials function (#72)", {
+  log <- new.env()
+  local_azure_fake(azure_fake(fake_root(), log))
   parquet_gets <- function() sum(vapply(log$requests, function(r) r$method == "GET" && endsWith(r$path, ".parquet"), NA))
   creds <- function() "tok"
   first <- lake_read(lake_open(fake_uri("zl-basic"), credentials = creds))
   n <- parquet_gets()
   expect_gt(n, 0L)
-  # The same blobs by every form of the table's URI, the host in upper case
-  # and the root percent-encoded: no download again.
-  uris <- c(fake_uri("zl-basic", "dfs"), fake_uri("zl-basic", "blob"),
+  # The same URI, then every form of it, the host in upper case and the
+  # root percent-encoded.
+  uris <- c(fake_uri("zl-basic"), fake_uri("zl-basic", "dfs"), fake_uri("zl-basic", "blob"),
             "abfss://lake@ACCT.dfs.core.windows.net/zl-basic", "https://acct.blob.core.windows.net/lake/zl%2Dbasic",
             paste0(fake_uri("zl-basic"), "/"))
   for (uri in uris) {
     log$requests <- list()
     expect_identical(lake_read(lake_open(uri, credentials = creds)), first, label = uri)
-    expect_identical(parquet_gets(), 0L, label = uri)
+    expect_identical(parquet_gets(), n, label = uri)
   }
-  # Other credentials download for themselves, and a refusal is an error,
-  # never the files another snapshot fetched.
+})
+
+test_that("lake_open() calls with other credentials never serve each other's files (#72)", {
+  log <- new.env()
+  deny <- FALSE
+  local_azure_fake(azure_fake(fake_root(), log, auth = function(h) if (deny) 401L))
+  parquet_gets <- function() sum(vapply(log$requests, function(r) r$method == "GET" && endsWith(r$path, ".parquet"), NA))
+  first <- lake_read(lake_open(fake_uri("zl-basic"), credentials = function() "tok"))
+  n <- parquet_gets()
   log$requests <- list()
   tbl <- lake_open(fake_uri("zl-basic"), credentials = function() "tok-b")
   expect_identical(lake_read(tbl), first)
   expect_identical(parquet_gets(), n)
+  # A refusal is an error, never the files another snapshot fetched.
   deny <- TRUE
   for (other in list(function() "other", NULL)) {
     expect_error(lake_open(fake_uri("zl-basic"), credentials = other), class = "zulake_error_auth")
@@ -1003,18 +1043,10 @@ test_that("the download cache is keyed on the blob and served only to the creden
     lake_open(fake_uri("zl-basic"), credentials = function() "third")
   })
   expect_error(lake_read(denied), class = "zulake_error_auth")
-  deny <- FALSE
-  # A copy that is not the log's size on disk is downloaded again.
-  cache <- get("cache_env", envir = asNamespace("zulake"))
-  files <- vapply(cache$files, function(e) e$file, "", USE.NAMES = FALSE)
-  writeBin(as.raw(1:3), files[1L])
-  log$requests <- list()
-  expect_identical(lake_read(tbl), first)
-  expect_identical(parquet_gets(), 1L)
+  expect_length(denied$downloads$files, 0L)
 })
 
 test_that("a download that fails while it is written leaves no file in the cache (#72)", {
-  local_empty_download_cache()
   log <- new.env()
   local_azure_fake(azure_fake(fake_root(), log))
   tbl <- lake_open(fake_uri("zl-basic"), credentials = function() "tok")
@@ -1029,7 +1061,6 @@ test_that("a download that fails while it is written leaves no file in the cache
     expect_error(lake_read(tbl), "disk full")
   })
   expect_identical(list.files(dir), before)
-  cache <- get("cache_env", envir = asNamespace("zulake"))
-  expect_length(cache$files, 0L)
+  expect_length(tbl$downloads$files, 0L)
   expect_identical(nrow(lake_read(tbl)), 3L)
 })

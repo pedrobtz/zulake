@@ -72,8 +72,10 @@
 #' Data files are read in place on local disk. On Azure, every file left
 #' after pruning is downloaded to the session's temporary directory
 #' ([tempdir()]) before the first piece is read, by `lake_walk()` too, and
-#' kept there for the rest of the session, so that a later read of the same
-#' file downloads nothing. The disk used is the size of the files left after
+#' kept there for the snapshots of the same [lake_open()] call (the snapshot
+#' itself and those [lake_load()] makes from it), so that their later reads
+#' of the same file download nothing. Another `lake_open()` of the table
+#' downloads its files again. The disk used is the size of the files left after
 #' pruning: `lake_walk()` reads tables larger than memory, not larger than
 #' the temporary directory's disk.
 #'
@@ -151,7 +153,7 @@ lake_walk <- function(tbl, FUN, columns = NULL, filter = NULL, int64 = c("double
 # read_scan() decides everything before a row is read: refusals, the filter
 # plan, the files that survive pruning (fetched to local paths: on Azure
 # every one is downloaded into tempdir() here, before the first piece, and
-# kept for the session, so a read uses disk equal to the pruned files' size,
+# kept for the snapshots of its lake_open(), so a read uses disk equal to the pruned files' size,
 # #75), each file's
 # qio read plan, and the columns returned. read_piece() reads one surviving
 # file into a filtered piece; bind_pieces() binds them. Deletion vectors,
@@ -385,18 +387,21 @@ bind_pieces <- function(pieces, scan) {
 
 # ---- files on disk ----------------------------------------------------------
 
-cache_env <- new.env(parent = emptyenv())
-
-# The credentials function a backend's requests use (NULL for anonymous
-# ones and for other backends). A cached file is served only to the same
-# function that downloaded it, so a snapshot opened with other credentials
-# (another principal, a path-scoped token) downloads it itself, and is
-# refused if Azure refuses it (#72). A snapshot restored in another session
-# gets zulake_error_auth here, as on its next request.
-cache_credentials <- function(storage) {
-  handle <- storage$location$handle
-  if (identical(storage$kind, "azure") && !is.null(handle)) credential_entry(handle)$fn
+# The download cache of one lake_open() (design section 4.3): an
+# environment created there, carried in the snapshot as `downloads` and
+# passed by lake_load() to every snapshot derived from it, which use the
+# same storage and credentials. `files` maps a cached file's key (fetch_file())
+# to the path of its copy under tempdir(); it holds paths only, never the
+# token or the credentials function. As in delta-rs, no cache is shared
+# across tables: another lake_open() of the same table downloads again.
+new_downloads <- function() {
+  env <- new.env(parent = emptyenv())
+  env$files <- list()
+  env
 }
+
+# Where downloaded copies go: under this session's tempdir().
+downloads_dir <- function() file.path(tempdir(), "zulake-cache")
 
 # Where live file `i` is, before anything is read: list(local) for an
 # absolute local path, or list(storage, rel, key) for a file of a backend,
@@ -432,11 +437,10 @@ bad_relative_path <- function(rel) {
   !nzchar(rel) || any(strsplit(rel, "/", fixed = TRUE)[[1L]] %in% c("", ".", "..")) || endsWith(rel, "/")
 }
 
-# What identifies a downloaded file in the session cache: on Azure the blob
-# itself (account, container, full decoded name), so that the three URI
-# forms of one table, a host in upper case and an encoded root share it
-# (#72); for another backend, its root and the path. The credentials that
-# fetched it are checked apart (cache_credentials()).
+# What identifies a downloaded file in a snapshot's download cache: on
+# Azure the blob itself (account, container, full decoded name), so that a
+# file named by an absolute URI in another form of the table's own URI is
+# the same file (#72); for another backend, its root and the path.
 cache_key <- function(storage, rel) {
   loc <- storage$location
   parts <- if (identical(storage$kind, "azure")) {
@@ -448,12 +452,12 @@ cache_key <- function(storage, rel) {
   paste(parts, collapse = "\x1f")
 }
 
-cache_env <- new.env(parent = emptyenv())
-
 # The local path of live file `i`, from resolve_file(): the file itself on
 # local disk, otherwise a copy downloaded through the storage backend once
-# per session (design section 4.3) into tempdir(), keyed by cache_key(), the
-# size and the modification time, which never change for a Delta data file.
+# per lake_open() (`tbl$downloads`, new_downloads(), design section 4.3) into
+# tempdir(), keyed by cache_key(), the size and the modification time, which
+# never change for a Delta data file. A copy from another session (a
+# snapshot restored with readRDS()) is not used: it is downloaded again.
 # A copy is written under a temporary name and renamed when whole, and one
 # whose size on disk is not the log's is downloaded again.
 fetch_file <- function(tbl, i, where = resolve_file(tbl, i)) {
@@ -471,11 +475,12 @@ fetch_file <- function(tbl, i, where = resolve_file(tbl, i)) {
   a <- tbl$files$action[[i]]
   size <- a[["size"]]
   key <- paste(where$key, int_text(size %||% -1), int_text(a[["modificationTime"]] %||% -1), sep = "\x1f")
-  fn <- cache_credentials(where$storage)
-  hit <- cache_env$files[[key]]
-  if (!is.null(hit) && identical(hit$fn, fn) && file.exists(hit$file) &&
-      (!is_whole(size) || identical(file.size(hit$file), as.numeric(size)))) {
-    return(hit$file)
+  downloads <- tbl$downloads
+  dir <- downloads_dir()
+  hit <- downloads$files[[key]]
+  if (!is.null(hit) && startsWith(hit, dir) && file.exists(hit) &&
+      (!is_whole(size) || identical(file.size(hit), as.numeric(size)))) {
+    return(hit)
   }
   bytes <- where$storage$get(where$rel)
   if (is_whole(size) && length(bytes) != size) {
@@ -488,7 +493,6 @@ fetch_file <- function(tbl, i, where = resolve_file(tbl, i)) {
       path = path
     )
   }
-  dir <- file.path(tempdir(), "zulake-cache")
   dir.create(dir, showWarnings = FALSE)
   f <- tempfile("data-", tmpdir = dir, fileext = ".parquet")
   part <- paste0(f, ".part")
@@ -499,10 +503,9 @@ fetch_file <- function(tbl, i, where = resolve_file(tbl, i)) {
     zulake_abort("storage", sprintf("cannot write a copy of %s to %s.", format_string(path), format_string(dir)), path = path)
   }
   ok <- TRUE
-  if (is.null(cache_env$files)) {
-    cache_env$files <- list()
+  if (is.environment(downloads)) {
+    downloads$files[[key]] <- f
   }
-  cache_env$files[[key]] <- list(file = f, fn = fn)
   f
 }
 

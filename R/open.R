@@ -112,7 +112,7 @@
 #' }
 lake_open <- function(uri, version = NULL, timestamp = NULL, credentials = NULL) {
   storage <- storage_for(uri, credentials)
-  snapshot_build(storage, uri, check_version(version), check_timestamp(timestamp))
+  snapshot_build(storage, uri, check_version(version), check_timestamp(timestamp), new_downloads())
 }
 
 #' @rdname lake_open
@@ -120,7 +120,7 @@ lake_open <- function(uri, version = NULL, timestamp = NULL, credentials = NULL)
 #' @export
 lake_load <- function(tbl, version = NULL, timestamp = NULL) {
   check_table(tbl)
-  snapshot_build(tbl$storage, tbl$uri, check_version(version), check_timestamp(timestamp))
+  snapshot_build(tbl$storage, tbl$uri, check_version(version), check_timestamp(timestamp), tbl$downloads)
 }
 
 #' Is there a table here?
@@ -174,7 +174,9 @@ lake_version <- function(tbl) {
 #   log              the `_delta_log/` listing at open time (log_entries())
 #   last_checkpoint  `_last_checkpoint`, parsed, or NULL
 #   storage          the storage backend (storage.R)
-snapshot_build <- function(storage, uri, version = NULL, timestamp = NULL) {
+#   downloads        the download cache of the lake_open() it came from
+#                    (new_downloads(), read.R), shared with lake_load()
+snapshot_build <- function(storage, uri, version = NULL, timestamp = NULL, downloads = new_downloads()) {
   if (!is.null(version) && !is.null(timestamp)) {
     zulake_abort("argument", "Give `version` or `timestamp`, not both.")
   }
@@ -300,7 +302,8 @@ snapshot_build <- function(storage, uri, version = NULL, timestamp = NULL) {
       commit_info = commit_info,
       log = entries,
       last_checkpoint = last_checkpoint,
-      storage = storage
+      storage = storage,
+      downloads = downloads
     ),
     class = "zulake_table"
   )

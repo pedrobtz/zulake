@@ -149,10 +149,9 @@ open_or_class <- function(uri, version, credentials = NULL) {
 }
 
 # The session cassette_tables are recorded and replayed with: open, files,
-# read and deletion vectors of the latest version, with the session's
-# download cache empty, so that every data file is requested.
+# read and deletion vectors of the latest version, from one lake_open(),
+# whose download cache starts empty, so that every data file is requested.
 cassette_session <- function(table) {
-  local_empty_download_cache()
   tbl <- lake_open(azurite_uri(table), credentials = function() azurite_token)
   dv_ok <- requireNamespace("zuroar", quietly = TRUE)
   files <- suppressWarnings(lake_files(tbl))
@@ -178,14 +177,6 @@ local_fresh_credential_registry <- function(env = parent.frame()) {
       list2env(saved[[i]], envir = envs[[i]])
     }
   }, envir = env)
-}
-
-# zulake's per-session download cache (read.R) empty until `env` ends.
-local_empty_download_cache <- function(env = parent.frame()) {
-  cache <- get("cache_env", envir = asNamespace("zulake"))
-  old <- cache$files
-  cache$files <- NULL
-  withr::defer(cache$files <- old, envir = env)
 }
 
 # Expect no piece of `token` (token_pieces()) in `x`: in its serialization,
