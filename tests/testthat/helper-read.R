@@ -309,7 +309,11 @@ us_time_text <- function(us) {
   f <- us - s * 1e6
   day <- floor(s / 86400)
   sec <- s - day * 86400
-  sprintf("%s %02d:%02d:%02d.%06d", format(as.Date(day, origin = "1970-01-01")),
+  # The date from its parts: format() writes year 1 as "1-01-01" where the
+  # C library's strftime() does not pad %Y (glibc), as on the Linux legs.
+  lt <- as.POSIXlt(as.Date(day, origin = "1970-01-01"))
+  date <- sprintf("%04d-%02d-%02d", lt$year + 1900L, lt$mon + 1L, lt$mday)
+  sprintf("%s %02d:%02d:%02d.%06d", date,
           as.integer(sec %/% 3600), as.integer(sec %% 3600 %/% 60), as.integer(sec %% 60), as.integer(f))
 }
 
