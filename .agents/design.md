@@ -185,8 +185,10 @@ Settled in Stage 6 (2026-11-26):
   unexpected is a `zulake_error_storage` with the same fields; a transport
   failure is a `zulake_error_storage` with zuhttp's message and class name
   (`reason`), not its condition, which holds the request. `credentials()`
-  must return one non-empty string without control characters (a leading
-  `Bearer ` is dropped); otherwise, or if it fails, `zulake_error_auth`.
+  must return one string; a leading `Bearer ` in any case is dropped, and
+  what is left must be non-empty, without spaces or control characters
+  (checked after the drop, so `"Bearer "` is no token: 2026-11-27, #47);
+  otherwise, or if it fails, `zulake_error_auth`.
   `credentials = NULL` sends anonymous requests (a public container) and
   never retries. The token and the function live in a package-level
   registry keyed by an id; the snapshot holds only a handle with that id

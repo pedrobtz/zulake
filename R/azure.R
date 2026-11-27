@@ -229,10 +229,17 @@ credential_token <- function(handle, refresh = FALSE) {
   token <- tryCatch(entry$fn(), error = function(e) {
     zulake_abort("auth", sprintf("`credentials()` failed: %s", conditionMessage(e)))
   })
-  if (!is_string(token) || !nzchar(token) || grepl("[[:cntrl:]]", token)) {
-    zulake_abort("auth", "`credentials()` must return a bearer token: a single non-empty string.")
+  # A leading "Bearer " (any case) is the header's, not the token's: dropped
+  # before the token is checked, so that "Bearer " alone is no token (#47).
+  if (is_string(token)) {
+    token <- sub("^[Bb][Ee][Aa][Rr][Ee][Rr] +", "", token)
   }
-  token <- sub("^Bearer +", "", token)
+  if (!is_string(token) || !nzchar(token) || grepl("[[:cntrl:][:space:]]", token)) {
+    zulake_abort(
+      "auth",
+      "`credentials()` must return a bearer token: a single non-empty string without spaces or control characters."
+    )
+  }
   entry$token <- token
   assign(handle$id, entry, envir = credential_env)
   token

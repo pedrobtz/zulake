@@ -739,3 +739,19 @@ test_that("ContainerNotFound after the first page fails the listing, not ends it
   # On the first page it is still a container with nothing in it.
   expect_false(lake_is_table("abfss://other@acct.dfs.core.windows.net/zl-basic"))
 })
+
+test_that("a token is checked after its Bearer prefix is dropped, in any case (#47)", {
+  for (bad in c("Bearer ", "Bearer   ", "bearer ", " lead", "tok en", "tok\ten", "Bearer tok en")) {
+    log <- new.env()
+    local_azure_fake(azure_fake(fake_root(), log))
+    expect_error(lake_open(fake_uri("zl-basic"), credentials = function() bad), class = "zulake_error_auth",
+                 label = bad)
+    expect_length(log$requests, 0L)
+  }
+  for (good in c("bearer x", "BEARER x", "Bearer x", "BeArEr   x", "x")) {
+    log <- new.env()
+    local_azure_fake(azure_fake(fake_root(), log))
+    lake_open(fake_uri("zl-basic"), credentials = function() good)
+    expect_identical(unique(vapply(log$requests, function(r) r$headers$authorization, "")), "Bearer x", label = good)
+  }
+})

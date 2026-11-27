@@ -125,3 +125,7 @@
   `zulake_error_storage` (#45). `ContainerNotFound` after the first page
   is a `zulake_error_storage` too, instead of ending the listing and
   opening an older version (#46).
+* Fixed: `credentials()` returning `"Bearer "` sent an empty token, and
+  `"bearer x"` was sent as `Bearer bearer x`. The prefix is dropped in any
+  case before the token is checked, and a token with a space is refused
+  (#47).
