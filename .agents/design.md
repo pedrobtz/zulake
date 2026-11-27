@@ -283,9 +283,22 @@ a choice:
   and `deltalake` 1.7.0 keeps the first line's action, so one of the two
   orders gave other rows than zulake. This replaces the Stage 2 rule
   (2026-11-26) that read such a commit as "replace it" (2026-11-27,
-  #103). Two adds, or two removes, of one tuple in one commit, which the
-  same sentence of the protocol covers, are not refused: replay keeps one
-  of them either way.
+  #103).
+- *Two adds, or two removes, of one path inside one commit* are a
+  `zulake_error_corrupt_log` naming the file and the `path`, whatever
+  their deletion vectors and whether or not the two actions differ; a log
+  compaction file is held to the same rule, a checkpoint is not
+  (2026-11-27, #106, on a design adviser's recommendation). A remove of
+  `(path, dvA)` with an add of `(path, dvB)` stays legal, as above. Why:
+  PROTOCOL.md ("Delta Log Entries") allows a version at most one file
+  action of a type per `(path, dvId)`, "and for simplicity" at most one
+  per `path` whatever its dvId. Two adds of one path under two deletion
+  vectors are two logical files, so both would stay live and the file be
+  read twice; two adds of one tuple with other `partitionValues` or
+  `stats` kept the last line where `deltalake` keeps the first. A known
+  difference: `deltalake` 1.7.0 opens such logs (it lists the file twice
+  in the first case). That no path is live twice across checkpoints and
+  commits is not checked (roadmap, "After 0.1.0").
 - *A JSON object with a repeated key is a corrupt log* (2026-11-27,
   #102, on a design adviser's recommendation). In any JSON file of the
   log (a commit, a log compaction file, a JSON V2 checkpoint,
@@ -311,8 +324,24 @@ a choice:
   JSON: a compaction file is passed over for its commits, and a
   checkpoint for an earlier one or commit 0, as above. When `zujson`
   offers `duplicate_keys = "error"`, the walk is replaced by that option
-  and the tests stay. The JSON held in strings (`schemaString`, `stats`)
-  is not checked.
+  and the tests stay. The JSON held in two strings is held to the same
+  rule (2026-11-27, #107, on a design adviser's recommendation): a
+  `schemaString` with a repeated key is a `zulake_error_corrupt_log` when
+  the `metaData` action is applied, with `file`, `action` and `key`
+  (`deltalake` 1.7.0 refuses it too); a `stats` string with one is a
+  `zulake_error_corrupt_log` with `file` (the data file) and `key` where
+  statistics are used (`lake_files()`, `lake_count()`, a filtered read),
+  the rule for a `stats` string that is not JSON. Why: a repeated
+  `maxValues`, or a column repeated in `minValues`, would prune with the
+  first value where `deltalake` takes the last, and a filtered read would
+  miss rows. JSON text in a `tags` value, `domainMetadata.configuration`
+  and `stats_parsed` are not checked. A MAP in a Parquet checkpoint
+  (`partitionValues`, `tags`, `configuration`) is a list of key/value
+  pairs that may repeat a key: one that does is a refusal of that
+  checkpoint (`zulake_checkpoint_refusal`), not a corrupt log, so it is
+  passed over for an earlier checkpoint or commit 0, and is a
+  `zulake_error_checkpoint_unreadable` when replay needs it, like a JSON
+  checkpoint with a repeated key (2026-11-27, #108).
 - *Log compaction files* replace the commits they cover whenever one
   starts where replay stands and ends at or before the target version
   (the one reaching furthest, of several). Why: the protocol makes them

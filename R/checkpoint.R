@@ -280,14 +280,23 @@ column_values <- function(col, rows) {
 
 # A LIST (a vector) or a MAP (a key/value data frame) value, as zujson gives
 # a JSON array or object: an empty array is logical(0), an object a named
-# list with NULL for a null value.
+# list with NULL for a null value. A MAP that holds a key twice is refused,
+# as a JSON object would be (#102): a lookup by name would take the first
+# (#108).
 nested_value <- function(x) {
   if (is.null(x)) {
     return(NULL)
   }
   if (is.data.frame(x)) {
+    keys <- as.character(x[["key"]])
+    d <- anyDuplicated(keys)
+    if (d) {
+      checkpoint_refusal(
+        sprintf("a map holds the key %s twice", format_string(keys[d]))
+      )
+    }
     values <- column_values(x[["value"]], seq_len(nrow(x)))
-    names(values) <- as.character(x[["key"]])
+    names(values) <- keys
     return(values)
   }
   if (is.list(x)) {

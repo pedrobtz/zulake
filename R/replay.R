@@ -196,8 +196,10 @@ replay <- function(plan, read, checkpoint = NULL) {
 # (`(path, deletionVector.uniqueId)`) in one commit: in a commit or a
 # compaction file that is a corrupt log (#103). The same path with another
 # deletion vector is another logical file, the legal update of its vector.
-# Removes are then applied before adds. A checkpoint (`commit = FALSE`) is
-# the reconciled state, and is not checked here.
+# Two adds, or two removes, of one path are a corrupt log there too, whatever
+# their deletion vectors (#106). Removes are then applied before adds. A
+# checkpoint (`commit = FALSE`) is the reconciled state, and is not checked
+# here.
 apply_file <- function(st, name, actions, commit = TRUE) {
   adds <- list()
   removes <- list()
@@ -249,6 +251,10 @@ apply_file <- function(st, name, actions, commit = TRUE) {
       }
     }
   }
+  if (commit) {
+    check_one_per_path(adds, name, "adds")
+    check_one_per_path(removes, name, "removes")
+  }
   if (commit && length(adds) && length(removes)) {
     added <- vapply(adds, file_key, "")
     both <- match(vapply(removes, file_key, ""), added)
@@ -282,6 +288,32 @@ apply_file <- function(st, name, actions, commit = TRUE) {
     assign(key, a, envir = st$adds)
   }
   invisible(st)
+}
+
+# The protocol allows a commit at most one action of a type (add or remove)
+# for any path, whatever its deletion vector (#106): two adds of one path
+# under two deletion vectors would otherwise both be live, and the file
+# read twice. Refused whether or not the two actions differ.
+check_one_per_path <- function(actions, name, what) {
+  if (length(actions) < 2L) {
+    return(invisible())
+  }
+  paths <- vapply(actions, `[[`, "", "path")
+  d <- anyDuplicated(paths)
+  if (d) {
+    zulake_abort(
+      "corrupt_log",
+      sprintf(
+        "log file %s %s %s twice, which the protocol forbids in one commit.",
+        format_string(name),
+        what,
+        format_string(paths[d])
+      ),
+      file = name,
+      path = paths[d]
+    )
+  }
+  invisible()
 }
 
 # The protocol's key for a logical file: `(path, deletionVector.uniqueId)`.
@@ -327,7 +359,7 @@ dv_unique_id <- function(dv) {
 # The fields the protocol marks required, and the types replay relies on.
 # Unknown fields and unknown actions are ignored, as the protocol requires.
 
-bad_action <- function(name, action, problem) {
+bad_action <- function(name, action, problem, ...) {
   zulake_abort(
     "corrupt_log",
     sprintf(
@@ -337,7 +369,8 @@ bad_action <- function(name, action, problem) {
       problem
     ),
     file = name,
-    action = action
+    action = action,
+    ...
   )
 }
 
@@ -457,6 +490,20 @@ check_metadata <- function(x, name) {
       bad_action(name, "metaData", "whose `schemaString` is not valid JSON")
     }
   )
+  # The schema is JSON in a string, held to the rule of the log's own JSON
+  # (#102, #107): a repeated `type` would type a column by the first.
+  key <- repeated_key(x[["schema"]])
+  if (!is.null(key)) {
+    bad_action(
+      name,
+      "metaData",
+      sprintf(
+        "whose `schemaString` has an object with the key %s twice",
+        format_string(key)
+      ),
+      key = key
+    )
+  }
   fields <- if (is.list(x[["schema"]])) x[["schema"]][["fields"]]
   if (
     !is.list(x[["schema"]]) ||

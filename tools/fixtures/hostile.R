@@ -176,4 +176,86 @@ d <- copy_table("zl-basic", "remove-then-add-same-file")
 f <- commit_path(d, 2L)
 write_lines(f, c(lines[1L], remove_added, lines[2:3]))
 
+# A commit with two adds of one path, the second with other statistics: the
+# protocol allows one add per path in a commit (#106).
+d <- copy_table("zl-basic", "two-adds-same-file")
+f <- commit_path(d, 2L)
+lines <- read_lines(f)
+stopifnot(length(lines) == 3L, startsWith(lines[2L], first))
+min_one <- "\\\"minValues\\\":{\\\"id\\\":1,"
+stopifnot(grepl(min_one, lines[2L], fixed = TRUE))
+again <- sub(min_one, "\\\"minValues\\\":{\\\"id\\\":0,", lines[2L], fixed = TRUE)
+write_lines(f, c(lines[1:2], again, lines[3L]))
+
+# A commit with two adds of one path under two deletion vectors: its own
+# (on disk) and table-with-dv-small-inline's (inline). Replay keeps both as
+# two logical files, so the file would be read twice (#106).
+d <- copy_table("table-with-dv-small", "two-adds-same-path-new-dv")
+f <- commit_path(d, 1L)
+lines <- read_lines(f)
+inline <- read_lines(commit_path(file.path(tables, "table-with-dv-small-inline"), 1L))
+stopifnot(
+  length(lines) == 3L,
+  startsWith(lines[3L], "{\"add\":{"),
+  grepl("\"storageType\":\"u\"", lines[3L], fixed = TRUE),
+  startsWith(inline[3L], "{\"add\":{"),
+  grepl("\"storageType\":\"i\"", inline[3L], fixed = TRUE)
+)
+write_lines(f, c(lines, inline[3L]))
+
+# A commit with two removes of one path, at two times (#106).
+d <- copy_table("zl-basic", "two-removes-same-file")
+f <- commit_path(d, 3L)
+lines <- read_lines(f)
+j <- which(startsWith(lines, sprintf("{\"remove\":{\"path\":\"%s\",", added)))
+stopifnot(length(j) == 1L, grepl("\"deletionTimestamp\":1795690965425", lines[j], fixed = TRUE))
+again <- sub("\"deletionTimestamp\":1795690965425", "\"deletionTimestamp\":1795690965426", lines[j], fixed = TRUE)
+write_lines(f, append(lines, again, after = j))
+
+# zl-basic's commit 4 adds part-...08a25d6d... (line 2), live at the last
+# version; its statistics have id 12 for both bounds.
+stats_line <- function(lines) {
+  j <- which(startsWith(lines, "{\"add\":{\"path\":\"part-00000-08a25d6d-"))
+  stopifnot(length(j) == 1L)
+  j
+}
+
+# Statistics with `maxValues` twice, the first saying id 11: zujson's lookup
+# would take it and prune the file for `id == 12` (#107).
+d <- copy_table("zl-basic", "stats-repeated-key")
+f <- commit_path(d, 4L)
+lines <- read_lines(f)
+j <- stats_line(lines)
+max_12 <- "\\\"maxValues\\\":{\\\"id\\\":12,"
+stopifnot(grepl(max_12, lines[j], fixed = TRUE))
+lines[j] <- sub(max_12, paste0("\\\"maxValues\\\":{\\\"id\\\":11},", max_12), lines[j], fixed = TRUE)
+write_lines(f, lines)
+
+# Statistics whose `minValues` holds `id` twice, 13 first (#107).
+d <- copy_table("zl-basic", "stats-repeated-column")
+f <- commit_path(d, 4L)
+lines <- read_lines(f)
+j <- stats_line(lines)
+min_12 <- "\\\"minValues\\\":{\\\"id\\\":12,"
+stopifnot(grepl(min_12, lines[j], fixed = TRUE))
+lines[j] <- sub(min_12, "\\\"minValues\\\":{\\\"id\\\":13,\\\"id\\\":12,", lines[j], fixed = TRUE)
+write_lines(f, lines)
+
+# A schema whose field `id` has `type` twice, "string" first (#107).
+d <- copy_table("zl-basic", "schema-repeated-key")
+f <- commit_path(d, 0L)
+lines <- read_lines(f)
+id_long <- "{\\\"name\\\":\\\"id\\\",\\\"type\\\":\\\"long\\\","
+stopifnot(sum(grepl(id_long, lines, fixed = TRUE)) == 1L)
+lines <- sub(
+  id_long,
+  "{\\\"name\\\":\\\"id\\\",\\\"type\\\":\\\"string\\\",\\\"type\\\":\\\"long\\\",",
+  lines,
+  fixed = TRUE
+)
+write_lines(f, lines)
+
+# checkpoint-map-repeated-key needs a Parquet writer: hostile_parquet.py
+# writes it after this script.
+
 cat("wrote", length(list.dirs(hostile, recursive = FALSE)), "hostile fixtures\n")
