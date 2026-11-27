@@ -101,12 +101,10 @@ replay_state <- function(entries, sets, version, read, read_cp) {
   failed <- list()
   for (v in incomplete_checkpoints(entries, sets)) {
     if (v <= version) {
-      failed[[length(failed) + 1L]] <- structure(
-        class = c("zulake_error_checkpoint_unreadable", "zulake_error", "error", "condition"),
-        list(
-          message = sprintf("the checkpoint at version %s is missing a part.", format_number(v)),
-          call = NULL, checkpoint = v
-        )
+      failed[[length(failed) + 1L]] <- zulake_condition(
+        "checkpoint_unreadable",
+        sprintf("the checkpoint at version %s is missing a part.", format_number(v)),
+        checkpoint = v
       )
     }
   }

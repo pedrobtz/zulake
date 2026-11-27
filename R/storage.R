@@ -80,7 +80,7 @@ storage_local <- function(root) {
     f <- full(path)
     size <- file.size(f)
     if (is.na(size) || dir.exists(f)) {
-      zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path)
+      abort_no_file(path)
     }
     readBin(f, "raw", size)
   }
@@ -89,7 +89,7 @@ storage_local <- function(root) {
     f <- full(path)
     size <- file.size(f)
     if (is.na(size) || dir.exists(f)) {
-      zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path)
+      abort_no_file(path)
     }
     ok <- is_whole(from) && is_whole(to) && from >= 0 && to >= from && to < size
     if (!ok) {
@@ -122,7 +122,7 @@ storage_local <- function(root) {
   local_path <- function(path) {
     f <- full(path)
     if (!file.exists(f) || dir.exists(f)) {
-      zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path)
+      abort_no_file(path)
     }
     f
   }
@@ -149,7 +149,8 @@ as_utc <- function(x) {
   x
 }
 
-new_data_frame <- function(cols) {
-  n <- if (length(cols)) length(cols[[1L]]) else 0L
-  structure(cols, class = "data.frame", row.names = .set_row_names(n))
+# The error for a file the backend does not have; `...` adds fields (the
+# Azure backend's `status`).
+abort_no_file <- function(path, ...) {
+  zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path, ...)
 }

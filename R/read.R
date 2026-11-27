@@ -316,10 +316,10 @@ read_piece <- function(scan, k) {
     cols <- lapply(cols, function(x) x[alive])
     n <- length(alive)
   }
-  piece <- new_data_frame_n(cols, n)
+  piece <- new_data_frame(cols, n)
   if (!is.null(scan$plan)) {
     rows <- which(filter_rows(scan$plan, piece, scan$env) %in% TRUE)
-    piece <- new_data_frame_n(lapply(cols, function(x) x[rows]), length(rows))
+    piece <- new_data_frame(lapply(cols, function(x) x[rows]), length(rows))
   }
   piece[scan$out_cols]
 }
@@ -353,7 +353,7 @@ bind_pieces <- function(pieces, scan) {
     for (col in scan$out_cols) {
       cols[[col]] <- if (col %in% names(scan$parts)) scan$parts[[col]][0L] else empty_column(scan$types[[col]], scan$int64, 0L)
     }
-    return(new_data_frame_n(cols, 0L))
+    return(new_data_frame(cols, 0L))
   }
   n <- sum(vapply(pieces, nrow, 0L))
   cols <- list()
@@ -382,7 +382,7 @@ bind_pieces <- function(pieces, scan) {
       out
     }
   }
-  new_data_frame_n(cols, n)
+  new_data_frame(cols, n)
 }
 
 # ---- files on disk -------------------------------------------------------

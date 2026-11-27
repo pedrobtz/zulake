@@ -123,7 +123,7 @@ lake_changes <- function(tbl, from, to = lake_version(tbl), int64 = c("double", 
   removed <- add_frame(a, a$files$action[!ka %in% kb], FALSE, int64)
   out <- rbind_frames(added, removed)
   out <- c(list(change = rep(c("added", "removed"), c(nrow(added), nrow(removed)))), out)
-  new_data_frame_n(out, nrow(added) + nrow(removed))
+  new_data_frame(out, nrow(added) + nrow(removed))
 }
 
 #' @rdname lake_log

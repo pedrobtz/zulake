@@ -467,13 +467,6 @@ prune_info <- function(tbl, plan, int64) {
   info
 }
 
-file_stats_text <- function(actions) {
-  vapply(actions, function(a) {
-    s <- a[["stats"]]
-    if (is_string(s)) s else NA_character_
-  }, "", USE.NAMES = FALSE)
-}
-
 # Whether each of `n` files can make the filter TRUE (`t`) and FALSE (`f`)
 # on some row. NA needs no tracking: under R's three-valued logic `!x` is
 # TRUE only where `x` is FALSE, `x & y` only where both are TRUE and `x | y`
@@ -521,8 +514,7 @@ filter_outcomes <- function(plan, info) {
 column_bounds <- function(tbl, parsed, col, type) {
   n <- length(parsed)
   kind <- type_kind(type)
-  fields <- schema_fields(tbl)
-  field <- fields[[match(col, vapply(fields, field_name, ""))]]
+  field <- field_by_name(schema_fields(tbl), col)
   key <- field_physical(field, tbl$column_mapping)
   get <- function(i, what) {
     obj <- parsed[[i]][[what]]

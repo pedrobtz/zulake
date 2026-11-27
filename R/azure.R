@@ -138,20 +138,14 @@ unreserved_bytes <- charToRaw("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvw
 
 # ---- credentials ---------------------------------------------------------
 
-# Made in .onLoad(), not here: an environment made when the package is
-# built is stored in its lazy-load database, and the loader's own
-# environments keep a reference to it, which a srcref or a byte-code
-# constant in a snapshot can reach (seen with the source kept, Stage 6).
-# `credential_env` holds the entries and nothing else; `credential_state`
-# the session's nonce and counter.
+# Made in .onLoad() (zulake-package.R), not here: an environment made when
+# the package is built is stored in its lazy-load database, and the
+# loader's own environments keep a reference to it, which a srcref or a
+# byte-code constant in a snapshot can reach (seen with the source kept,
+# Stage 6). `credential_env` holds the entries and nothing else;
+# `credential_state` the session's nonce and counter.
 credential_env <- NULL
 credential_state <- NULL
-
-.onLoad <- function(libname, pkgname) {
-  ns <- topenv()
-  assign("credential_env", new.env(parent = emptyenv()), envir = ns)
-  assign("credential_state", new.env(parent = emptyenv()), envir = ns)
-}
 
 # A handle on `credentials` (a function, or NULL for anonymous requests)
 # for the table at `root` (its URI): an environment holding only an id and
@@ -411,7 +405,7 @@ storage_azure <- function(parts, handle) {
     resp <- azure_request(loc, "GET", blob(path), path = path)
     status <- zuhttp::zu_resp_status(resp)
     if (status == 404L) {
-      zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path, status = status)
+      abort_no_file(path, status = status)
     }
     if (status != 200L) {
       azure_fail(resp, "read", path)
@@ -430,7 +424,7 @@ storage_azure <- function(parts, handle) {
     resp <- azure_request(loc, "GET", blob(path), range = c(from, to), path = path)
     status <- zuhttp::zu_resp_status(resp)
     if (status == 404L) {
-      zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path, status = status)
+      abort_no_file(path, status = status)
     }
     total <- content_range_total(zuhttp::zu_resp_header(resp, "content-range"))
     body <- if (status == 206L) zuhttp::zu_resp_raw(resp) else raw()

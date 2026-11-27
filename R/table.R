@@ -228,8 +228,6 @@ lake_summary <- function(tbl, int64 = c("double", "integer64")) {
 
 # ---- helpers -------------------------------------------------------------
 
-named_list <- function() structure(list(), names = character())
-
 # Versions as the `int64` argument asks: always exact, since the log's
 # versions are below 2^53.
 version_column <- function(v, int64) {

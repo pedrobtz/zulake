@@ -108,7 +108,7 @@ lake_partitions <- function(tbl, filter = NULL, int64 = c("double", "integer64")
   keep <- filter_files(tbl, substitute(filter), parent.frame(), int64)
   parts <- partition_table(tbl$files$action[keep], tbl, int64)
   if (!length(parts)) {
-    return(new_data_frame_n(list(), 0L))
+    return(new_data_frame(list(), 0L))
   }
   # Distinct on the log's own text, as deltalake 1.7.0 is: typed values
   # print to 15 digits, lose the sign of zero, and NaN is.na() (#55).
@@ -209,15 +209,11 @@ add_frame <- function(tbl, actions, stats, int64) {
     out <- c(out, stats_columns(tbl, actions, paths, int64))
   }
   out$action <- lapply(actions, unmark_tree, int64 = int64, what = "an `add` action")
-  new_data_frame_n(out, length(actions))
+  new_data_frame(out, length(actions))
 }
 
 stats_columns <- function(tbl, actions, paths, int64) {
-  text <- vapply(actions, function(a) {
-    s <- a[["stats"]]
-    if (is_string(s)) s else NA_character_
-  }, "", USE.NAMES = FALSE)
-  parsed <- parse_stats(text, paths)
+  parsed <- parse_stats(file_stats_text(actions), paths)
   fields <- schema_fields(tbl)
   mode <- tbl$column_mapping
   skipped <- new.env(parent = emptyenv())
@@ -301,11 +297,7 @@ check_record_counts <- function(records, cardinality, paths) {
 file_counts <- function(tbl, int64) {
   actions <- tbl$files$action
   paths <- tbl$files$path
-  text <- vapply(actions, function(a) {
-    s <- a[["stats"]]
-    if (is_string(s)) s else NA_character_
-  }, "", USE.NAMES = FALSE)
-  parsed <- parse_stats(text, paths)
+  parsed <- parse_stats(file_stats_text(actions), paths)
   records <- int64_values(lapply(parsed, function(p) p[["numRecords"]]), int64, "a file's `numRecords`")
   dvs <- lapply(actions, function(a) a[["deletionVector"]])
   has_dv <- !vapply(dvs, is.null, NA)

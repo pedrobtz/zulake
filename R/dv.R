@@ -119,7 +119,7 @@ lake_deletion_vectors <- function(tbl, files = NULL, rows = TRUE) {
   if (rows) {
     out$rows <- dv_rows_of(tbl, pick)
   }
-  new_data_frame_n(out, length(pick))
+  new_data_frame(out, length(pick))
 }
 
 # ---- the rows of deletion vectors ----------------------------------------

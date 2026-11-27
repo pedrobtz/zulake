@@ -13,6 +13,11 @@ field_name <- function(field) {
   if (is.list(field) && is_string(field[["name"]])) field[["name"]] else NA_character_
 }
 
+# The field of `fields` whose logical name is `col`, or NULL when none is.
+field_by_name <- function(fields, col) {
+  fields[[match(col, vapply(fields, field_name, ""))]]
+}
+
 # A field's name in the data files: its column mapping physical name when the
 # table maps columns, its name otherwise. snapshot_build() has checked that
 # every field has one in name mode (check_physical_names(), #77).
@@ -193,14 +198,13 @@ partition_table <- function(actions, tbl, int64) {
   for (col in columns) {
     out[[col]] <- parse_partition_values(partition_raw(actions, tbl, col), types[[col]], int64, col)
   }
-  new_data_frame_n(out, length(actions))
+  new_data_frame(out, length(actions))
 }
 
 # The partition values of column `col` in `actions` as the log writes them,
 # NA for null (an empty string or a missing key).
 partition_raw <- function(actions, tbl, col) {
-  fields <- schema_fields(tbl)
-  field <- fields[[match(col, vapply(fields, field_name, ""))]]
+  field <- field_by_name(schema_fields(tbl), col)
   key <- field_physical(field, tbl$column_mapping)
   vapply(actions, function(a) {
     v <- a[["partitionValues"]][[key]]
@@ -223,22 +227,24 @@ partition_read_table <- function(actions, tbl, int64, columns) {
       parse_partition_values(raw, types[[col]], int64, col)
     }
   }
-  new_data_frame_n(out, length(actions))
+  new_data_frame(out, length(actions))
 }
-
-new_data_frame_n <- function(cols, n) {
-  structure(cols, names = names(cols) %||% character(), class = "data.frame", row.names = .set_row_names(n))
-}
-
-`%||%` <- function(x, y) if (is.null(x)) y else x
 
 # Row `i` of a data frame of typed columns, as a named list of scalars.
 frame_row <- function(df, i) {
   out <- lapply(df, function(col) col[i])
-  if (!length(out)) structure(list(), names = character()) else out
+  if (!length(out)) named_list() else out
 }
 
 # ---- statistics ----------------------------------------------------------
+
+# The `stats` string of each of `actions`, NA where a file has none.
+file_stats_text <- function(actions) {
+  vapply(actions, function(a) {
+    s <- a[["stats"]]
+    if (is_string(s)) s else NA_character_
+  }, "", USE.NAMES = FALSE)
+}
 
 # `stats` strings (NA where a file has none) parsed with every number kept
 # as text (int64.R). A string that is not JSON is a corrupt log.
@@ -286,7 +292,7 @@ stats_object <- function(x, fields, mode, kind, int64, what, skipped = NULL, pre
     zulake_abort("corrupt_log", sprintf("%s is not a JSON object.", what))
   }
   if (!length(x)) {
-    return(structure(list(), names = character()))
+    return(named_list())
   }
   physical <- vapply(fields, field_physical, "", mode = mode)
   out <- vector("list", length(x))

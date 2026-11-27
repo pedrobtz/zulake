@@ -1,4 +1,15 @@
-# Argument checks and small predicates.
+# Argument checks, small predicates and package-wide helpers.
+
+`%||%` <- function(x, y) if (is.null(x)) y else x
+
+# A data frame from a named list of columns, with `n` rows (by default the
+# length of the first column, 0 when there is none).
+new_data_frame <- function(cols, n = if (length(cols)) length(cols[[1L]]) else 0L) {
+  structure(cols, names = names(cols) %||% character(), class = "data.frame", row.names = .set_row_names(n))
+}
+
+# An empty named list.
+named_list <- function() structure(list(), names = character())
 
 # Largest whole number a double holds exactly together with its neighbours:
 # versions and timestamps are doubles, exact below 2^53 (design section 7).

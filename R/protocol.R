@@ -167,18 +167,14 @@ check_partition_values <- function(adds, metadata, mode) {
     return(invisible())
   }
   fields <- metadata[["schema"]][["fields"]]
-  field_names <- vapply(fields, function(f) {
-    if (is.list(f) && is_string(f[["name"]])) f[["name"]] else NA_character_
-  }, "")
   for (col in columns) {
-    i <- match(col, field_names)
-    if (is.na(i)) {
+    field <- field_by_name(fields, col)
+    if (is.null(field)) {
       zulake_abort(
         "corrupt_log",
         sprintf("partition column %s is not in the table's schema.", format_string(col))
       )
     }
-    field <- fields[[i]]
     key <- field_physical(field, mode)
     type <- field[["type"]]
     if (!is_string(type)) {

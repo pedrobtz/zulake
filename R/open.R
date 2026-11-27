@@ -313,7 +313,7 @@ snapshot_build <- function(storage, uri, version = NULL, timestamp = NULL, downl
 # named list.
 sort_by_name <- function(x) {
   if (!length(x)) {
-    return(structure(list(), names = character()))
+    return(named_list())
   }
   x[order(names(x), method = "radix")]
 }
