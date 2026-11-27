@@ -4,8 +4,10 @@
 
 test_that("every 64-bit value from the log straddles 2^53: exact, then an error, or exact as integer64", {
   skip_if_not_installed("bit64")
+  # 17 and 18 digits too, between 2^53's 16 and the 19 of 2^63 (#63).
   for (text in c("9007199254740991", "9007199254740992", "9007199254740993",
-                 "-9007199254740991", "-9007199254740992")) {
+                 "-9007199254740991", "-9007199254740992", "10000000000000001", "123456789012345678",
+                 "-10000000000000001")) {
     path <- int64_table(text)
     tbl <- lake_open(path)
     exact <- text %in% c("9007199254740991", "-9007199254740991")
