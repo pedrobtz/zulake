@@ -1,0 +1,10 @@
+source(file.path(Sys.getenv("W"), "common.R"))
+options(OutDec = ",", scipen = -5, digits = 3)
+t <- lake_open(file.path(FX, "zl-orders")); ty <- lake_open(file.path(W, "t/types"))
+m <- function(e) { r <- try1(e); cat(if (is_err(r)) r$msg else paste("no error:", paste(format(r), collapse = " ")), "\n") }
+m(lake_actions(t, 100)); m(lake_open(file.path(FX, "zl-orders"), version = 123456)); m(lake_changes(t, 3, 2)); m(lake_read(ty, filter = dec == 1/3)); m(lake_read(ty, filter = substr(s, 1, c(1, 2)) == "a"))
+m(lake_read(ty, columns = "a", filter = a == 1e5)); m(lake_read(ty, columns = "a", filter = a == 100)); m(lake_read(ty, columns = "a", filter = a %in% c(100, 1e1)))
+m(lake_read(ty, columns = "a", filter = dec15 == 100000)); m(lake_read(ty, columns = "a", filter = dec15 == 1e5)); m(lake_read(ty, columns = "a", filter = dec == 12.3)); m(lake_read(ty, columns = "a", filter = f64 == 1e300))
+m(lake_read(ty, columns = "a", filter = i16 == 32767)); m(lake_read(ty, columns = "a", filter = i32 > 2147483646)); m(lake_read(ty, columns = "a", filter = ts > 1.7e9)); m(lake_read(ty, columns = "a", filter = d > 19000))
+print(t); m(lake_count(t)); m(lake_history(t, limit = 2)$version)
+m(lake_read(lake_open(file.path(W, "t/by_pl2")), columns = "id"))

@@ -1,0 +1,47 @@
+source("setup.R")
+src <- file.path(fixture_dir(), "tables")
+mkroot <- function() { d <- tempfile("root"); dir.create(d); d }
+copy_tbl <- function(root, name, as = name) { file.copy(file.path(src, name), root, recursive = TRUE); if (as != name) file.rename(file.path(root, name), file.path(root, as)); file.path(root, as) }
+edit_log <- function(tbl, pattern, replacement) for (f in list.files(file.path(tbl, "_delta_log"), pattern = "json$", full.names = TRUE)) { x <- readLines(f, warn = FALSE); writeLines(gsub(pattern, replacement, x, fixed = TRUE), f) }
+ref_dv <- lake_read(lake_open(fixture_table("table-with-dv-small")))
+ref_b <- lake_read(lake_open(fixture_table("zl-basic")))
+U <- function(t) paste0("abfss://lake@acct.dfs.core.windows.net/", t)
+dvname <- "deletion_vector_61d16c75-6994-46b7-a15b-8b538852e50e.bin"
+run <- function(label, abs, ref = ref_dv, kind = "dv") {
+  root <- mkroot()
+  if (kind == "dv") { t <- copy_tbl(root, "table-with-dv-small"); edit_log(t, '"storageType":"u","pathOrInlineDv":"vBn[lx{q8@P<9BNH/isA"', sprintf('"storageType":"p","pathOrInlineDv":"%s"', abs)); u <- U("table-with-dv-small") }
+  else { t <- copy_tbl(root, "zl-basic"); edit_log(t, '"path":"part-', sprintf('"path":"%spart-', abs)); u <- U("zl-basic") }
+  log <- new.env(); use(azure_fake(root, log, max_requests = 100L))
+  e <- try_(lake_read(lake_open(u, credentials = cred)))
+  cat("==", label, "\n   ", abs, "\n   requests", length(log$requests), "\n")
+  if (is.data.frame(e)) cat("   rows", nrow(e), "same:", identical(e, ref), "\n") else show(e)
+  hosts <- vapply(log$requests, function(r) paste(r$host, r$container, !is.null(r$headers$authorization)), "")
+  print(table(hosts)); cat("   leak:", has_token(e), "\n")
+  invisible(list(e = e, log = log))
+}
+run("dv abs abfss own", paste0("abfss://lake@acct.dfs.core.windows.net/table-with-dv-small/", dvname))
+run("dv abs https blob own, upper host", paste0("https://ACCT.blob.core.windows.net/lake/table-with-dv-small/", dvname))
+run("dv abs dfs own, encoded", paste0("https://acct.dfs.core.windows.net/lake/table%2Dwith-dv-small/", dvname))
+run("dv abs other account", paste0("https://evil.blob.core.windows.net/lake/table-with-dv-small/", dvname))
+run("dv abs other container", paste0("abfss://other@acct.dfs.core.windows.net/table-with-dv-small/", dvname))
+run("dv abs with port", paste0("https://acct.blob.core.windows.net:443/lake/table-with-dv-small/", dvname))
+run("dv abs with query", paste0("https://acct.blob.core.windows.net/lake/table-with-dv-small/", dvname, "?x=1"))
+run("dv abs userinfo", paste0("https://acct.blob.core.windows.net@evil.com/lake/table-with-dv-small/", dvname))
+run("dv abs evil host", paste0("https://evil.com/lake/table-with-dv-small/", dvname))
+run("dv abs http scheme", paste0("http://acct.blob.core.windows.net/lake/table-with-dv-small/", dvname))
+run("dv abs local path", paste0(file.path(src, "table-with-dv-small"), "/", dvname))
+run("dv abs file uri", paste0("file://", file.path(src, "table-with-dv-small"), "/", dvname))
+run("dv abs outside table path but same container (..)", paste0("https://acct.blob.core.windows.net/lake/x/../table-with-dv-small/", dvname))
+run("dv abs own container, other dir (outside table root)", paste0("https://acct.blob.core.windows.net/lake/zzz/", dvname))
+run("dv abs newline-container", paste0("https://acct.blob.core.windows.net/lake\\n/table-with-dv-small/", dvname))
+run("add abs abfss own", "abfss://lake@acct.dfs.core.windows.net/zl-basic/", ref_b, "add")
+run("add abs blob own", "https://acct.blob.core.windows.net/lake/zl-basic/", ref_b, "add")
+run("add abs other account", "https://evil.blob.core.windows.net/lake/zl-basic/", ref_b, "add")
+run("add abs other container", "https://acct.blob.core.windows.net/lake2/zl-basic/", ref_b, "add")
+run("add abs local", paste0(file.path(src, "zl-basic"), "/"), ref_b, "add")
+run("add abs file:", paste0("file://", file.path(src, "zl-basic"), "/"), ref_b, "add")
+run("add abs s3", "s3://bucket/zl-basic/", ref_b, "add")
+run("add abs C:", "C:/zl-basic/", ref_b, "add")
+run("add relative ..", "../zl-basic/", ref_b, "add")
+run("add relative encoded ..", "%2E%2E/zl-basic/", ref_b, "add")
+run("add relative leading //", "//evil.blob.core.windows.net/lake/zl-basic/", ref_b, "add")
