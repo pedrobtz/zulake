@@ -288,7 +288,7 @@ test_that("the token is in no print, condition, field, serialized snapshot or ca
   # credential handle, whether or not the package keeps its source (with
   # it kept, srcrefs once reached the loader's environments and the
   # credential registry: CI, Stage 6).
-  expect_identical(serialized_envs(tbl), "blob,get,get_range,handle,head,list_files,loc,name | id")
+  expect_identical(serialized_envs(tbl), "blob,get,get_range,handle,head,list_files,loc,name | id,root")
   expect_no_token(tbl, token, "the snapshot")
   expect_no_token(lake_load(tbl, version = 0), token, "a reloaded snapshot")
   expect_no_token(utils::capture.output(print(tbl), format(tbl), str(tbl)), token, "the print")
@@ -366,7 +366,7 @@ test_that("a snapshot keeps no credentials: restored in another session it asks 
 })
 
 test_that("a handle's credentials go when nothing holds the handle", {
-  h <- credential_handle(function() "tok")
+  h <- credential_handle(function() "tok", "abfss://lake@acct.dfs.core.windows.net/t")
   id <- h$id
   expect_true(exists(id, envir = credential_env))
   rm(h)
@@ -634,4 +634,73 @@ test_that("a deletion vector at an absolute Azure path is read with the table's 
   for (r in got) expect_identical(r$headers$authorization, "Bearer tok")
   ranges <- unlist(lapply(got, function(r) r$headers$range))
   expect_true(sprintf("bytes=1-%.0f", 1 + 4 + length(vec) + 4 - 1) %in% ranges)
+})
+
+test_that("a snapshot restored in another session never sends that session's token (#43)", {
+  log <- new.env()
+  # Every request's token is its own account's: acct's is tok-saved, any
+  # other account's tok-other.
+  local_azure_fake(azure_fake(fake_root(), log, auth = function(h, host) {
+    want <- if (host == "acct.blob.core.windows.net") "Bearer tok-saved" else "Bearer tok-other"
+    if (!is.null(h) && !identical(h, want)) 401L
+  }))
+  other_uri <- "abfss://lake@other.dfs.core.windows.net/zl-basic"
+  for (saved_credentials in list(function() "tok-saved", NULL)) {
+    # Session A opens and saves a snapshot; session B, as fresh as A was,
+    # opens another account's table, then restores A's snapshot.
+    local_fresh_credential_registry()
+    saved <- serialize(lake_open(fake_uri("zl-basic"), credentials = saved_credentials), NULL)
+    local_fresh_credential_registry()
+    local_empty_download_cache()
+    other <- lake_open(other_uri, credentials = function() "tok-other")
+    log$requests <- list()
+    copy <- unserialize(saved)
+    expect_error(lake_load(copy), class = "zulake_error_auth")
+    expect_error(lake_read(copy), class = "zulake_error_auth")
+    expect_length(Filter(function(r) r$host == "acct.blob.core.windows.net", log$requests), 0L)
+    # A handle given another live handle's id (as a guess, or a collision)
+    # still gets no token: the entry is bound to its own table.
+    copy$storage$location$handle$id <- other$storage$location$handle$id
+    expect_error(lake_load(copy), class = "zulake_error_auth")
+    for (id in list("n", "nonce", NA_character_, 1, NULL)) {
+      copy$storage$location$handle$id <- id
+      expect_error(lake_load(copy), class = "zulake_error_auth")
+    }
+    expect_length(log$requests, 0L)
+    # B's own table still reads, with B's token.
+    expect_s3_class(lake_load(other), "zulake_table")
+    expect_true(all(vapply(log$requests, function(r) identical(r$headers$authorization, "Bearer tok-other"), NA)))
+  }
+  # A handle that is not an environment is no handle.
+  expect_error(credential_token(list(id = "x")), class = "zulake_error_auth")
+  expect_error(credential_token("x"), class = "zulake_error_auth")
+})
+
+test_that("two sessions' handle ids differ, and the session's random stream is untouched (#43)", {
+  local_fresh_credential_registry()
+  a <- credential_handle(NULL, "abfss://lake@acct.dfs.core.windows.net/t")
+  local_fresh_credential_registry()
+  b <- credential_handle(NULL, "abfss://lake@acct.dfs.core.windows.net/t")
+  expect_false(identical(a$id, b$id))
+  expect_match(b$id, "^[0-9a-f]{32}-1$")
+  set.seed(42)
+  want <- runif(3)
+  set.seed(42)
+  local_fresh_credential_registry()
+  credential_handle(NULL, "x")
+  expect_identical(runif(3), want)
+  expect_match(random_hex(16L), "^[0-9a-f]{32}$")
+  # Without a system generator (Windows), R's, reseeded, and the session's
+  # stream left as it was, or left unmade.
+  local_mocked_bindings(system_random_bytes = function(n) raw())
+  set.seed(7)
+  want <- runif(2)
+  set.seed(7)
+  expect_match(random_hex(16L), "^[0-9a-f]{32}$")
+  expect_identical(runif(2), want)
+  withr::with_preserve_seed({
+    rm(".Random.seed", envir = globalenv())
+    random_hex(16L)
+    expect_false(exists(".Random.seed", envir = globalenv(), inherits = FALSE))
+  })
 })

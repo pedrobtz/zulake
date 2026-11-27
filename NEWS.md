@@ -114,3 +114,9 @@
   evaluated, and every help page's examples run on it.
 * zulake needs R 3.5.0 or later, as `qio` and `zuhttp` do; the test
   cassettes are saved in R's serialization format 3 (#37).
+* Fixed: a snapshot saved in one R session and restored in another could
+  send the other session's bearer token to the saved table's account,
+  because credential handles were numbered from 1 in every session. Handle
+  ids now start with a random per-session nonce, and a handle reaches only
+  the entry made for its own table; a restored snapshot is a
+  `zulake_error_auth` asking for `lake_open()` again (#43).

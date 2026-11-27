@@ -165,6 +165,21 @@ cassette_session <- function(table) {
   )
 }
 
+# The credential registry (azure.R) as a new R session finds it: no entry,
+# no nonce, no counter, until `env` ends, when the session's own come back.
+local_fresh_credential_registry <- function(env = parent.frame()) {
+  ns <- asNamespace("zulake")
+  envs <- Filter(Negate(is.null), list(ns$credential_env, ns$credential_state))
+  saved <- lapply(envs, function(e) mget(ls(e, all.names = TRUE), envir = e))
+  for (e in envs) rm(list = ls(e, all.names = TRUE), envir = e)
+  withr::defer({
+    for (i in seq_along(envs)) {
+      rm(list = ls(envs[[i]], all.names = TRUE), envir = envs[[i]])
+      list2env(saved[[i]], envir = envs[[i]])
+    }
+  }, envir = env)
+}
+
 # zulake's per-session download cache (read.R) empty until `env` ends.
 local_empty_download_cache <- function(env = parent.frame()) {
   cache <- get("cache_env", envir = asNamespace("zulake"))
@@ -328,7 +343,7 @@ azure_fake <- function(root, log, container = "lake", page_size = 1000L, auth = 
       if (!is.null(out)) return(out)
     }
     if (is.function(auth)) {
-      status <- auth(rec$headers$authorization)
+      status <- if (length(formals(auth)) >= 2L) auth(rec$headers$authorization, rec$host) else auth(rec$headers$authorization)
       if (!is.null(status)) {
         code <- if (status == 401L) "InvalidAuthenticationInfo" else "AuthorizationPermissionMismatch"
         return(zuhttp::zu_response(status, c(`x-ms-error-code` = code)))

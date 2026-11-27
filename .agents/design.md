@@ -186,11 +186,15 @@ Settled in Stage 6 (2026-11-26):
   `Bearer ` is dropped); otherwise, or if it fails, `zulake_error_auth`.
   `credentials = NULL` sends anonymous requests (a public container) and
   never retries. The token and the function live in a package-level
-  registry keyed by an id; the snapshot holds only a handle with that id,
-  whose finalizer removes the entry. So `serialize()` of a snapshot
-  carries neither, even when the function's environment holds the token
-  as a literal, and a snapshot restored in another session gets
-  `zulake_error_auth` on its next request. Why: a `function() token`
+  registry keyed by an id; the snapshot holds only a handle with that id
+  and its table's URI, whose finalizer removes the entry. So `serialize()`
+  of a snapshot carries neither, even when the function's environment
+  holds the token as a literal, and a snapshot restored in another session
+  gets `zulake_error_auth` on its next request. An id is a random 128-bit
+  nonce made once per session and a counter, and an entry answers only a
+  handle with its own table's URI (2026-11-27, #43: ids counted from 1 in
+  every session, so a restored snapshot found another session's entry and
+  sent its token to the saved account). Why: a `function() token`
   closure in the snapshot would put the token in every `saveRDS()`. The
   registry is made in `.onLoad()`, and the backend's functions carry no
   srcref and its frame no argument promises: with the package's source

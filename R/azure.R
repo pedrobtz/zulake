@@ -132,23 +132,62 @@ unreserved_bytes <- charToRaw("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvw
 # built is stored in its lazy-load database, and the loader's own
 # environments keep a reference to it, which a srcref or a byte-code
 # constant in a snapshot can reach (seen with the source kept, Stage 6).
+# `credential_env` holds the entries and nothing else; `credential_state`
+# the session's nonce and counter.
 credential_env <- NULL
+credential_state <- NULL
 
 .onLoad <- function(libname, pkgname) {
-  assign("credential_env", new.env(parent = emptyenv()), envir = topenv())
+  ns <- topenv()
+  assign("credential_env", new.env(parent = emptyenv()), envir = ns)
+  assign("credential_state", new.env(parent = emptyenv()), envir = ns)
 }
 
-# A handle on `credentials` (a function, or NULL for anonymous requests):
-# an environment holding only an id; the function and its token live in
-# credential_env until the handle is garbage-collected.
-credential_handle <- function(credentials) {
-  credential_env$n <- (credential_env$n %||% 0) + 1
-  id <- paste0("h", format_number(credential_env$n))
+# A handle on `credentials` (a function, or NULL for anonymous requests)
+# for the table at `root` (its URI): an environment holding only an id and
+# that root; the function and its token live in credential_env until the
+# handle is garbage-collected. The id is a random 128-bit nonce made once
+# per session followed by a counter, so that no two sessions make the same
+# id: a snapshot restored in another session finds no entry (#43). The
+# entry keeps the root too, and a handle whose root is not its entry's
+# gets no token.
+credential_handle <- function(credentials, root) {
+  if (is.null(credential_state$nonce)) {
+    credential_state$nonce <- random_hex(16L)
+  }
+  credential_state$n <- (credential_state$n %||% 0) + 1
+  id <- paste0(credential_state$nonce, "-", format_number(credential_state$n))
   handle <- new.env(parent = emptyenv())
   handle$id <- id
-  assign(id, list(fn = credentials, token = NULL), envir = credential_env)
+  handle$root <- root
+  assign(id, list(fn = credentials, token = NULL, root = root), envir = credential_env)
   reg.finalizer(handle, credential_release)
   handle
+}
+
+# `n` random bytes as hexadecimal: from the system's generator where there
+# is one, else from R's, seeded afresh from the clock and the process id and
+# leaving the session's own random stream (`.Random.seed`) as it was.
+random_hex <- function(n) {
+  bytes <- tryCatch(system_random_bytes(n), error = function(e) raw(), warning = function(w) raw())
+  if (length(bytes) != n) {
+    genv <- globalenv()
+    had <- exists(".Random.seed", envir = genv, inherits = FALSE)
+    old <- if (had) get(".Random.seed", envir = genv, inherits = FALSE)
+    on.exit(if (had) assign(".Random.seed", old, envir = genv) else rm(".Random.seed", envir = genv))
+    if (had) rm(".Random.seed", envir = genv)
+    bytes <- as.raw(sample.int(256L, n, replace = TRUE) - 1L)
+  }
+  paste(sprintf("%02x", as.integer(bytes)), collapse = "")
+}
+
+system_random_bytes <- function(n) {
+  if (!file.exists("/dev/urandom")) {
+    return(raw())
+  }
+  con <- file("/dev/urandom", "rb", raw = TRUE)
+  on.exit(close(con))
+  readBin(con, "raw", n)
 }
 
 credential_release <- function(handle) {
@@ -160,8 +199,12 @@ credential_release <- function(handle) {
 }
 
 credential_entry <- function(handle) {
-  id <- handle$id
-  if (!is_string(id) || !exists(id, envir = credential_env, inherits = FALSE)) {
+  id <- if (is.environment(handle)) handle$id
+  root <- if (is.environment(handle)) handle$root
+  entry <- if (is_string(id) && exists(id, envir = credential_env, inherits = FALSE)) {
+    get(id, envir = credential_env, inherits = FALSE)
+  }
+  if (is.null(entry) || !is_string(root) || !identical(entry$root, root)) {
     zulake_abort(
       "auth",
       paste(
@@ -170,7 +213,7 @@ credential_entry <- function(handle) {
       )
     )
   }
-  get(id, envir = credential_env, inherits = FALSE)
+  entry
 }
 
 # The bearer token to send, or NULL for anonymous requests. `refresh`
