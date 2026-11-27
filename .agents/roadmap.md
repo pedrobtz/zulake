@@ -805,6 +805,17 @@ so that its table describes the commit that is submitted.
   ([#39](https://github.com/pedrobtz/zulake/issues/39)): 2.4 s of a 3.2 s
   open for a 20,000-file checkpoint, against 23 to 38 ms for the fixtures;
   correct as it is, only slow on large tables.
+- A cache for `lake_history()` (2026-11-27,
+  [#92](https://github.com/pedrobtz/zulake/issues/92)). Each call reads
+  every commit up to `limit` again, which costs one request per commit on
+  Azure. It could keep the parsed `commitInfo` in the snapshot's
+  `downloads` environment, which holds paths only today. The answer is
+  correct, only slow, and `limit` bounds the cost.
+- The default port in an Azure URI (2026-11-27,
+  [#92](https://github.com/pedrobtz/zulake/issues/92)). Accept `:443` on
+  the three forms, as `deltalake` 1.7.0 does on `abfss`, and when another
+  port is refused, say so in the message instead of "cannot open the
+  scheme". Refused today, which is safe ([§4.1](design.md#41-storage)).
 
 ## Blocking open questions
 
