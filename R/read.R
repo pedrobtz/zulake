@@ -5,7 +5,8 @@
 #' could match are read, then reads each one with qio, adds the partition
 #' columns from the log, keeps the rows `filter` is `TRUE` for, and binds the
 #' pieces. `lake_walk()` does the same one file at a time and calls `FUN` on
-#' each piece instead of binding them, for tables larger than memory.
+#' each piece instead of binding them, for tables larger than memory (but on
+#' Azure not larger than disk; see below).
 #'
 #' `filter` is an unevaluated R expression over column names, with values
 #' from the calling environment (a column's name always means the column).
@@ -65,8 +66,13 @@
 #' `reason`); named in `columns` or used in `filter`, such a column is an
 #' error of class `zulake_error_column_unreadable` with the same fields.
 #'
-#' Data files are read in place on local disk; other stores download each
-#' file once per session, to the session's temporary directory.
+#' Data files are read in place on local disk. On Azure, every file left
+#' after pruning is downloaded to the session's temporary directory
+#' ([tempdir()]) before the first piece is read, by `lake_walk()` too, and
+#' kept there for the rest of the session, so that a later read of the same
+#' file downloads nothing. The disk used is the size of the files left after
+#' pruning: `lake_walk()` reads tables larger than memory, not larger than
+#' the temporary directory's disk.
 #'
 #' Rows a deletion vector marks as deleted are never returned (see
 #' [lake_deletion_vectors()]); reading their vectors needs the zuroar
@@ -140,7 +146,10 @@ lake_walk <- function(tbl, FUN, columns = NULL, filter = NULL, int64 = c("double
 # ---- the read pipeline ------------------------------------------------------
 #
 # read_scan() decides everything before a row is read: refusals, the filter
-# plan, the files that survive pruning (fetched to local paths), each file's
+# plan, the files that survive pruning (fetched to local paths: on Azure
+# every one is downloaded into tempdir() here, before the first piece, and
+# kept for the session, so a read uses disk equal to the pruned files' size,
+# #75), each file's
 # qio read plan, and the columns returned. read_piece() reads one surviving
 # file into a filtered piece; bind_pieces() binds them. Deletion vectors,
 # read in read_scan(), drop rows in read_piece(), between the read and the

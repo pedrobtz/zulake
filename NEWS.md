@@ -211,3 +211,7 @@
   by `is.na()` and `%in% NA` filters whenever its file's null count was 0;
   such a file is now kept unless its minimum is known and above -2^31, so
   equivalent filters agree. `?lake_read` documents the `NA` (#79).
+* `?lake_walk` now says that on Azure every file left after pruning is
+  downloaded to `tempdir()` before the first piece and kept for the
+  session: a walk reads tables larger than memory, not larger than disk
+  (#75).

@@ -359,7 +359,12 @@ without local paths (Azure) downloads each file once per session, keyed by
 path, size and modification time, into the session's temporary
 directory, which R removes when the session ends. Caching across sessions
 is Q4, after 0.1.0 (settled 2026-11-26, Stage 4: no `cache` argument in
-0.1.0, since a per-session cache needs none).
+0.1.0, since a per-session cache needs none). Every file left after
+pruning is downloaded before the first piece, by `lake_walk()` too, and the
+disk this uses, the pruned files' size, is documented in `?lake_walk`
+rather than bounded: larger than memory, not larger than disk (2026-11-27,
+#75: plans before rows is the design's order, and fetching per piece or
+reading footers by range is a later change).
 
 Settled in Stage 4 (2026-11-26):
 
