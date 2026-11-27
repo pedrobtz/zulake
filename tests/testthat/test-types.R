@@ -287,22 +287,24 @@ test_that("time text is range-checked by one parser, at open and in filters (#53
                   "2024-01-01 12:00:00+18:00", "2024-01-01 12:00:00-05:30"),
     timestamp_ntz = c("2024-01-01 23:59:59.999999", "2024-02-29 00:00:00")
   )
+  # Every table has the feature timestamp_ntz needs (#120).
+  ntz <- protocol_line(3L, 7L, "timestampNtz", "timestampNtz")
   for (type in names(bad)) {
     for (x in bad[[type]]) {
       expect_false(partition_value_ok(x, type), label = paste(type, x))
       expect_true(is.na(if (type == "date") parse_date_text(x) else parse_time_text(x, zone = type == "timestamp")),
                   label = paste(type, x))
-      path <- hand_table(c(protocol_line(), metadata_line(c(id = "long", p = type), partition = "p"),
+      path <- hand_table(c(ntz, metadata_line(c(id = "long", p = type), partition = "p"),
                            add_line("a.parquet", partition = list(p = x))))
       expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
       # As a filter literal, against a column of the same type.
-      tbl <- lake_open(hand_table(c(protocol_line(), metadata_line(c(id = "long", p = type), partition = "p"),
+      tbl <- lake_open(hand_table(c(ntz, metadata_line(c(id = "long", p = type), partition = "p"),
                                     add_line("a.parquet", partition = list(p = good[[type]][1L])))))
       expect_error(lake_files(tbl, filter = p > x), class = "zulake_error_filter", label = paste(type, x))
     }
     for (x in good[[type]]) {
       expect_true(partition_value_ok(x, type), label = paste(type, x))
-      path <- hand_table(c(protocol_line(), metadata_line(c(id = "long", p = type), partition = "p"),
+      path <- hand_table(c(ntz, metadata_line(c(id = "long", p = type), partition = "p"),
                            add_line("a.parquet", partition = list(p = x))))
       expect_identical(nrow(lake_files(lake_open(path))), 1L, label = paste(type, x))
     }

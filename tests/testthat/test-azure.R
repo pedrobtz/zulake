@@ -1084,3 +1084,103 @@ test_that("a download that fails while it is written leaves no file in the cache
   expect_length(tbl$downloads$files, 0L)
   expect_identical(nrow(lake_read(tbl)), 3L)
 })
+
+test_that("a log file cut short in transfer is refused before replay, whatever its kind (#122)", {
+  # Each body ends early, without Content-Length; List Blobs (or the
+  # sidecar action) gave the whole size. On main, zl-basic with commit 2 cut
+  # opened with 6 rows instead of 3.
+  log_name <- function(table, pattern, dir = fixture_table(table)) {
+    f <- list.files(file.path(dir, "_delta_log"), pattern = pattern, recursive = TRUE)
+    stopifnot(length(f) == 1L)
+    paste0("_delta_log/", f)
+  }
+  # A copy of `table` without the log files matching `drop`, so that replay
+  # needs the cut file.
+  copy_without <- function(table, drop) {
+    path <- local_fixture_copy(table, env = parent.frame())
+    log <- file.path(path, "_delta_log")
+    unlink(file.path(log, grep(drop, list.files(log), value = TRUE)))
+    path
+  }
+  cases <- list(
+    commit = list(path = fixture_table("zl-basic"), file = "_delta_log/00000000000000000002.json"),
+    last_checkpoint = list(path = fixture_table("zl-checkpoint"), file = "_delta_log/_last_checkpoint"),
+    compaction = list(
+      path = copy_without("zl-log-compaction", "^00000000000000000002[.]json$"),
+      file = "_delta_log/00000000000000000001.00000000000000000003.compacted.json"
+    ),
+    classic_checkpoint = list(
+      path = copy_without("zl-checkpoint", "^0000000000000000000[0-9][.]|^00000000000000000005[.]checkpoint"),
+      file = "_delta_log/00000000000000000010.checkpoint.parquet", checkpoint = 10
+    ),
+    multi_part_checkpoint = list(
+      path = copy_without("zl-multipart-checkpoint", "^0000000000000000000[0-3][.]json$"),
+      file = log_name("zl-multipart-checkpoint", "^00000000000000000004[.]checkpoint[.]0000000002[.]"), checkpoint = 4
+    ),
+    v2_checkpoint = list(
+      path = copy_without("checkpoint-v2-table", "^0000000000000000000[0-7][.]json$|^00000000000000000006[.]checkpoint"),
+      file = log_name("checkpoint-v2-table", "^00000000000000000008[.]checkpoint[.].*[.]json$"), checkpoint = 8
+    ),
+    sidecar = list(
+      path = copy_without("checkpoint-v2-table", "^0000000000000000000[0-7][.]json$|^00000000000000000006[.]checkpoint"),
+      file = log_name("checkpoint-v2-table", "^00000000000000000008[.]checkpoint[.].*[.]parquet$"), checkpoint = 8
+    )
+  )
+  for (kind in names(cases)) {
+    case <- cases[[kind]]
+    root <- dirname(case$path)
+    table <- basename(case$path)
+    size <- file.size(file.path(case$path, case$file))
+    local_azure_fake(azure_fake(root, new.env(), override = cut_blob(root, paste0(table, "/", case$file))))
+    tbl <- "untouched"
+    err <- tryCatch(tbl <- lake_open(fake_uri(table)), error = identity)
+    expect_identical(tbl, "untouched", label = kind)
+    if (is.null(case$checkpoint)) {
+      expect_s3_class(err, "zulake_error_storage")
+    } else {
+      expect_s3_class(err, "zulake_error_checkpoint_unreadable")
+      expect_identical(err$checkpoint, case$checkpoint, label = kind)
+    }
+    cause <- cause_of_class(err, "zulake_error_storage")
+    expect_false(is.null(cause), label = kind)
+    expect_identical(cause$path, case$file, label = kind)
+    expect_identical(cause$listed_size, size, label = kind)
+    expect_true(cause$size < size, label = kind)
+    expect_match(conditionMessage(cause), sprintf("has %.0f bytes, but", cause$size), fixed = TRUE, label = kind)
+  }
+  # A version that does not read the cut commit opens, and a cut
+  # compaction file is passed over while its commits are all in the log.
+  local_azure_fake(azure_fake(fake_root(), new.env(), override = cut_blob(fake_root(), "zl-basic/_delta_log/00000000000000000002.json")))
+  expect_oracle(replay_files_frame(lake_open(fake_uri("zl-basic"), version = 1), "path"), "zl-basic", 1, "add_actions")
+  cut <- cut_blob(fake_root(), "zl-log-compaction/_delta_log/00000000000000000001.00000000000000000003.compacted.json")
+  local_azure_fake(azure_fake(fake_root(), new.env(), override = cut))
+  expect_oracle(replay_files_frame(lake_open(fake_uri("zl-log-compaction")), "path"), "zl-log-compaction", 5, "add_actions")
+})
+
+test_that("a local log file whose size differs from the listing's is refused (#122)", {
+  # The listing and the read are two looks at the disk; a file changed
+  # between them is refused, as on Azure. A Parquet checkpoint is read
+  # through its local path, checked the same way.
+  for (case in list(
+    list(table = "zl-basic", file = "00000000000000000002.json", class = "zulake_error_storage"),
+    list(table = "zl-checkpoint-no-last", file = "00000000000000000002.checkpoint.parquet", class = "zulake_error_storage")
+  )) {
+    path <- local_fixture_copy(case$table)
+    if (endsWith(case$file, ".parquet")) {
+      unlink(file.path(path, "_delta_log", sprintf("%020d.json", 0:1)))
+    }
+    storage <- storage_local(path)
+    local <- storage
+    storage$list <- function(prefix, after = NULL) {
+      x <- local$list(prefix, after)
+      x$size[x$name == case$file] <- x$size[x$name == case$file] + 1
+      x
+    }
+    err <- tryCatch(snapshot_build(storage, path), error = identity)
+    cause <- cause_of_class(err, case$class)
+    expect_false(is.null(cause), label = case$file)
+    expect_identical(cause$path, paste0("_delta_log/", case$file))
+    want <- file.size(file.path(path, "_delta_log", case$file))
+    expect_identical(c(cause$size, cause$listed_size), c(want, want + 1))
+  }
+})

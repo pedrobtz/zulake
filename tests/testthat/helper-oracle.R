@@ -120,6 +120,19 @@ oracle_refusal <- function(table, version) {
   oracle_answer(table, version)$refusal
 }
 
+# deltalake's refusal of the hostile log `name` at its last version
+# (list(class, message), fixtures/hostile-answers.json), or NULL when it
+# opened and read it.
+hostile_refusal <- function(name) {
+  if (is.null(oracle_env$hostile)) {
+    oracle_env$hostile <- zujson::json_parse_file(testthat::test_path("fixtures", "hostile-answers.json"))
+  }
+  if (!name %in% names(oracle_env$hostile)) {
+    stop("no deltalake answer for hostile log ", name, call. = FALSE)
+  }
+  oracle_env$hostile[[name]]$refusal
+}
+
 # ---- comparison ------------------------------------------------------------
 
 # A value in canonical form: every scalar as text, so that a double, an

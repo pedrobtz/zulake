@@ -456,7 +456,7 @@ test_that("partition values of every type parse as the protocol serialises them"
   values <- list(b = "-128", s = "32767", i = "-2147483648", l = "-9007199254740991", f = "-Infinity", d = "1.5e-300",
                  t = "TRUE", dt = "0001-01-01", ts = "2024-01-02 03:04:05.123456", ntz = "2024-01-02T03:04:05",
                  dec = "-0.10", str = "")
-  path <- hand_table(c(protocol_line(), metadata_line(types, partition = names(types)),
+  path <- hand_table(c(protocol_line(3L, 7L, "timestampNtz", "timestampNtz"), metadata_line(types, partition = names(types)),
                        add_line("a.parquet", partition = values)))
   p <- lake_files(lake_open(path))$partition[[1L]]
   expect_identical(p$b, -128L)

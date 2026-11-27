@@ -57,11 +57,12 @@ read_checkpoint <- function(storage, set, read) {
   tryCatch(
     {
       actions <- list()
-      for (name in set$name) {
+      for (i in seq_along(set$name)) {
+        name <- set$name[i]
         part <- if (endsWith(name, ".json")) {
           read(name)
         } else {
-          log_parquet_actions(storage, paste0(log_dir, name))
+          log_parquet_actions(storage, paste0(log_dir, name), set$size[i])
         }
         actions <- c(actions, part)
       }
@@ -122,7 +123,9 @@ qio_read <- function(expr) {
 }
 
 # A V2 sidecar's add and remove actions. Its `path` names a file in
-# `_delta_log/_sidecars/`, as the protocol requires sidecars to be.
+# `_delta_log/_sidecars/`, as the protocol requires sidecars to be, and its
+# `sizeInBytes` the size the file must have (#122); a sidecar action
+# without a whole `sizeInBytes` gives no size to check.
 sidecar_actions <- function(storage, sidecar, checkpoint) {
   path <- sidecar[["path"]]
   if (!is_string(path) || !nzchar(path) || grepl("/", path, fixed = TRUE)) {
@@ -132,9 +135,12 @@ sidecar_actions <- function(storage, sidecar, checkpoint) {
       "whose `path` is not a file name in `_delta_log/_sidecars/`"
     )
   }
+  size <- sidecar[["sizeInBytes"]]
   actions <- log_parquet_actions(
     storage,
-    paste0(log_dir, "_sidecars/", percent_decode(path))
+    paste0(log_dir, "_sidecars/", percent_decode(path)),
+    if (is_whole(size)) as.numeric(size) else NA_real_,
+    from = "its sidecar action gives"
   )
   Filter(function(a) !is.null(a[["add"]]) || !is.null(a[["remove"]]), actions)
 }
@@ -158,14 +164,25 @@ checkpoint_actions <- c(
 parsed_field <- function(path) grepl("^[^.]+[.][^.]*_parsed$", path)
 
 # One Parquet log file (a checkpoint, a part of one, or a sidecar) as a list
-# of actions, one per row that holds one, in row order.
-log_parquet_actions <- function(storage, path) {
+# of actions, one per row that holds one, in row order. The file must have
+# `size` bytes, the size its listing (or, `from`, its sidecar action) gives
+# (#122).
+log_parquet_actions <- function(
+  storage,
+  path,
+  size,
+  from = "its listing gives"
+) {
   file <- if (is.function(storage$local_path)) {
-    storage$local_path(path)
+    local <- storage$local_path(path)
+    check_log_size(path, file.size(local), size, from)
+    local
   } else {
+    bytes <- storage$get(path)
+    check_log_size(path, length(bytes), size, from)
     tmp <- tempfile(fileext = ".parquet")
     on.exit(unlink(tmp), add = TRUE)
-    writeBin(storage$get(path), tmp)
+    writeBin(bytes, tmp)
     tmp
   }
   plan <- qio_read(qio::read_plan(file))

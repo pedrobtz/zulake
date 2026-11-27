@@ -703,13 +703,16 @@ test_that("two adds of one path are refused even when they are the same action, 
   expect_identical(files$size_bytes[files$path == "b.parquet"], 2)
 })
 
-test_that("a compaction file with two adds of one path is a corrupt log, and a checkpoint is not checked (#106)", {
+test_that("a compaction file with two adds of one file is a corrupt log when needed, and a checkpoint is not checked (#106, #117)", {
   path <- local_fixture_copy("zl-log-compaction")
   name <- "00000000000000000001.00000000000000000003.compacted.json"
   f <- file.path(path, "_delta_log", name)
   lines <- readLines(f, warn = FALSE, encoding = "UTF-8")
   j <- which(startsWith(lines, "{\"add\":{"))[1L]
   writeLines(append(lines, lines[j], after = j), f, useBytes = TRUE)
+  # Passed over for the commits it covers while they are all in the log.
+  expect_oracle(replay_files_frame(lake_open(path), "path"), "zl-log-compaction", 5, "add_actions")
+  unlink(file.path(path, "_delta_log", "00000000000000000002.json"))
   err <- tryCatch(lake_open(path), error = identity)
   expect_s3_class(err, "zulake_error_corrupt_log")
   expect_identical(err$file, name)
@@ -832,4 +835,238 @@ test_that("a decimal partition value the comparator cannot read or the type cann
                        label = paste(value, deparse(expr)))
     }
   }
+})
+
+# ---- two actions on one line (#121) ------------------------------------------
+
+test_that("a line holding two actions is a corrupt log naming the file and the line (#121)", {
+  # deltalake 1.7.0 opens it and applies the add alone; zulake applied both.
+  expect_null(hostile_refusal("two-actions-one-line"))
+  path <- fixture_table("two-actions-one-line", "hostile")
+  for (version in list(NULL, 2, 3, 4)) {
+    expect_no_snapshot(lake_open(path, version = version), "zulake_error_corrupt_log")
+  }
+  err <- tryCatch(lake_open(path), error = identity)
+  expect_identical(err[c("file", "line")], list(file = "00000000000000000002.json", line = 2L))
+  expect_match(conditionMessage(err), "line 2 of log file \"00000000000000000002.json\" holds the actions \"add\" and \"remove\"", fixed = TRUE)
+  expect_oracle(replay_files_frame(lake_open(path, version = 1), "path"), "zl-basic", 1, "add_actions")
+  # Any two keys on a line, known actions or not; one unknown action alone
+  # is still ignored.
+  path <- hand_table(c(protocol_line(), metadata_line(), "{\"add\":{\"path\":\"a\",\"size\":1,\"partitionValues\":{}},\"newAction\":{}}"))
+  expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
+  path <- hand_table(c(protocol_line(), metadata_line(), "{\"newAction\":{}}", add_line("a")))
+  expect_identical(lake_open(path)$files$path, "a")
+})
+
+test_that("a compaction file or a JSON V2 checkpoint with two actions on a line is passed over, and refused when needed (#121)", {
+  path <- local_fixture_copy("zl-log-compaction")
+  name <- "00000000000000000001.00000000000000000003.compacted.json"
+  f <- file.path(path, "_delta_log", name)
+  lines <- readLines(f, warn = FALSE, encoding = "UTF-8")
+  stopifnot(startsWith(lines[1L], "{\"add\":{"), endsWith(lines[1L], "}}"))
+  lines[1L] <- sub("}$", ",\"txn\":{\"appId\":\"a\",\"version\":1}}", lines[1L])
+  writeLines(lines, f, useBytes = TRUE)
+  for (version in oracle_versions("zl-log-compaction")) {
+    expect_oracle(replay_files_frame(lake_open(path, version = version), "path"), "zl-log-compaction", version, "add_actions")
+  }
+  unlink(file.path(path, "_delta_log", "00000000000000000002.json"))
+  for (version in 3:5) expect_no_snapshot(lake_open(path, version = version), "zulake_error_corrupt_log")
+  err <- tryCatch(lake_open(path), error = identity)
+  expect_identical(err[c("file", "line")], list(file = name, line = 1L))
+
+  path <- hand_table()
+  write_commit(path, 1, add_line("part-1.parquet"))
+  two <- sub("}$", paste0(",", substring(add_line("part-1.parquet"), 2L)), metadata_line())
+  name <- write_json_checkpoint(path, 1, c(protocol_line(3L, 7L, "v2Checkpoint", "v2Checkpoint"), two, add_line("part-0.parquet")))
+  expect_identical(lake_open(path)$files$path, c("part-0.parquet", "part-1.parquet"))
+  unlink(file.path(path, "_delta_log", "00000000000000000000.json"))
+  err <- tryCatch(lake_open(path), error = identity)
+  expect_s3_class(err, "zulake_error_checkpoint_unreadable")
+  cause <- err$parent
+  while (!is.null(cause) && !inherits(cause, "zulake_error_corrupt_log")) cause <- cause$parent
+  expect_identical(cause[c("file", "line")], list(file = basename(name), line = 2L))
+})
+
+# ---- compaction files hold a reconciled range (#117) ---------------------------
+
+test_that("a compaction file with two tombstones of one path under two deletion vectors is read (#117)", {
+  # Commit 1 updates f0's deletion vector, commit 2 removes it with that
+  # vector and adds f1. Reconciled by (path, deletionVector.uniqueId), the
+  # range 1-2 holds both tombstones of f0, as the protocol requires.
+  # deltalake 1.7.0 reads the commits; zulake refused the compaction file
+  # and did not fall back to them.
+  dv <- list(storageType = "u", pathOrInlineDv = "vBn[lx{q8@P<9BNH/isA", offset = 1L, sizeInBytes = 36L, cardinality = 2L)
+  path <- hand_table(c(protocol_line(3L, 7L, "deletionVectors", "deletionVectors"), metadata_line(), add_line("f0.parquet")))
+  write_commit(path, 1, c(remove_line("f0.parquet"), add_line("f0.parquet", dv = dv)))
+  write_commit(path, 2, c(remove_line("f0.parquet", dv = dv), add_line("f1.parquet")))
+  commits <- lake_open(path)
+  compacted <- file.path(path, "_delta_log", "00000000000000000001.00000000000000000002.compacted.json")
+  writeLines(c(remove_line("f0.parquet"), remove_line("f0.parquet", dv = dv), add_line("f1.parquet")), compacted)
+  # Commit 1 gone: replay needs the compaction file, and reads it.
+  unlink(file.path(path, "_delta_log", "00000000000000000001.json"))
+  tbl <- lake_open(path)
+  expect_identical(tbl$files, commits$files)
+  expect_identical(tbl$removed[c("path", "deletion_vector_id")], commits$removed[c("path", "deletion_vector_id")])
+  expect_identical(tbl$removed$deletion_vector_id, c("", "uvBn[lx{q8@P<9BNH/isA@1"))
+  # One logical file twice in a compaction file is still refused, and an
+  # add with a remove of it; the same path with another vector is not.
+  bad <- list(
+    adds = c(add_line("f1.parquet"), add_line("f1.parquet")),
+    removes = c(remove_line("f0.parquet", dv = dv), remove_line("f0.parquet", dv = dv), add_line("f1.parquet")),
+    both = c(remove_line("f0.parquet"), add_line("f1.parquet"), remove_line("f1.parquet"))
+  )
+  for (case in names(bad)) {
+    writeLines(bad[[case]], compacted)
+    err <- tryCatch(lake_open(path), error = identity)
+    expect_s3_class(err, "zulake_error_corrupt_log")
+    expect_identical(err$file, basename(compacted), label = case)
+  }
+  writeLines(c(remove_line("f0.parquet"), add_line("f0.parquet", dv = dv), add_line("f1.parquet")), compacted)
+  expect_identical(lake_open(path)$files$path, c("f0.parquet", "f1.parquet"))
+})
+
+test_that("a compaction file the action checks refuse is passed over for its commits, and refused when needed (#117)", {
+  path <- local_fixture_copy("zl-log-compaction")
+  name <- "00000000000000000001.00000000000000000003.compacted.json"
+  f <- file.path(path, "_delta_log", name)
+  lines <- readLines(f, warn = FALSE, encoding = "UTF-8")
+  j <- which(startsWith(lines, "{\"add\":{"))[1L]
+  checks <- list(
+    two_adds = append(lines, lines[j], after = j),
+    add_without_size = c(lines, "{\"add\":{\"path\":\"x.parquet\",\"partitionValues\":{}}}"),
+    two_protocols = c(lines, protocol_line(), protocol_line())
+  )
+  for (case in names(checks)) {
+    copy <- local_copy_dir(path)
+    writeLines(checks[[case]], file.path(copy, "_delta_log", name), useBytes = TRUE)
+    for (version in oracle_versions("zl-log-compaction")) {
+      expect_oracle(replay_files_frame(lake_open(copy, version = version), "path"), "zl-log-compaction", version, "add_actions")
+    }
+    unlink(file.path(copy, "_delta_log", "00000000000000000002.json"))
+    for (version in 3:5) expect_no_snapshot(lake_open(copy, version = version), "zulake_error_corrupt_log")
+    expect_identical(tryCatch(lake_open(copy), error = identity)$file, name, label = case)
+  }
+})
+
+# ---- the schema, validated at open (#120) --------------------------------------
+
+test_that("a schema zulake cannot read as written is refused at open, naming the field (#120)", {
+  cases <- list(
+    "schema-unknown-type" = list("corrupt_log", "label", "type \"varchar(10)\""),
+    "schema-upper-case-type" = list("corrupt_log", "label", "type \"STRING\""),
+    "schema-field-without-type" = list("corrupt_log", "label", "has no type"),
+    "schema-duplicate-name" = list("corrupt_log", "label", "two fields named \"label\""),
+    "schema-field-without-name" = list("corrupt_log", NULL, "field 3 of the schema has no name"),
+    "schema-empty-name" = list("corrupt_log", NULL, "field 3 of the schema has no name"),
+    "schema-variant-without-feature" = list("unsupported_feature", "label", "reader feature \"variantType\""),
+    "schema-timestamp-ntz-without-feature" = list("unsupported_feature", "label", "reader feature \"timestampNtz\"")
+  )
+  for (name in names(cases)) {
+    case <- cases[[name]]
+    # deltalake 1.7.0 refuses each but the empty name, which it reads as a
+    # column named "".
+    refusal <- hostile_refusal(name)
+    if (name == "schema-empty-name") expect_null(refusal) else expect_false(is.null(refusal), label = name)
+    path <- fixture_table(name, "hostile")
+    for (version in list(NULL, 0, 4)) {
+      expect_no_snapshot(lake_open(path, version = version), paste0("zulake_error_", case[[1L]]))
+    }
+    err <- tryCatch(lake_open(path), error = identity)
+    expect_identical(err$column, case[[2L]], label = name)
+    expect_match(conditionMessage(err), case[[3L]], fixed = TRUE, label = name)
+  }
+  expect_identical(tryCatch(lake_open(fixture_table("schema-variant-without-feature", "hostile")), error = identity)$feature, "variantType")
+  expect_identical(tryCatch(lake_open(fixture_table("schema-timestamp-ntz-without-feature", "hostile")), error = identity)$feature, "timestampNtz")
+})
+
+test_that("two fields with one physical name in name mode are a corrupt log (#120)", {
+  # Commit 0 gives `int` the physical name of `letter`; commit 2's schema
+  # has its own again. deltalake 1.7.0 refuses such a schema ("Duplicate
+  # `delta.columnMapping.physicalName`") and opens the last version.
+  expect_null(hostile_refusal("column-mapping-duplicate-physical-name"))
+  path <- fixture_table("column-mapping-duplicate-physical-name", "hostile")
+  for (version in 0:1) expect_no_snapshot(lake_open(path, version = version), "zulake_error_corrupt_log")
+  err <- tryCatch(lake_open(path, version = 0), error = identity)
+  expect_identical(err$column, "int")
+  expect_match(conditionMessage(err), "\"letter\" and \"int\"", fixed = TRUE)
+  for (version in 2:3) {
+    expect_oracle(replay_files_frame(lake_open(path, version = version), "path"), "column_mapping", version, "add_actions")
+  }
+})
+
+test_that("nested schemas are checked at every level, and every type of the protocol opens (#120)", {
+  field <- function(name, type, md = NULL) {
+    f <- list(name = name, type = type, nullable = TRUE, metadata = md %||% structure(list(), names = character()))
+    if (is.null(name)) f$name <- NULL
+    f
+  }
+  meta <- function(fields, configuration = list()) {
+    conf <- if (length(configuration)) configuration else structure(list(), names = character())
+    json_line(list(metaData = list(
+      id = "t", format = list(provider = "parquet", options = structure(list(), names = character())),
+      schemaString = json_line(list(type = "struct", fields = fields)), partitionColumns = I(character()),
+      configuration = conf
+    )))
+  }
+  struct <- function(...) list(type = "struct", fields = list(...))
+  open_schema <- function(fields, protocol = protocol_line(), configuration = list()) {
+    path <- hand_table(c(protocol, meta(fields, configuration), add_line("a")), env = parent.frame())
+    tryCatch(lake_open(path), error = identity)
+  }
+  ok <- list(
+    field("s", "string"), field("l", "long"), field("i", "integer"), field("h", "short"), field("b", "byte"),
+    field("f", "float"), field("d", "double"), field("t", "boolean"), field("y", "binary"), field("e", "date"),
+    field("ts", "timestamp"), field("d1", "decimal(1,0)"), field("d38", "decimal(38,38)"), field("dsp", "decimal(5, 2)"),
+    field("a", list(type = "array", elementType = "long", containsNull = TRUE)),
+    field("m", list(type = "map", keyType = "string", valueType = struct(field("v", "long")), valueContainsNull = TRUE)),
+    field("st", struct(field("x", "long"), field("X", "long")))
+  )
+  expect_s3_class(open_schema(ok), "zulake_table")
+  ntz <- protocol_line(3L, 7L, "timestampNtz", "timestampNtz")
+  expect_s3_class(open_schema(list(field("n", struct(field("t", "timestamp_ntz")))), ntz), "zulake_table")
+  corrupt <- list(
+    list(field("a", list(type = "array", elementType = "varchar(3)", containsNull = TRUE)), "a.element", "varchar(3)"),
+    list(field("a", list(type = "array", containsNull = TRUE)), "a", "has no element type"),
+    list(field("m", list(type = "map", valueType = "long", valueContainsNull = TRUE)), "m", "has no key type"),
+    list(field("m", list(type = "map", keyType = "long", valueContainsNull = TRUE)), "m", "has no value type"),
+    list(field("s", struct(field("y", "long"), field("y", "long"))), "s.y", "two fields named \"y\""),
+    list(field("s", struct(field(NULL, "long"))), "s", "field 1 of \"s\" has no name"),
+    list(field("s", list(type = "struct")), "s", "has no fields"),
+    list(field("x", list(type = "tuple")), "x", "type \"tuple\""),
+    list(field("x", 3L), "x", "has no type"),
+    list(field("x", "decimal"), "x", "type \"decimal\""),
+    list(field("x", "decimal(39,0)"), "x", "type \"decimal(39,0)\""),
+    list(field("x", "decimal(0,0)"), "x", "type \"decimal(0,0)\""),
+    list(field("x", "decimal(5,6)"), "x", "type \"decimal(5,6)\""),
+    list(field("x", "void"), "x", "type \"void\""),
+    list(field("x", "interval day to second"), "x", "type \"interval day to second\""),
+    list(list(name = 3L, type = "long"), NULL, "field 2 of the schema has no name")
+  )
+  for (case in corrupt) {
+    err <- open_schema(list(field("id", "long"), case[[1L]]))
+    label <- case[[3L]]
+    expect_s3_class(err, "zulake_error_corrupt_log")
+    expect_identical(err$column, case[[2L]], label = label)
+    expect_match(conditionMessage(err), case[[3L]], fixed = TRUE, label = label)
+  }
+  for (type in list("variant", list(type = "array", elementType = "variant", containsNull = TRUE))) {
+    err <- open_schema(list(field("v", type)))
+    expect_s3_class(err, "zulake_error_unsupported_feature")
+    expect_identical(err$feature, "variantType")
+  }
+  err <- open_schema(list(field("n", struct(field("t", "timestamp_ntz")))), protocol_line(3L, 7L, character(), character()))
+  expect_s3_class(err, "zulake_error_unsupported_feature")
+  expect_identical(err[c("feature", "column")], list(feature = "timestampNtz", column = "n.t"))
+  # Name mode: physical names unique at each level of the schema.
+  cm <- list(delta.columnMapping.mode = "name")
+  pn <- function(x) list(delta.columnMapping.physicalName = x)
+  err <- open_schema(
+    list(field("a", "long", pn("c1")), field("s", struct(field("p", "long", pn("c3")), field("q", "long", pn("c3"))), pn("c2"))),
+    protocol_line(2L, 5L), cm
+  )
+  expect_s3_class(err, "zulake_error_corrupt_log")
+  expect_identical(err$column, "s.q")
+  # A physical name that is another field's logical name is legal.
+  tbl <- open_schema(list(field("a", "long", pn("b")), field("b", "long", pn("a"))), protocol_line(2L, 5L), cm)
+  expect_s3_class(tbl, "zulake_table")
 })

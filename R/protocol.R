@@ -192,6 +192,188 @@ check_physical_names <- function(metadata, mode) {
   invisible()
 }
 
+# ---- the schema ----------------------------------------------------------
+
+# Primitive types the protocol defines ("Primitive Types"), as the schema
+# writes them, besides `decimal(p, s)`.
+delta_primitive_types <- c(
+  "string",
+  "long",
+  "integer",
+  "short",
+  "byte",
+  "float",
+  "double",
+  "boolean",
+  "binary",
+  "date",
+  "timestamp",
+  "timestamp_ntz",
+  "variant"
+)
+
+# Types a table may hold only with a reader feature its protocol declares.
+type_features <- c(timestamp_ntz = "timestampNtz", variant = "variantType")
+
+# The schema of the snapshot, checked once at open, at every level of
+# nesting (#120): every field an object with a non-empty `name` and a type
+# the protocol defines (a primitive type, `decimal(p, s)` with p from 1 to
+# 38 and s from 0 to p, or a struct, array or map with its members), no two
+# fields of one struct with one name (compared byte for byte), and in name
+# mode no two with one physical name. Any of these is a corrupt log. A type
+# that needs a reader feature the protocol does not declare (`variant`,
+# `timestamp_ntz`) is a zulake_error_unsupported_feature naming the
+# feature. Unrefused, a field without a name failed the read with a base R
+# error, an unknown type read whatever the file held, and two fields of one
+# name read as one column.
+check_schema <- function(protocol, metadata, mode, version) {
+  bad <- function(message, column = NULL) {
+    zulake_abort("corrupt_log", message, column = column)
+  }
+  features <- reader_features(protocol)
+  type <- function(t, path) {
+    if (is_string(t)) {
+      ps <- decimal_ps(t)
+      decimal <- !is.null(ps) &&
+        ps[["precision"]] >= 1 &&
+        ps[["precision"]] <= 38 &&
+        ps[["scale"]] <= ps[["precision"]]
+      if (!decimal && !t %in% delta_primitive_types) {
+        bad(
+          sprintf(
+            "field %s has the type %s, which is not a Delta type.",
+            format_string(path),
+            format_string(t)
+          ),
+          path
+        )
+      }
+      feature <- unname(type_features[t])
+      if (!is.na(feature) && !feature %in% features) {
+        zulake_abort(
+          "unsupported_feature",
+          sprintf(
+            paste(
+              "Version %s of this table has a %s column %s, which needs",
+              "reader feature %s, and its protocol does not declare it."
+            ),
+            format_number(version),
+            t,
+            format_string(path),
+            format_string(feature)
+          ),
+          feature = feature,
+          column = path,
+          version = version,
+          protocol = protocol_frame(protocol, metadata)
+        )
+      }
+      return(invisible())
+    }
+    kind <- if (is.list(t) && !is.null(names(t))) t[["type"]]
+    if (!is_string(kind)) {
+      bad(sprintf("field %s has no type.", format_string(path)), path)
+    }
+    member <- function(key, what) {
+      if (is.null(t[[key]])) {
+        bad(
+          sprintf(
+            "field %s is %s that has no %s.",
+            format_string(path),
+            if (kind == "array") "an array" else "a map",
+            what
+          ),
+          path
+        )
+      }
+      t[[key]]
+    }
+    switch(
+      kind,
+      struct = {
+        f <- t[["fields"]]
+        if (
+          !(is.list(f) && is.null(names(f))) && !(is.logical(f) && !length(f))
+        ) {
+          bad(
+            sprintf(
+              "field %s is a struct that has no fields.",
+              format_string(path)
+            ),
+            path
+          )
+        }
+        fields(as.list(f), path)
+      },
+      array = type(
+        member("elementType", "element type"),
+        paste0(path, ".element")
+      ),
+      map = {
+        type(member("keyType", "key type"), paste0(path, ".key"))
+        type(member("valueType", "value type"), paste0(path, ".value"))
+      },
+      bad(
+        sprintf(
+          "field %s has the type %s, which is not a Delta type.",
+          format_string(path),
+          format_string(kind)
+        ),
+        path
+      )
+    )
+    invisible()
+  }
+  fields <- function(fs, parent) {
+    where <- if (is.null(parent)) "the schema" else format_string(parent)
+    names <- character(length(fs))
+    for (i in seq_along(fs)) {
+      f <- fs[[i]]
+      if (!is.list(f) || is.null(names(f))) {
+        bad(sprintf("field %d of %s is not an object.", i, where), parent)
+      }
+      if (!is_string(f[["name"]]) || !nzchar(f[["name"]])) {
+        bad(sprintf("field %d of %s has no name.", i, where), parent)
+      }
+      names[i] <- f[["name"]]
+    }
+    paths <- if (is.null(parent)) names else paste0(parent, ".", names)
+    d <- anyDuplicated(enc2utf8(names))
+    if (d) {
+      bad(
+        sprintf("%s has two fields named %s.", where, format_string(names[d])),
+        paths[d]
+      )
+    }
+    if (mode == "name") {
+      physical <- vapply(fs, field_physical_name, "")
+      named <- which(!is.na(physical))
+      d <- anyDuplicated(physical[named])
+      if (d) {
+        j <- named[d]
+        i <- named[match(physical[j], physical[named])]
+        bad(
+          sprintf(
+            paste(
+              "fields %s and %s have one physical name, %s, which column",
+              "mapping in \"name\" mode does not allow."
+            ),
+            format_string(names[i]),
+            format_string(names[j]),
+            format_string(physical[j])
+          ),
+          paths[j]
+        )
+      }
+    }
+    for (i in seq_along(fs)) {
+      type(fs[[i]][["type"]], paths[i])
+    }
+    invisible()
+  }
+  fields(metadata[["schema"]][["fields"]], NULL)
+}
+
 # ---- partition values ----------------------------------------------------
 
 # Every live file's partition values are what the column's Delta type

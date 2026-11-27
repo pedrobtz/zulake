@@ -191,6 +191,23 @@ Settled in Stage 6 (2026-11-26):
   text; anything else is a `zulake_error_storage` (2026-11-27, #68:
   `as.numeric()` took `Inf`, `0x10`, `1e3`, `" 12 "` and rounded past
   2^53).
+- **Log file sizes** (2026-11-27, #122). Every log file replay reads
+  (commits, compaction files, classic, multi-part and V2 checkpoints,
+  `_last_checkpoint`) must have the size the `_delta_log/` listing gives
+  it: List Blobs' `Content-Length` on Azure, `file.size()` at listing time
+  on local disk (compared with the bytes `get()` returns, or with
+  `file.size()` of the path a Parquet file is read from). A V2 sidecar,
+  which is not in that listing, must have its action's `sizeInBytes`, when
+  that is a whole number. A difference is a `zulake_error_storage` with
+  `path`, `size` (the bytes read) and `listed_size`, raised before the
+  file is parsed; for a checkpoint it is a read failure, passed over as
+  §4.2 says. Why: a server that closes the connection without a
+  `Content-Length` ends the body early, which zuhttp accepts, and a commit
+  cut at a line boundary parses as a shorter commit (`zl-basic` read 6
+  rows instead of 3); data files were already checked against the log's
+  sizes, log files against nothing. A file rewritten between the listing
+  and its read (only `_last_checkpoint` is rewritten in place) is refused
+  the same way; opening again reads it whole.
 - **Credentials (D4).** `credentials()` is called before the first request
   of a snapshot's backend and once more after a `401`; the new token is
   kept for later requests. A second `401`, or a `403`, is a
@@ -286,9 +303,15 @@ a choice:
   #103).
 - *Two adds, or two removes, of one path inside one commit* are a
   `zulake_error_corrupt_log` naming the file and the `path`, whatever
-  their deletion vectors and whether or not the two actions differ; a log
-  compaction file is held to the same rule, a checkpoint is not
-  (2026-11-27, #106, on a design adviser's recommendation). A remove of
+  their deletion vectors and whether or not the two actions differ; a
+  checkpoint is not checked (2026-11-27, #106, on a design adviser's
+  recommendation). A log compaction file is held to the rule by logical
+  file only: two adds, or two removes, of one `(path, dvId)` are refused,
+  two of one path under two deletion vectors are not (2026-11-27, #117:
+  the rule is for one version, and a compaction file reconciles a range,
+  in which a path whose vector changes twice leaves two tombstones, as
+  reconciliation by `(path, dvId)` requires; zulake refused such a file,
+  where `deltalake` 1.7.0 reads the commits). A remove of
   `(path, dvA)` with an add of `(path, dvB)` stays legal, as above. Why:
   PROTOCOL.md ("Delta Log Entries") allows a version at most one file
   action of a type per `(path, dvId)`, "and for simplicity" at most one
@@ -342,14 +365,55 @@ a choice:
   passed over for an earlier checkpoint or commit 0, and is a
   `zulake_error_checkpoint_unreadable` when replay needs it, like a JSON
   checkpoint with a repeated key (2026-11-27, #108).
+- *One action per line* (2026-11-27, #121). A line of a JSON log file (a
+  commit, a compaction file, a JSON V2 checkpoint) whose object has more
+  than one key is a `zulake_error_corrupt_log` with `file` and `line`,
+  whatever the keys, known actions or not; a line with one unknown action
+  is still ignored. Why: PROTOCOL.md stores every action as a single-line
+  JSON document, and `{"add":{...},"remove":{...}}` was applied whole by
+  zulake while `deltalake` 1.7.0 applies the add alone (it opens such a
+  log, `hostile-answers.json`), the silent disagreement of #102. A key
+  repeated on the line is reported as that (#102) first. Hostile log
+  `two-actions-one-line`.
+- *The schema* is checked once when the snapshot is built, on the
+  `metaData` in force, at every level of nesting (2026-11-27, #120). A
+  type the protocol does not define, a field without a `type`, a field
+  without a `name` or with `""`, two fields of one struct with one name,
+  and in `name` mode two fields of one struct with one physical name are
+  a `zulake_error_corrupt_log` whose `column` names the field (a dotted
+  path, `s.y`, `a.element`, `m.key`). The types are the protocol's
+  primitive types, `decimal(p, s)` with `p` from 1 to 38 and `s` from 0
+  to `p` (spaces after the comma allowed, as `deltalake` reads them), and
+  `struct`, `array` and `map` with their members. A type whose reader
+  feature the protocol does not declare (`timestamp_ntz` without
+  `timestampNtz`, `variant` without `variantType`, which zulake refuses
+  anyway) is a `zulake_error_unsupported_feature` with `feature` and
+  `column`. Why: such schemas opened, then read whatever the files held
+  (`varchar(10)`, `STRING`), read two fields as one column, or failed in
+  `lake_read()` with a base R error. Against `deltalake` 1.7.0
+  (`hostile-answers.json`; the hand-written cases by
+  `tools/oracle`'s environment): it refuses every one of these but four.
+  It reads a field named `""`, which zulake refuses (R cannot name a
+  column so). It reads `void` and `interval day to second`, which are not
+  in PROTOCOL.md; zulake refuses them, since nothing says what their
+  values are. It compares names case-insensitively, refusing `id` beside
+  `ID`, which zulake reads as two columns, as the Parquet files hold
+  them; and it opened a schema with a non-ASCII name twice (`"\u00e9"`),
+  which zulake refuses. Both refuse two fields of one struct with one
+  physical name, nested or not.
+  Hostile logs `schema-*` and `column-mapping-duplicate-physical-name`.
 - *Log compaction files* replace the commits they cover whenever one
   starts where replay stands and ends at or before the target version
   (the one reaching furthest, of several). Why: the protocol makes them
   equivalent to those commits; a log whose old commits were cleaned up
   but compacted still opens. A compaction file that cannot be read (not
-  JSON, gone) is passed over for the commits it covers when they are all
-  in the log, as an unreadable checkpoint is, and is a corrupt log only
-  when replay needs it; an authentication failure is never passed over.
+  JSON, gone, cut short), or whose actions the checks of this section
+  refuse (two actions of one logical file, an add without a `size`, two
+  `protocol` actions; 2026-11-27, #117), is passed over for the commits
+  it covers when they are all in the log, as an unreadable checkpoint is,
+  and is a corrupt log only when replay needs it; an authentication
+  failure is never passed over. Its actions are checked whole before any
+  is applied, so a file passed over leaves nothing in the state.
   A name `<x>.<y>.compacted.json` with `y` not greater than `x`, which the
   protocol does not define, is not a log file and is left out of the
   listing (2026-11-27, #69, on a design adviser's recommendation: a

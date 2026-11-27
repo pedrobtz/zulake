@@ -44,16 +44,20 @@ or value, such as a \code{version} that is not a whole number),
 \code{zulake_error_not_table} (no Delta log at \code{uri}),
 \code{zulake_error_version} (no such version, or one no longer in the log),
 \code{zulake_error_uri} (a URI zulake cannot open), \code{zulake_error_storage}
-(a file that cannot be read; from Azure with the HTTP \code{status} and
-Azure's error \code{code}),
+(a file that cannot be read, or a log file whose size is not the one
+its listing gives; from Azure with the HTTP \code{status} and Azure's error
+\code{code}),
 \code{zulake_error_auth} (credentials refused), \code{zulake_error_corrupt_log}
-(a log that breaks the protocol, such as a commit that is not JSON or a
-partition value of the wrong type, or a \verb{_last_checkpoint} naming a
-checkpoint the log does not hold whole),
+(a log that breaks the protocol, such as a commit that is not JSON, a
+line holding two actions, a partition value of the wrong type, a
+schema with a type the protocol does not define or two fields of one
+name, or a \verb{_last_checkpoint} naming a checkpoint the log does not
+hold whole),
 \code{zulake_error_checkpoint_unreadable} (its \code{checkpoint} field gives the
 version, \code{parent} the read failure) and
 \code{zulake_error_unsupported_feature}, whose \code{feature} field names the
-feature.
+feature (also for a \code{timestamp_ntz} or \code{variant} column whose reader
+feature the protocol does not declare).
 }
 \description{
 \code{lake_open()} builds a snapshot of a Delta Lake table: one version of it,

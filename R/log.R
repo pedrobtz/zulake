@@ -98,10 +98,51 @@ commit_name <- function(version) {
   sprintf("%020.0f.json", version)
 }
 
-# A JSON log file's actions, one named list per line. A line that is not
-# JSON, or not a JSON object, is a corrupt log.
-read_actions <- function(storage, name) {
-  bytes <- storage$get(paste0(log_dir, name))
+# The size `entries` (log_entries()) gives the log file `name`, NA when it
+# lists no such file.
+listed_size <- function(entries, name) {
+  entries$size[match(name, entries$name)]
+}
+
+# The bytes of the log file at `path` (relative to the table root), which
+# must have the `size` its listing gave (NA: no size to check). A body cut
+# short in transfer (a server that closes the connection without a
+# Content-Length) parses as a shorter log, so its length is compared before
+# anything reads it (#122).
+log_get <- function(storage, path, size) {
+  bytes <- storage$get(path)
+  check_log_size(path, length(bytes), size)
+  bytes
+}
+
+# `got` bytes read of the log file `path` against the `size` listed for it,
+# or named by the action that points to it (`from`): a difference is a
+# zulake_error_storage with both sizes.
+check_log_size <- function(path, got, size, from = "its listing gives") {
+  if (is.na(size) || got == size) {
+    return(invisible())
+  }
+  zulake_abort(
+    "storage",
+    sprintf(
+      "log file %s has %s bytes, but %s %s: it was cut short or changed while it was read.",
+      format_string(path),
+      format_number(got),
+      from,
+      format_number(size)
+    ),
+    path = path,
+    size = as.numeric(got),
+    listed_size = as.numeric(size)
+  )
+}
+
+# A JSON log file's actions, one named list per line, from its bytes, which
+# must have the `size` its listing gave. A line that is not JSON, or not a
+# JSON object, is a corrupt log, and so is a line holding more than one
+# action: the protocol stores every action on a line of its own (#121).
+read_actions <- function(storage, name, size) {
+  bytes <- log_get(storage, paste0(log_dir, name), size)
   marked <- mark_big_integers(bytes)
   actions <- tryCatch(
     zujson::json_parse_ndjson(marked),
@@ -148,6 +189,20 @@ read_actions <- function(storage, name) {
         file = name,
         line = line,
         key = key
+      )
+    }
+    if (length(a) > 1L) {
+      line <- file_line(bytes, i)
+      zulake_abort(
+        "corrupt_log",
+        sprintf(
+          "line %d of log file %s holds the actions %s, where the protocol stores one action per line.",
+          line,
+          format_string(name),
+          paste(format_string(names(a)), collapse = " and ")
+        ),
+        file = name,
+        line = line
       )
     }
   }
@@ -212,7 +267,7 @@ read_last_checkpoint <- function(storage, entries) {
     return(NULL)
   }
   name <- "_last_checkpoint"
-  bytes <- storage$get(paste0(log_dir, name))
+  bytes <- log_get(storage, paste0(log_dir, name), listed_size(entries, name))
   x <- tryCatch(
     zujson::json_parse_raw(bytes),
     zujson_error = function(e) {
