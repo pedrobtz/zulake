@@ -122,7 +122,12 @@
 #' total <- 0
 #' lake_walk(tbl, function(piece) total <<- total + sum(piece$amount))
 #' total
-lake_read <- function(tbl, columns = NULL, filter = NULL, int64 = c("double", "integer64")) {
+lake_read <- function(
+  tbl,
+  columns = NULL,
+  filter = NULL,
+  int64 = c("double", "integer64")
+) {
   check_table(tbl)
   int64 <- check_int64(int64)
   scan <- read_scan(tbl, columns, substitute(filter), parent.frame(), int64)
@@ -132,7 +137,13 @@ lake_read <- function(tbl, columns = NULL, filter = NULL, int64 = c("double", "i
 
 #' @rdname lake_read
 #' @export
-lake_walk <- function(tbl, FUN, columns = NULL, filter = NULL, int64 = c("double", "integer64")) {
+lake_walk <- function(
+  tbl,
+  FUN,
+  columns = NULL,
+  filter = NULL,
+  int64 = c("double", "integer64")
+) {
   check_table(tbl)
   if (!is.function(FUN)) {
     zulake_abort("argument", "`FUN` must be a function.")
@@ -165,14 +176,29 @@ read_scan <- function(tbl, columns, expr, env, int64) {
   all_cols <- names(types)
   if (!is.null(columns)) {
     if (!is.character(columns) || anyNA(columns)) {
-      zulake_abort("argument", "`columns` must be NULL or a character vector of column names.")
+      zulake_abort(
+        "argument",
+        "`columns` must be NULL or a character vector of column names."
+      )
     }
     unknown <- setdiff(columns, all_cols)
     if (length(unknown)) {
-      zulake_abort("argument", sprintf("`columns` names %s, which the table does not have.", format_string(unknown[1L])))
+      zulake_abort(
+        "argument",
+        sprintf(
+          "`columns` names %s, which the table does not have.",
+          format_string(unknown[1L])
+        )
+      )
     }
     if (anyDuplicated(columns)) {
-      zulake_abort("argument", sprintf("`columns` names %s twice.", format_string(columns[duplicated(columns)][1L])))
+      zulake_abort(
+        "argument",
+        sprintf(
+          "`columns` names %s twice.",
+          format_string(columns[duplicated(columns)][1L])
+        )
+      )
     }
   }
   plan <- if (!is.null(expr)) filter_plan(expr, types, env, strict = FALSE)
@@ -182,7 +208,10 @@ read_scan <- function(tbl, columns, expr, env, int64) {
   need <- all_cols[all_cols %in% c(out_cols, filter_cols)]
   pcols <- tbl$metadata[["partitionColumns"]]
   fields <- schema_fields(tbl)
-  physical <- stats::setNames(vapply(fields, field_physical, "", mode = tbl$column_mapping), all_cols)
+  physical <- stats::setNames(
+    vapply(fields, field_physical, "", mode = tbl$column_mapping),
+    all_cols
+  )
 
   reasons <- list()
   for (col in need) {
@@ -193,10 +222,18 @@ read_scan <- function(tbl, columns, expr, env, int64) {
   where <- lapply(keep, function(i) resolve_file(tbl, i))
   # Deletion vectors are read and checked before any data file, so a bad
   # one returns no rows, from lake_walk() too.
-  has_dv <- !vapply(tbl$files$action[keep], function(a) is.null(a[["deletionVector"]]), NA)
+  has_dv <- !vapply(
+    tbl$files$action[keep],
+    function(a) is.null(a[["deletionVector"]]),
+    NA
+  )
   deleted <- vector("list", length(keep))
   deleted[has_dv] <- dv_rows_of(tbl, keep[has_dv])
-  paths <- vapply(seq_along(keep), function(k) fetch_file(tbl, keep[k], where[[k]]), "")
+  paths <- vapply(
+    seq_along(keep),
+    function(k) fetch_file(tbl, keep[k], where[[k]]),
+    ""
+  )
   data_cols <- setdiff(need, c(pcols, names(reasons)))
   plans <- lapply(paths, function(p) qio::read_plan(p, int64 = int64))
   for (k in seq_along(paths)) {
@@ -211,15 +248,26 @@ read_scan <- function(tbl, columns, expr, env, int64) {
     used <- if (col %in% columns) "named in `columns`" else "used in `filter`"
     zulake_abort(
       "column_unreadable",
-      sprintf("Column %s, %s, cannot be read: %s.", format_string(col), used, reasons[[col]]),
-      column = col, reason = reasons[[col]]
+      sprintf(
+        "Column %s, %s, cannot be read: %s.",
+        format_string(col),
+        used,
+        reasons[[col]]
+      ),
+      column = col,
+      reason = reasons[[col]]
     )
   }
   for (col in names(reasons)) {
     zulake_warn(
       "column_skipped",
-      sprintf("Column %s is left out of the read: %s.", format_string(col), reasons[[col]]),
-      column = col, reason = reasons[[col]]
+      sprintf(
+        "Column %s is left out of the read: %s.",
+        format_string(col),
+        reasons[[col]]
+      ),
+      column = col,
+      reason = reasons[[col]]
     )
   }
   read_cols <- setdiff(need, names(reasons))
@@ -228,34 +276,61 @@ read_scan <- function(tbl, columns, expr, env, int64) {
     flat <- pl$path[!pl$nested]
     data_cols[physical[data_cols] %in% flat]
   })
-  vetted <- vapply(seq_along(plans), function(k) {
-    pl <- plans[[k]]
-    dec <- pl$path[!pl$nested & pl$logical_type %in% "DECIMAL"]
-    dec <- intersect(dec, physical[present[[k]]])
-    cols <- names(physical)[match(dec, physical)]
-    all(vapply(types[cols], function(t) {
-      ps <- decimal_ps(t)
-      !is.null(ps) && ps[["precision"]] <= max_double_precision
-    }, NA))
-  }, NA)
+  vetted <- vapply(
+    seq_along(plans),
+    function(k) {
+      pl <- plans[[k]]
+      dec <- pl$path[!pl$nested & pl$logical_type %in% "DECIMAL"]
+      dec <- intersect(dec, physical[present[[k]]])
+      cols <- names(physical)[match(dec, physical)]
+      all(vapply(
+        types[cols],
+        function(t) {
+          ps <- decimal_ps(t)
+          !is.null(ps) && ps[["precision"]] <= max_double_precision
+        },
+        NA
+      ))
+    },
+    NA
+  )
   list(
-    tbl = tbl, keep = keep, paths = paths, plan = plan, env = env, int64 = int64,
-    types = types, physical = physical, read_cols = read_cols, out_cols = setdiff(out_cols, names(reasons)),
-    present = present, vetted = vetted, deleted = deleted,
-    parts = partition_read_table(tbl$files$action[keep], tbl, int64, intersect(read_cols, pcols))
+    tbl = tbl,
+    keep = keep,
+    paths = paths,
+    plan = plan,
+    env = env,
+    int64 = int64,
+    types = types,
+    physical = physical,
+    read_cols = read_cols,
+    out_cols = setdiff(out_cols, names(reasons)),
+    present = present,
+    vetted = vetted,
+    deleted = deleted,
+    parts = partition_read_table(
+      tbl$files$action[keep],
+      tbl,
+      int64,
+      intersect(read_cols, pcols)
+    )
   )
 }
 
 # Why qio cannot return a column of Delta type `type`, or NA.
 type_unreadable <- function(type) {
   if (type %in% c("struct", "array", "map")) {
-    return(sprintf("it is a nested column (%s), which zulake does not read yet (design D14)", type))
+    return(sprintf(
+      "it is a nested column (%s), which zulake does not read yet (design D14)",
+      type
+    ))
   }
   ps <- decimal_ps(type)
   if (!is.null(ps) && ps[["precision"]] > max_double_precision) {
     return(sprintf(
       "decimal precision %s > %d, which a double cannot hold exactly; qio reads exact decimals from version 0.2.0",
-      format_number(ps[["precision"]]), max_double_precision
+      format_number(ps[["precision"]]),
+      max_double_precision
     ))
   }
   NA_character_
@@ -270,7 +345,10 @@ plan_unreadable <- function(plan, name) {
       return(NA_character_)
     }
     note <- plan$note[flat & !plan$collectible][1L]
-    return(sprintf("qio cannot read it (%s)", if (is.na(note)) "no reason given" else note))
+    return(sprintf(
+      "qio cannot read it (%s)",
+      if (is.na(note)) "no reason given" else note
+    ))
   }
   if (any(plan$nested & startsWith(plan$path, paste0(name, ".")))) {
     return("it is a nested column, which zulake does not read yet (design D14)")
@@ -285,9 +363,16 @@ read_piece <- function(scan, k) {
   i <- scan$keep[k]
   sel <- scan$present[[k]]
   read <- function() {
-    qio::read_parquet(scan$paths[k], columns = unname(scan$physical[sel]), int64 = scan$int64)
+    qio::read_parquet(
+      scan$paths[k],
+      columns = unname(scan$physical[sel]),
+      int64 = scan$int64
+    )
   }
-  df <- withCallingHandlers(read(), message = qio_decimal_muffler(scan$vetted[k]))
+  df <- withCallingHandlers(
+    read(),
+    message = qio_decimal_muffler(scan$vetted[k])
+  )
   n <- nrow(df)
   gone <- scan$deleted[[k]]
   if (length(gone) && gone[length(gone)] >= n) {
@@ -296,7 +381,9 @@ read_piece <- function(scan, k) {
       "corrupt_log",
       sprintf(
         "The deletion vector of file %s deletes row %s, but the file has %s rows.",
-        format_string(file), format_number(gone[length(gone)]), format_number(n)
+        format_string(file),
+        format_number(gone[length(gone)]),
+        format_number(n)
       ),
       file = file
     )
@@ -329,11 +416,16 @@ empty_column <- function(type, int64, n) {
   if (grepl("^decimal", type)) {
     return(rep(NA_real_, n))
   }
-  switch(type,
+  switch(
+    type,
     byte = ,
     short = ,
     integer = rep(NA_integer_, n),
-    long = if (int64 == "integer64") bit64::as.integer64(rep(NA, n)) else rep(NA_real_, n),
+    long = if (int64 == "integer64") {
+      bit64::as.integer64(rep(NA, n))
+    } else {
+      rep(NA_real_, n)
+    },
     float = ,
     double = rep(NA_real_, n),
     string = rep(NA_character_, n),
@@ -341,7 +433,11 @@ empty_column <- function(type, int64, n) {
     boolean = rep(NA, n),
     date = structure(rep(NA_real_, n), class = "Date"),
     timestamp = ,
-    timestamp_ntz = structure(rep(NA_real_, n), class = c("POSIXct", "POSIXt"), tzone = "UTC"),
+    timestamp_ntz = structure(
+      rep(NA_real_, n),
+      class = c("POSIXct", "POSIXt"),
+      tzone = "UTC"
+    ),
     rep(NA, n)
   )
 }
@@ -351,7 +447,11 @@ bind_pieces <- function(pieces, scan) {
   if (!length(pieces)) {
     cols <- list()
     for (col in scan$out_cols) {
-      cols[[col]] <- if (col %in% names(scan$parts)) scan$parts[[col]][0L] else empty_column(scan$types[[col]], scan$int64, 0L)
+      cols[[col]] <- if (col %in% names(scan$parts)) {
+        scan$parts[[col]][0L]
+      } else {
+        empty_column(scan$types[[col]], scan$int64, 0L)
+      }
     }
     return(new_data_frame(cols, 0L))
   }
@@ -366,7 +466,9 @@ bind_pieces <- function(pieces, scan) {
           "corrupt_log",
           sprintf(
             "column %s reads as %s from one file and %s from another; the files of a table must agree on its type.",
-            format_string(col), class(first)[1L], class(parts[[j]])[1L]
+            format_string(col),
+            class(first)[1L],
+            class(parts[[j]])[1L]
           ),
           column = col
         )
@@ -424,7 +526,10 @@ resolve_file <- function(tbl, i) {
     if (bad_relative_path(rel)) {
       zulake_abort(
         "corrupt_log",
-        sprintf("file %s has an empty, \".\" or \"..\" path segment, which would leave the table's root.", format_string(path)),
+        sprintf(
+          "file %s has an empty, \".\" or \"..\" path segment, which would leave the table's root.",
+          format_string(path)
+        ),
         file = path
       )
     }
@@ -434,7 +539,9 @@ resolve_file <- function(tbl, i) {
 
 # Whether a relative path (decoded) has an empty, "." or ".." segment.
 bad_relative_path <- function(rel) {
-  !nzchar(rel) || any(strsplit(rel, "/", fixed = TRUE)[[1L]] %in% c("", ".", "..")) || endsWith(rel, "/")
+  !nzchar(rel) ||
+    any(strsplit(rel, "/", fixed = TRUE)[[1L]] %in% c("", ".", "..")) ||
+    endsWith(rel, "/")
 }
 
 # What identifies a downloaded file in a snapshot's download cache: on
@@ -465,7 +572,11 @@ fetch_file <- function(tbl, i, where = resolve_file(tbl, i)) {
   if (!is.null(where$local)) {
     local <- where$local
     if (!file.exists(local) || dir.exists(local)) {
-      zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path)
+      zulake_abort(
+        "storage",
+        sprintf("cannot read %s: no such file.", format_string(path)),
+        path = path
+      )
     }
     return(local)
   }
@@ -474,12 +585,21 @@ fetch_file <- function(tbl, i, where = resolve_file(tbl, i)) {
   }
   a <- tbl$files$action[[i]]
   size <- a[["size"]]
-  key <- paste(where$key, int_text(size %||% -1), int_text(a[["modificationTime"]] %||% -1), sep = "\x1f")
+  key <- paste(
+    where$key,
+    int_text(size %||% -1),
+    int_text(a[["modificationTime"]] %||% -1),
+    sep = "\x1f"
+  )
   downloads <- tbl$downloads
   dir <- downloads_dir()
   hit <- downloads$files[[key]]
-  if (!is.null(hit) && startsWith(hit, dir) && file.exists(hit) &&
-      (!is_whole(size) || identical(file.size(hit), as.numeric(size)))) {
+  if (
+    !is.null(hit) &&
+      startsWith(hit, dir) &&
+      file.exists(hit) &&
+      (!is_whole(size) || identical(file.size(hit), as.numeric(size)))
+  ) {
     return(hit)
   }
   bytes <- where$storage$get(where$rel)
@@ -488,7 +608,9 @@ fetch_file <- function(tbl, i, where = resolve_file(tbl, i)) {
       "storage",
       sprintf(
         "data file %s has %s bytes, but the log says %s.",
-        format_string(path), format_number(length(bytes)), format_number(size)
+        format_string(path),
+        format_number(length(bytes)),
+        format_number(size)
       ),
       path = path
     )
@@ -500,7 +622,15 @@ fetch_file <- function(tbl, i, where = resolve_file(tbl, i)) {
   on.exit(if (!ok) unlink(part), add = TRUE)
   writeBin(bytes, part)
   if (!file.rename(part, f)) {
-    zulake_abort("storage", sprintf("cannot write a copy of %s to %s.", format_string(path), format_string(dir)), path = path)
+    zulake_abort(
+      "storage",
+      sprintf(
+        "cannot write a copy of %s to %s.",
+        format_string(path),
+        format_string(dir)
+      ),
+      path = path
+    )
   }
   ok <- TRUE
   if (is.environment(downloads)) {
@@ -512,7 +642,9 @@ fetch_file <- function(tbl, i, where = resolve_file(tbl, i)) {
 # Whether a path from the log (an `add` path, a deletion vector's absolute
 # path) is absolute: a URI with a scheme, or a path from the root.
 is_absolute_path <- function(path) {
-  startsWith(path, "/") || grepl("^[A-Za-z]:[/\\\\]", path) || grepl("^[A-Za-z][A-Za-z0-9+.-]*:", path)
+  startsWith(path, "/") ||
+    grepl("^[A-Za-z]:[/\\\\]", path) ||
+    grepl("^[A-Za-z][A-Za-z0-9+.-]*:", path)
 }
 
 # The local path of an absolute path from the log: itself, or the path of a
@@ -523,7 +655,11 @@ absolute_local_path <- function(path) {
   }
   if (startsWith(path, "file:")) {
     # file:///home/x, file:/home/x, and file:///C:/x on Windows.
-    return(sub("^/([A-Za-z]:)", "\\1", percent_decode(sub("^file:(//)?", "", path))))
+    return(sub(
+      "^/([A-Za-z]:)",
+      "\\1",
+      percent_decode(sub("^file:(//)?", "", path))
+    ))
   }
   zulake_abort(
     "uri",
@@ -555,11 +691,17 @@ qio_decimal_muffler <- function(vetted) {
   function(m) {
     if (inherits(m, "qio_message_decimal_double")) {
       precision <- m$columns$precision
-      if (length(precision) && all(!is.na(precision) & precision <= max_double_precision)) {
+      if (
+        length(precision) &&
+          all(!is.na(precision) & precision <= max_double_precision)
+      ) {
         invokeRestart("muffleMessage")
       }
-    } else if (isTRUE(vetted) && inherits(m, "simpleMessage") &&
-               grepl("Parquet DECIMAL columns? as double", conditionMessage(m))) {
+    } else if (
+      isTRUE(vetted) &&
+        inherits(m, "simpleMessage") &&
+        grepl("Parquet DECIMAL columns? as double", conditionMessage(m))
+    ) {
       invokeRestart("muffleMessage")
     }
   }

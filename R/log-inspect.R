@@ -70,7 +70,10 @@ lake_actions <- function(tbl, version, int64 = c("double", "integer64")) {
   check_table(tbl)
   int64 <- check_int64(int64)
   if (missing(version) || is.null(version)) {
-    zulake_abort("argument", "`version` must be a single whole number from 0 to 2^53 - 1.")
+    zulake_abort(
+      "argument",
+      "`version` must be a single whole number from 0 to 2^53 - 1."
+    )
   }
   version <- check_version(version)
   log <- tbl$log
@@ -78,7 +81,10 @@ lake_actions <- function(tbl, version, int64 = c("double", "integer64")) {
   if (!any(hit)) {
     zulake_abort(
       "version",
-      sprintf("the log has no commit file for version %s.", format_number(version)),
+      sprintf(
+        "the log has no commit file for version %s.",
+        format_number(version)
+      ),
       version = version
     )
   }
@@ -100,11 +106,19 @@ lake_actions <- function(tbl, version, int64 = c("double", "integer64")) {
 
 #' @rdname lake_log
 #' @export
-lake_changes <- function(tbl, from, to = lake_version(tbl), int64 = c("double", "integer64")) {
+lake_changes <- function(
+  tbl,
+  from,
+  to = lake_version(tbl),
+  int64 = c("double", "integer64")
+) {
   check_table(tbl)
   int64 <- check_int64(int64)
   if (missing(from) || is.null(from)) {
-    zulake_abort("argument", "`from` must be a single whole number from 0 to 2^53 - 1.")
+    zulake_abort(
+      "argument",
+      "`from` must be a single whole number from 0 to 2^53 - 1."
+    )
   }
   from <- check_version(from)
   to <- check_version(to)
@@ -115,14 +129,21 @@ lake_changes <- function(tbl, from, to = lake_version(tbl), int64 = c("double", 
   a <- snap(from)
   b <- snap(to)
   key <- function(s) {
-    if (!nrow(s$files)) character() else paste0(s$files$path, "\x1f", s$files$deletion_vector_id)
+    if (!nrow(s$files)) {
+      character()
+    } else {
+      paste0(s$files$path, "\x1f", s$files$deletion_vector_id)
+    }
   }
   keys_from <- key(a)
   keys_to <- key(b)
   added <- add_frame(b, b$files$action[!keys_to %in% keys_from], FALSE, int64)
   removed <- add_frame(a, a$files$action[!keys_from %in% keys_to], FALSE, int64)
   out <- rbind_frames(added, removed)
-  out <- c(list(change = rep(c("added", "removed"), c(nrow(added), nrow(removed)))), out)
+  out <- c(
+    list(change = rep(c("added", "removed"), c(nrow(added), nrow(removed)))),
+    out
+  )
   new_data_frame(out, nrow(added) + nrow(removed))
 }
 
@@ -132,10 +153,18 @@ lake_transactions <- function(tbl, int64 = c("double", "integer64")) {
   check_table(tbl)
   int64 <- check_int64(int64)
   txns <- tbl$transactions
-  updated <- int64_values(lapply(txns, function(x) x[["lastUpdated"]]), "double", "a `txn`'s `lastUpdated`")
+  updated <- int64_values(
+    lapply(txns, function(x) x[["lastUpdated"]]),
+    "double",
+    "a `txn`'s `lastUpdated`"
+  )
   new_data_frame(list(
     app_id = names(txns),
-    version = int64_values(lapply(txns, function(x) x[["version"]]), int64, "a `txn`'s `version`"),
+    version = int64_values(
+      lapply(txns, function(x) x[["version"]]),
+      int64,
+      "a `txn`'s `version`"
+    ),
     last_updated = ms_to_posixct(updated)
   ))
 }
@@ -147,7 +176,12 @@ lake_domains <- function(tbl) {
   d <- tbl$domains
   new_data_frame(list(
     domain = names(d),
-    configuration = vapply(d, function(x) x[["configuration"]], "", USE.NAMES = FALSE)
+    configuration = vapply(
+      d,
+      function(x) x[["configuration"]],
+      "",
+      USE.NAMES = FALSE
+    )
   ))
 }
 
@@ -158,8 +192,14 @@ lake_checkpoints <- function(tbl) {
   log <- tbl$log
   cp <- log[log$kind == "checkpoint", , drop = FALSE]
   cp <- cp[order(cp$version, cp$name, method = "radix"), , drop = FALSE]
-  type <- ifelse(!is.na(cp$parts), "multi-part",
-    ifelse(grepl("[.]checkpoint[.][0-9a-fA-F-]{36}[.]", cp$name), "v2", "classic")
+  type <- ifelse(
+    !is.na(cp$parts),
+    "multi-part",
+    ifelse(
+      grepl("[.]checkpoint[.][0-9a-fA-F-]{36}[.]", cp$name),
+      "v2",
+      "classic"
+    )
   )
   last <- tbl$last_checkpoint
   new_data_frame(list(
@@ -170,7 +210,11 @@ lake_checkpoints <- function(tbl) {
     parts = cp$parts,
     size = cp$size,
     modification_time = cp$modification_time,
-    last_checkpoint = if (is.null(last)) rep(FALSE, nrow(cp)) else cp$version == last[["version"]]
+    last_checkpoint = if (is.null(last)) {
+      rep(FALSE, nrow(cp))
+    } else {
+      cp$version == last[["version"]]
+    }
   ))
 }
 
@@ -181,7 +225,9 @@ rbind_frames <- function(a, b) {
     x <- a[[nm]]
     y <- b[[nm]]
     r <- c(x, y)
-    if (inherits(x, "POSIXct")) attr(r, "tzone") <- "UTC"
+    if (inherits(x, "POSIXct")) {
+      attr(r, "tzone") <- "UTC"
+    }
     r
   })
   names(out) <- names(a)

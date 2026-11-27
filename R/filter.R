@@ -27,15 +27,32 @@
 comparison_ops <- c("==", "!=", "<", "<=", ">", ">=")
 
 # The comparison that is TRUE where `op` is FALSE (on non-NA values).
-negate_op <- c(`==` = "!=", `!=` = "==", `<` = ">=", `<=` = ">", `>` = "<=", `>=` = "<")
+negate_op <- c(
+  `==` = "!=",
+  `!=` = "==",
+  `<` = ">=",
+  `<=` = ">",
+  `>` = "<=",
+  `>=` = "<"
+)
 
 # The comparison with its sides swapped: `v < x` is `x > v`.
-flip_op <- c(`==` = "==", `!=` = "!=", `<` = ">", `<=` = ">=", `>` = "<", `>=` = "<=")
+flip_op <- c(
+  `==` = "==",
+  `!=` = "!=",
+  `<` = ">",
+  `<=` = ">=",
+  `>` = "<",
+  `>=` = "<="
+)
 
 # Delta types of the snapshot's top-level columns, by logical name.
 column_types <- function(tbl) {
   fields <- schema_fields(tbl)
-  stats::setNames(vapply(fields, field_type, ""), vapply(fields, field_name, ""))
+  stats::setNames(
+    vapply(fields, field_type, ""),
+    vapply(fields, field_name, "")
+  )
 }
 
 # Indexes of the snapshot's live files that `expr` keeps (all of them for a
@@ -80,9 +97,33 @@ filter_error <- function(expr, problem, strict = TRUE) {
 # so a filter evaluated on each file's rows equals the filter evaluated on
 # the whole table. They filter rows after reading and never prune.
 row_wise_functions <- c(
-  "+", "-", "*", "/", "%%", "%/%", "^", "abs", "round", "floor", "ceiling", "sqrt", "exp", "log",
-  "nchar", "toupper", "tolower", "substr", "startsWith", "endsWith", "grepl", "is.nan", "is.finite",
-  "xor", "as.character", "as.numeric", "as.integer"
+  "+",
+  "-",
+  "*",
+  "/",
+  "%%",
+  "%/%",
+  "^",
+  "abs",
+  "round",
+  "floor",
+  "ceiling",
+  "sqrt",
+  "exp",
+  "log",
+  "nchar",
+  "toupper",
+  "tolower",
+  "substr",
+  "startsWith",
+  "endsWith",
+  "grepl",
+  "is.nan",
+  "is.finite",
+  "xor",
+  "as.character",
+  "as.numeric",
+  "as.integer"
 )
 
 # Arguments of a row-wise function that are options, not data: they must be
@@ -101,7 +142,13 @@ row_wise_first_only <- c("as.character", "as.numeric", "as.integer")
 # format for all of it (no time when every value was at midnight, no
 # fraction of a second): on a timestamp column their value for a row
 # depended on the file's other rows, which is not row-wise (D8, #74).
-time_text_functions <- c("as.character", "substr", "toupper", "tolower", "grepl")
+time_text_functions <- c(
+  "as.character",
+  "substr",
+  "toupper",
+  "tolower",
+  "grepl"
+)
 
 # The running R's version; a function, so that tests can replace it.
 r_version <- function() getRversion()
@@ -125,13 +172,16 @@ check_time_text <- function(x, types, expr, strict) {
           expr,
           sprintf(
             "%s() of the timestamp column %s is not row-wise before R 4.3.0, where a time's text depends on the other rows; compare the column with a time instead",
-            name, format_string(col[1L])
+            name,
+            format_string(col[1L])
           ),
           strict
         )
       }
     }
-    for (a in as.list(e)[-1L]) walk(a)
+    for (a in as.list(e)[-1L]) {
+      walk(a)
+    }
   }
   walk(x)
 }
@@ -163,13 +213,20 @@ filter_plan <- function(expr, types, env, strict = TRUE) {
     check_time_text(x, types, expr, strict)
     call <- row_expr(x, columns, env, expr, strict)
     if (strict) {
-      filter_error(expr, sprintf("%s, which filters rows and cannot prune files", why), strict = TRUE)
+      filter_error(
+        expr,
+        sprintf("%s, which filters rows and cannot prune files", why),
+        strict = TRUE
+      )
     }
     list(op = "r", call = call, columns = intersect(all.vars(call), columns))
   }
   const_node <- function(x) {
-    if (is.symbol(x) && identical(x, expr) &&
-        is.language(tryCatch(eval(x, env), error = function(e) NULL))) {
+    if (
+      is.symbol(x) &&
+        identical(x, expr) &&
+        is.language(tryCatch(eval(x, env), error = function(e) NULL))
+    ) {
       quoted_filter_error(x, expr, strict)
     }
     if (strict) {
@@ -177,7 +234,14 @@ filter_plan <- function(expr, types, env, strict = TRUE) {
     }
     value <- filter_value(x, env, expr)
     if (!is.logical(value) || length(value) != 1L) {
-      filter_error(expr, sprintf("%s names no column, so it must be one TRUE, FALSE or NA", deparse_one(x)), strict)
+      filter_error(
+        expr,
+        sprintf(
+          "%s names no column, so it must be one TRUE, FALSE or NA",
+          deparse_one(x)
+        ),
+        strict
+      )
     }
     list(op = "const", value = value)
   }
@@ -188,9 +252,19 @@ filter_plan <- function(expr, types, env, strict = TRUE) {
     if (is.symbol(x)) {
       col <- as.character(x)
       if (!identical(types[[col]], "boolean")) {
-        filter_error(expr, sprintf("column %s is not logical; compare it with a value", format_string(col)), strict)
+        filter_error(
+          expr,
+          sprintf(
+            "column %s is not logical; compare it with a value",
+            format_string(col)
+          ),
+          strict
+        )
       }
-      return(row_node(x, sprintf("the logical column %s alone", format_string(col))))
+      return(row_node(
+        x,
+        sprintf("the logical column %s alone", format_string(col))
+      ))
     }
     fn <- x[[1L]]
     name <- if (is.symbol(fn)) as.character(fn) else ""
@@ -202,16 +276,26 @@ filter_plan <- function(expr, types, env, strict = TRUE) {
       return(list(op = "not", args = list(walk(x[[2L]]))))
     }
     if (name %in% c("&", "|") && nargs == 2L) {
-      return(list(op = if (name == "&") "and" else "or", args = list(walk(x[[2L]]), walk(x[[3L]]))))
+      return(list(
+        op = if (name == "&") "and" else "or",
+        args = list(walk(x[[2L]]), walk(x[[3L]]))
+      ))
     }
     if (name == "%in%" && nargs == 2L && has_column(x[[3L]])) {
-      filter_error(expr, "%in% takes a column on its left and values on its right", strict)
+      filter_error(
+        expr,
+        "%in% takes a column on its left and values on its right",
+        strict
+      )
     }
     if (name %in% c(comparison_ops, "%in%") && nargs == 2L) {
       lhs <- x[[2L]]
       rhs <- x[[3L]]
       bare <- function(s) is.symbol(s) && as.character(s) %in% columns
-      if ((bare(lhs) && !has_column(rhs)) || (name != "%in%" && bare(rhs) && !has_column(lhs))) {
+      if (
+        (bare(lhs) && !has_column(rhs)) ||
+          (name != "%in%" && bare(rhs) && !has_column(lhs))
+      ) {
         return(atom_node(x, name, types, env, expr))
       }
       if (has_column(lhs) && has_column(rhs)) {
@@ -222,14 +306,25 @@ filter_plan <- function(expr, types, env, strict = TRUE) {
     if (name == "is.na" && nargs == 1L) {
       arg <- x[[2L]]
       if (is.symbol(arg)) {
-        return(list(op = "isna", column = as.character(arg), columns = as.character(arg)))
+        return(list(
+          op = "isna",
+          column = as.character(arg),
+          columns = as.character(arg)
+        ))
       }
       return(row_node(x, "is.na() of a function of a column"))
     }
     if (name %in% row_wise_functions) {
       return(row_node(x, sprintf("%s() is row-wise", name)))
     }
-    filter_error(expr, sprintf("%s is neither in the pruning subset nor row-wise", call_label(name)), strict)
+    filter_error(
+      expr,
+      sprintf(
+        "%s is neither in the pruning subset nor row-wise",
+        call_label(name)
+      ),
+      strict
+    )
   }
   walk(expr)
 }
@@ -241,9 +336,17 @@ atom_node <- function(x, name, types, env, expr) {
   col <- as.character(if (lhs_col) x[[2L]] else x[[3L]])
   value <- filter_value(if (lhs_col) x[[3L]] else x[[2L]], env, expr)
   if (name != "%in%" && length(value) != 1L) {
-    filter_error(expr, sprintf("a value compared with %s must have length 1", name), strict = TRUE)
+    filter_error(
+      expr,
+      sprintf("a value compared with %s must have length 1", name),
+      strict = TRUE
+    )
   }
-  call <- if (lhs_col) as.call(list(as.symbol(name), as.symbol(col), value)) else as.call(list(as.symbol(name), value, as.symbol(col)))
+  call <- if (lhs_col) {
+    as.call(list(as.symbol(name), as.symbol(col), value))
+  } else {
+    as.call(list(as.symbol(name), value, as.symbol(col)))
+  }
   fn_name <- if (lhs_col) name else flip_op[[name]]
   kind <- type_kind(types[[col]])
   if (is.na(kind)) {
@@ -252,10 +355,16 @@ atom_node <- function(x, name, types, env, expr) {
   lit <- literal_keys(value, kind, types[[col]], expr)
   keep <- !keys_na(lit$keys)
   list(
-    op = "atom", fn = fn_name, column = col, kind = kind, type = types[[col]],
+    op = "atom",
+    fn = fn_name,
+    column = col,
+    kind = kind,
+    type = types[[col]],
     keys = keys_subset(lit$keys, keep),
-    has_na = any(!keep & !lit$nan), has_nan = any(lit$nan),
-    call = call, columns = col
+    has_na = any(!keep & !lit$nan),
+    has_nan = any(lit$nan),
+    call = call,
+    columns = col
   )
 }
 
@@ -267,11 +376,23 @@ row_expr <- function(x, columns, env, expr, strict) {
   has_column <- function(e) length(intersect(all.vars(e), columns)) > 0L
   value_arg <- function(e, what) {
     if (has_column(e)) {
-      filter_error(expr, sprintf("%s must be a value, with no column inside", what), strict)
+      filter_error(
+        expr,
+        sprintf("%s must be a value, with no column inside", what),
+        strict
+      )
     }
     v <- filter_value(e, env, expr)
     if (length(v) != 1L) {
-      filter_error(expr, sprintf("%s has length %s; a value applied to rows must have length 1", deparse_one(e), format_number(length(v))), strict)
+      filter_error(
+        expr,
+        sprintf(
+          "%s has length %s; a value applied to rows must have length 1",
+          deparse_one(e),
+          format_number(length(v))
+        ),
+        strict
+      )
     }
     v
   }
@@ -286,7 +407,11 @@ row_expr <- function(x, columns, env, expr, strict) {
     name <- if (is.symbol(fn)) as.character(fn) else ""
     if (name == "%in%" && length(e) == 3L) {
       if (has_column(e[[3L]])) {
-        filter_error(expr, "%in% takes a column on its left and values on its right", strict)
+        filter_error(
+          expr,
+          "%in% takes a column on its left and values on its right",
+          strict
+        )
       }
       v <- filter_value(e[[3L]], env, expr)
       return(as.call(list(fn, walk(e[[2L]]), v)))
@@ -307,11 +432,18 @@ row_expr <- function(x, columns, env, expr, strict) {
     }
     if (name %in% row_wise_first_only) {
       for (a in seq_len(length(e) - 1L)) {
-        e[[a + 1L]] <- if (a == 1L) walk(e[[2L]]) else value_arg(e[[a + 1L]], sprintf("an option of %s()", name))
+        e[[a + 1L]] <- if (a == 1L) {
+          walk(e[[2L]])
+        } else {
+          value_arg(e[[a + 1L]], sprintf("an option of %s()", name))
+        }
       }
       return(e)
     }
-    if (name %in% c(row_wise_functions, comparison_ops, "(", "!", "&", "|", "is.na")) {
+    if (
+      name %in%
+        c(row_wise_functions, comparison_ops, "(", "!", "&", "|", "is.na")
+    ) {
       for (a in seq_len(length(e) - 1L)) {
         if (!identical(e[[a + 1L]], quote(expr = ))) {
           e[[a + 1L]] <- walk(e[[a + 1L]])
@@ -319,7 +451,14 @@ row_expr <- function(x, columns, env, expr, strict) {
       }
       return(e)
     }
-    filter_error(expr, sprintf("%s is applied to a column but is not row-wise", call_label(name)), strict)
+    filter_error(
+      expr,
+      sprintf(
+        "%s is applied to a column but is not row-wise",
+        call_label(name)
+      ),
+      strict
+    )
   }
   walk(x)
 }
@@ -327,7 +466,11 @@ row_expr <- function(x, columns, env, expr, strict) {
 # A value: an expression that names no column, evaluated once in `env`.
 filter_value <- function(x, env, expr) {
   value <- tryCatch(eval(x, env), error = function(e) {
-    filter_error(expr, sprintf("evaluating %s failed (%s)", deparse_one(x), conditionMessage(e)), strict = FALSE)
+    filter_error(
+      expr,
+      sprintf("evaluating %s failed (%s)", deparse_one(x), conditionMessage(e)),
+      strict = FALSE
+    )
   })
   if (is.language(value)) {
     quoted_filter_error(x, expr, strict = FALSE)
@@ -345,7 +488,8 @@ quoted_filter_error <- function(x, expr, strict) {
     expr,
     sprintf(
       "%s is an expression, and `filter` takes the expression written in the call; to pass a quoted one, write eval(bquote(lake_read(tbl, filter = .(%s))))",
-      deparse_one(x), deparse_one(x)
+      deparse_one(x),
+      deparse_one(x)
     ),
     strict = strict
   )
@@ -383,9 +527,14 @@ atom_values <- function(node, x) {
   if (node$fn == "%in%") {
     out <- rep(FALSE, n)
     for (j in seq_len(keys_length(node$keys))) {
-      out <- out | (keys_cmp(keys, keys_subset(node$keys, j), node$kind) %in% 0L)
+      out <- out |
+        (keys_cmp(keys, keys_subset(node$keys, j), node$kind) %in% 0L)
     }
-    nan <- if (is.double(x) && !inherits(x, "integer64")) is.nan(x) else rep(FALSE, n)
+    nan <- if (is.double(x) && !inherits(x, "integer64")) {
+      is.nan(x)
+    } else {
+      rep(FALSE, n)
+    }
     out[is.na(x) & !nan] <- node$has_na
     out[nan] <- node$has_nan
     return(out)
@@ -398,7 +547,8 @@ atom_values <- function(node, x) {
 
 # A comparison's result from -1, 0, 1 (NA stays NA).
 op_sign <- function(cmp, op) {
-  switch(op,
+  switch(
+    op,
     `==` = cmp == 0L,
     `!=` = cmp != 0L,
     `<` = cmp < 0L,
@@ -415,10 +565,13 @@ op_sign <- function(cmp, op) {
 # `env`.
 filter_rows <- function(plan, data, env) {
   n <- nrow(data)
-  switch(plan$op,
+  switch(
+    plan$op,
     not = !filter_rows(plan$args[[1L]], data, env),
-    and = filter_rows(plan$args[[1L]], data, env) & filter_rows(plan$args[[2L]], data, env),
-    or = filter_rows(plan$args[[1L]], data, env) | filter_rows(plan$args[[2L]], data, env),
+    and = filter_rows(plan$args[[1L]], data, env) &
+      filter_rows(plan$args[[2L]], data, env),
+    or = filter_rows(plan$args[[1L]], data, env) |
+      filter_rows(plan$args[[2L]], data, env),
     const = rep(plan$value, n),
     atom = ,
     isna = atom_values(plan, data[[plan$column]]),
@@ -428,11 +581,19 @@ filter_rows <- function(plan, data, env) {
       r <- tryCatch(
         eval(plan$call, as.list(data[plan$columns]), baseenv()),
         error = function(e) {
-          filter_error(plan$call, sprintf("evaluating it on rows failed (%s)", conditionMessage(e)), strict = FALSE)
+          filter_error(
+            plan$call,
+            sprintf("evaluating it on rows failed (%s)", conditionMessage(e)),
+            strict = FALSE
+          )
         }
       )
       if (!is.logical(r) || length(r) != n || !is.null(dim(r))) {
-        filter_error(plan$call, "it does not give one TRUE, FALSE or NA per row", strict = FALSE)
+        filter_error(
+          plan$call,
+          "it does not give one TRUE, FALSE or NA per row",
+          strict = FALSE
+        )
       }
       as.vector(r)
     }
@@ -455,7 +616,11 @@ prune_info <- function(tbl, plan, int64) {
   for (col in intersect(used, pcols)) {
     raw <- partition_raw(actions, tbl, col)
     kind <- type_kind(types[[col]])
-    info$part[[col]] <- if (!is.na(kind) && kind == "exact") raw else parse_partition_values(raw, types[[col]], int64, col)
+    info$part[[col]] <- if (!is.na(kind) && kind == "exact") {
+      raw
+    } else {
+      parse_partition_values(raw, types[[col]], int64, col)
+    }
   }
   data_cols <- setdiff(used, pcols)
   if (length(data_cols)) {
@@ -474,7 +639,8 @@ prune_info <- function(tbl, plan, int64) {
 filter_outcomes <- function(plan, info) {
   n <- info$n
   any_outcome <- list(t = rep(TRUE, n), f = rep(TRUE, n))
-  switch(plan$op,
+  switch(
+    plan$op,
     not = {
       a <- filter_outcomes(plan$args[[1L]], info)
       list(t = a$f, f = a$t)
@@ -498,7 +664,10 @@ filter_outcomes <- function(plan, info) {
       bounds <- info$stats[[plan$column]]
       if (is.null(bounds)) any_outcome else stats_outcomes(plan, bounds)
     },
-    const = list(t = rep(plan$value %in% TRUE, n), f = rep(plan$value %in% FALSE, n)),
+    const = list(
+      t = rep(plan$value %in% TRUE, n),
+      f = rep(plan$value %in% FALSE, n)
+    ),
     # A node R evaluates on rows never prunes, on partition columns too.
     r = any_outcome
   )
@@ -539,10 +708,14 @@ column_bounds <- function(tbl, parsed, col, type) {
     t <- leaf_text(v)
     if (is_marked(v) && grepl("^[0-9]+$", t)) t else NA_character_
   }
-  nrec <- vapply(seq_len(n), function(i) {
-    v <- parsed[[i]][["numRecords"]]
-    if (is.null(v)) NA_character_ else count_text(v)
-  }, "")
+  nrec <- vapply(
+    seq_len(n),
+    function(i) {
+      v <- parsed[[i]][["numRecords"]]
+      if (is.null(v)) NA_character_ else count_text(v)
+    },
+    ""
+  )
   nulls <- vapply(seq_len(n), function(i) count_text(get(i, "nullCount")), "")
   lo_text <- vapply(seq_len(n), function(i) leaf_text(get(i, "minValues")), "")
   hi_text <- vapply(seq_len(n), function(i) leaf_text(get(i, "maxValues")), "")
@@ -552,7 +725,8 @@ column_bounds <- function(tbl, parsed, col, type) {
   null_possible <- !empty & !(exact_cmp(nulls_p, exact_parse("0")) %in% 0L)
   nonnull_possible <- !empty & !(exact_cmp(nulls_p, nrec_p) %in% c(0L, 1L))
   out <- list(
-    null = null_possible, nonnull = nonnull_possible,
+    null = null_possible,
+    nonnull = nonnull_possible,
     nan = nonnull_possible & type %in% c("float", "double"),
     hi_prefix = FALSE
   )
@@ -568,8 +742,10 @@ column_bounds <- function(tbl, parsed, col, type) {
         # deltalake writes decimal statistics through a double, so one with
         # more fraction digits than the scale is not the column's value; and
         # past 15 digits a double holds no decimal exactly.
-        good <- good & ps[["precision"]] <= max_double_precision &
-          exact_fraction_digits(exact_parse(ifelse(good, t, NA))) <= ps[["scale"]]
+        good <- good &
+          ps[["precision"]] <= max_double_precision &
+          exact_fraction_digits(exact_parse(ifelse(good, t, NA))) <=
+            ps[["scale"]]
       }
       ifelse(good, t, NA_character_)
     }
@@ -584,7 +760,8 @@ column_bounds <- function(tbl, parsed, col, type) {
     }
   } else if (kind == "number") {
     num <- function(t) {
-      x <- switch(type,
+      x <- switch(
+        type,
         date = as.numeric(unclass(parse_date_text(t))),
         timestamp = as.numeric(unclass(parse_time_text(t, zone = TRUE))),
         timestamp_ntz = as.numeric(unclass(parse_time_text(t, zone = FALSE))),
@@ -614,7 +791,11 @@ column_bounds <- function(tbl, parsed, col, type) {
     # Delta Spark ends a truncated maximum with U+FFFD as a tie-breaker,
     # which sorts below every supplementary character in UTF-8 byte order:
     # the prefix is what comes before it (#78).
-    hi_text <- ifelse(is.na(hi_text), NA_character_, sub("\uFFFD+$", "", enc2utf8(hi_text)))
+    hi_text <- ifelse(
+      is.na(hi_text),
+      NA_character_,
+      sub("\uFFFD+$", "", enc2utf8(hi_text))
+    )
     out$hi <- hi_text
     out$hi_prefix <- TRUE
   }
@@ -634,11 +815,16 @@ stats_outcomes <- function(node, b) {
   possible <- function(op, v) {
     lo <- keys_cmp(b$lo, v, b$kind)
     hi <- if (b$hi_prefix) {
-      ifelse(bytes_starts_with(rep_len(v, length(b$hi)), b$hi), 1L, bytes_cmp(b$hi, v))
+      ifelse(
+        bytes_starts_with(rep_len(v, length(b$hi)), b$hi),
+        1L,
+        bytes_cmp(b$hi, v)
+      )
     } else {
       keys_cmp(b$hi, v, b$kind)
     }
-    r <- switch(op,
+    r <- switch(
+      op,
       `==` = lo <= 0L & hi >= 0L,
       `!=` = !(lo == 0L & hi == 0L),
       `<` = lo < 0L,
@@ -659,7 +845,10 @@ stats_outcomes <- function(node, b) {
       in_range <- in_range | possible("==", v)
       all_equal <- all_equal | !possible("!=", v)
     }
-    return(list(t = t | (b$nonnull & in_range), f = f | (b$nonnull & !all_equal)))
+    return(list(
+      t = t | (b$nonnull & in_range),
+      f = f | (b$nonnull & !all_equal)
+    ))
   }
   if (!keys_length(node$keys)) {
     none <- rep(FALSE, length(known))

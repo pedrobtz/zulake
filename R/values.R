@@ -10,7 +10,11 @@ schema_fields <- function(tbl) {
 }
 
 field_name <- function(field) {
-  if (is.list(field) && is_string(field[["name"]])) field[["name"]] else NA_character_
+  if (is.list(field) && is_string(field[["name"]])) {
+    field[["name"]]
+  } else {
+    NA_character_
+  }
 }
 
 # The field of `fields` whose logical name is `col`, or NULL when none is.
@@ -73,7 +77,12 @@ parse_time_text <- function(x, zone = TRUE) {
   if (any(ok)) {
     y <- x[ok]
     part <- function(i) sub(re, sprintf("\\%d", as.integer(i)), y)
-    days <- as.numeric(parse_date_text(sprintf("%s-%s-%s", part(1), part(2), part(3))))
+    days <- as.numeric(parse_date_text(sprintf(
+      "%s-%s-%s",
+      part(1),
+      part(2),
+      part(3)
+    )))
     h <- as.numeric(part(4))
     m <- as.numeric(part(5))
     sec <- as.numeric(part(6))
@@ -89,9 +98,20 @@ parse_time_text <- function(x, zone = TRUE) {
       off_h[has_off] <- as.numeric(substr(o, 2L, 3L))
       off_m[has_off] <- as.numeric(substr(o, 4L, 5L))
     }
-    valid <- !is.na(days) & h <= 23 & m <= 59 & sec <= 59 & off_h <= 18 & off_m <= 59 &
-      !(off_h == 18 & off_m > 0) & us < 1e6
-    whole <- days * 86400 + h * 3600 + m * 60 + sec - sign * (off_h * 3600 + off_m * 60)
+    valid <- !is.na(days) &
+      h <= 23 &
+      m <= 59 &
+      sec <= 59 &
+      off_h <= 18 &
+      off_m <= 59 &
+      !(off_h == 18 & off_m > 0) &
+      us < 1e6
+    whole <- days *
+      86400 +
+      h * 3600 +
+      m * 60 +
+      sec -
+      sign * (off_h * 3600 + off_m * 60)
     value <- micros_seconds(whole, us)
     value[!valid] <- NA_real_
     out[ok] <- value
@@ -120,11 +140,16 @@ parse_date_text <- function(x) {
     # as.Date() reads only what the format matches; the day it gives must be
     # the one written.
     parts <- strsplit(y, "-", fixed = TRUE)
-    same <- !is.na(d) & vapply(seq_along(y), function(i) {
-      lt <- as.POSIXlt(d[i])
-      p <- as.integer(parts[[i]])
-      lt$year + 1900L == p[1L] && lt$mon + 1L == p[2L] && lt$mday == p[3L]
-    }, NA)
+    same <- !is.na(d) &
+      vapply(
+        seq_along(y),
+        function(i) {
+          lt <- as.POSIXlt(d[i])
+          p <- as.integer(parts[[i]])
+          lt$year + 1900L == p[1L] && lt$mon + 1L == p[2L] && lt$mday == p[3L]
+        },
+        NA
+      )
     out[ok] <- ifelse(same, as.numeric(d), NA_real_)
   }
   structure(out, class = "Date")
@@ -139,11 +164,18 @@ parse_date_text <- function(x) {
 # so a value that does not parse here is a corrupt log.
 parse_partition_values <- function(x, type, int64, column) {
   what <- sprintf("partition column %s", format_string(column))
-  out <- switch(type,
+  out <- switch(
+    type,
     byte = ,
     short = suppressWarnings(as.integer(x)),
     integer = whole_double(x),
-    long = int64_values(lapply(x, function(v) if (is.na(v)) NA else make_marked(sub("^[+]", "", v))), int64, what),
+    long = int64_values(
+      lapply(x, function(v) {
+        if (is.na(v)) NA else make_marked(sub("^[+]", "", v))
+      }),
+      int64,
+      what
+    ),
     float = ,
     double = partition_double(x),
     boolean = ifelse(is.na(x), NA, tolower(x) == "true"),
@@ -152,11 +184,18 @@ parse_partition_values <- function(x, type, int64, column) {
     timestamp_ntz = parse_time_text(x, zone = FALSE),
     x
   )
-  bad <- !is.na(x) & is.na(out) & !(type %in% c("float", "double") & is.nan(double_special(x)))
+  bad <- !is.na(x) &
+    is.na(out) &
+    !(type %in% c("float", "double") & is.nan(double_special(x)))
   if (any(bad)) {
     zulake_abort(
       "corrupt_log",
-      sprintf("partition value %s of column %s is not a %s.", format_string(x[bad][1L]), format_string(column), type),
+      sprintf(
+        "partition value %s of column %s is not a %s.",
+        format_string(x[bad][1L]),
+        format_string(column),
+        type
+      ),
       column = column
     )
   }
@@ -173,7 +212,9 @@ whole_double <- function(x) {
 partition_double <- function(x) {
   out <- suppressWarnings(as.numeric(sub("^[+]", "", x)))
   special <- double_special(x)
-  out[!is.na(special) | is.nan(special)] <- special[!is.na(special) | is.nan(special)]
+  out[!is.na(special) | is.nan(special)] <- special[
+    !is.na(special) | is.nan(special)
+  ]
   out
 }
 
@@ -197,7 +238,12 @@ partition_table <- function(actions, tbl, int64) {
   types <- column_types(tbl)
   out <- list()
   for (col in columns) {
-    out[[col]] <- parse_partition_values(partition_raw(actions, tbl, col), types[[col]], int64, col)
+    out[[col]] <- parse_partition_values(
+      partition_raw(actions, tbl, col),
+      types[[col]],
+      int64,
+      col
+    )
   }
   new_data_frame(out, length(actions))
 }
@@ -207,10 +253,15 @@ partition_table <- function(actions, tbl, int64) {
 partition_raw <- function(actions, tbl, col) {
   field <- field_by_name(schema_fields(tbl), col)
   key <- field_physical(field, tbl$column_mapping)
-  vapply(actions, function(a) {
-    v <- a[["partitionValues"]][[key]]
-    if (is.null(v) || !nzchar(v)) NA_character_ else v
-  }, "", USE.NAMES = FALSE)
+  vapply(
+    actions,
+    function(a) {
+      v <- a[["partitionValues"]][[key]]
+      if (is.null(v) || !nzchar(v)) NA_character_ else v
+    },
+    "",
+    USE.NAMES = FALSE
+  )
 }
 
 # Partition columns `columns` of `actions` typed as a read returns them:
@@ -222,7 +273,9 @@ partition_read_table <- function(actions, tbl, int64, columns) {
   for (col in columns) {
     raw <- partition_raw(actions, tbl, col)
     ps <- decimal_ps(types[[col]])
-    out[[col]] <- if (!is.null(ps) && ps[["precision"]] <= max_double_precision) {
+    out[[col]] <- if (
+      !is.null(ps) && ps[["precision"]] <= max_double_precision
+    ) {
       as.numeric(raw)
     } else {
       parse_partition_values(raw, types[[col]], int64, col)
@@ -241,10 +294,15 @@ frame_row <- function(df, i) {
 
 # The `stats` string of each of `actions`, NA where a file has none.
 file_stats_text <- function(actions) {
-  vapply(actions, function(a) {
-    s <- a[["stats"]]
-    if (is_string(s)) s else NA_character_
-  }, "", USE.NAMES = FALSE)
+  vapply(
+    actions,
+    function(a) {
+      s <- a[["stats"]]
+      if (is_string(s)) s else NA_character_
+    },
+    "",
+    USE.NAMES = FALSE
+  )
 }
 
 # `stats` strings (NA where a file has none) parsed with every number kept
@@ -264,14 +322,25 @@ parse_stats <- function(stats, paths) {
       zujson_error = function(e) {
         zulake_abort(
           "corrupt_log",
-          sprintf("the statistics of file %s are not valid JSON: %s", format_string(paths[i]), conditionMessage(e)),
+          sprintf(
+            "the statistics of file %s are not valid JSON: %s",
+            format_string(paths[i]),
+            conditionMessage(e)
+          ),
           file = paths[i],
           parent = e
         )
       }
     )
     if (!is.list(x) || (length(x) && is.null(names(x)))) {
-      zulake_abort("corrupt_log", sprintf("the statistics of file %s are not a JSON object.", format_string(paths[i])), file = paths[i])
+      zulake_abort(
+        "corrupt_log",
+        sprintf(
+          "the statistics of file %s are not a JSON object.",
+          format_string(paths[i])
+        ),
+        file = paths[i]
+      )
     }
     out[[i]] <- x
   }
@@ -285,7 +354,16 @@ parse_stats <- function(stats, paths) {
 # A `long` value the `int64` mode cannot hold is NA when `skipped` is an
 # environment, recorded there as `skipped$values[[column]]`; `prefix` is the
 # column path of a nested object.
-stats_object <- function(x, fields, mode, kind, int64, what, skipped = NULL, prefix = "") {
+stats_object <- function(
+  x,
+  fields,
+  mode,
+  kind,
+  int64,
+  what,
+  skipped = NULL,
+  prefix = ""
+) {
   if (is.null(x)) {
     return(NULL)
   }
@@ -306,26 +384,43 @@ stats_object <- function(x, fields, mode, kind, int64, what, skipped = NULL, pre
     }
     v <- x[[j]]
     leaf_what <- sprintf("%s of column %s", what, format_string(out_names[j]))
-    sub_fields <- if (!is.null(field) && identical(field_type(field), "struct")) field[["type"]][["fields"]]
+    sub_fields <- if (
+      !is.null(field) && identical(field_type(field), "struct")
+    ) {
+      field[["type"]][["fields"]]
+    }
     if (is.list(v) && !is.null(names(v))) {
-      out[j] <- list(stats_object(v, sub_fields %||% list(), mode, kind, int64, leaf_what, skipped,
-                                  paste0(prefix, out_names[j], ".")))
+      out[j] <- list(stats_object(
+        v,
+        sub_fields %||% list(),
+        mode,
+        kind,
+        int64,
+        leaf_what,
+        skipped,
+        paste0(prefix, out_names[j], ".")
+      ))
     } else if (kind == "count") {
       out[j] <- list(int64_values(list(v), int64, leaf_what))
     } else {
       type <- if (is.null(field)) NA_character_ else field_type(field)
-      out[j] <- list(if (identical(type, "long") && is.environment(skipped)) {
-        tryCatch(stats_leaf(v, type, int64, leaf_what), zulake_error_int64 = function(e) {
-          column <- paste0(prefix, out_names[j])
-          if (is.null(skipped$values[[column]])) {
-            skipped$values[[column]] <- e$value
-            skipped$paths[[column]] <- skipped$path
-          }
-          if (int64 == "integer64") bit64::as.integer64(NA) else NA_real_
-        })
-      } else {
-        stats_leaf(v, type, int64, leaf_what)
-      })
+      out[j] <- list(
+        if (identical(type, "long") && is.environment(skipped)) {
+          tryCatch(
+            stats_leaf(v, type, int64, leaf_what),
+            zulake_error_int64 = function(e) {
+              column <- paste0(prefix, out_names[j])
+              if (is.null(skipped$values[[column]])) {
+                skipped$values[[column]] <- e$value
+                skipped$paths[[column]] <- skipped$path
+              }
+              if (int64 == "integer64") bit64::as.integer64(NA) else NA_real_
+            }
+          )
+        } else {
+          stats_leaf(v, type, int64, leaf_what)
+        }
+      )
     }
   }
   names(out) <- out_names
@@ -340,14 +435,21 @@ stats_leaf <- function(v, type, int64, what) {
   if (is.na(type)) {
     # A key the schema does not have: numbers as numbers, the rest as given.
     if (is_marked(v)) {
-      return(if (grepl("^-?[0-9]+$", text)) int64_values(list(v), int64, what) else as.numeric(text))
+      return(
+        if (grepl("^-?[0-9]+$", text)) {
+          int64_values(list(v), int64, what)
+        } else {
+          as.numeric(text)
+        }
+      )
     }
     return(if (is.null(v)) NA else unmark_tree(v, int64, what))
   }
   if (grepl("^decimal", type)) {
     return(if (is.na(text)) NA_character_ else as.character(text))
   }
-  out <- switch(type,
+  out <- switch(
+    type,
     byte = ,
     short = suppressWarnings(as.integer(text)),
     integer = whole_double(as.character(text)),
@@ -360,7 +462,15 @@ stats_leaf <- function(v, type, int64, what) {
     return(if (is.null(v)) NA else unmark_tree(v, int64, what))
   )
   if (!is.na(text) && is.na(out)) {
-    zulake_abort("corrupt_log", sprintf("%s is %s, which is not a %s.", what, format_string(as.character(text)), type))
+    zulake_abort(
+      "corrupt_log",
+      sprintf(
+        "%s is %s, which is not a %s.",
+        what,
+        format_string(as.character(text)),
+        type
+      )
+    )
   }
   out
 }

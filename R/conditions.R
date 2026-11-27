@@ -51,7 +51,12 @@
 # without raising it (replay's failed checkpoints).
 zulake_condition <- function(class, message, ..., call = NULL) {
   structure(
-    class = c(paste0("zulake_error_", class), "zulake_error", "error", "condition"),
+    class = c(
+      paste0("zulake_error_", class),
+      "zulake_error",
+      "error",
+      "condition"
+    ),
     list(message = message, call = call, ...)
   )
 }
@@ -62,7 +67,12 @@ zulake_abort <- function(class, message, ..., call = NULL) {
 
 zulake_warn <- function(class, message, ...) {
   cnd <- structure(
-    class = c(paste0("zulake_warning_", class), "zulake_warning", "warning", "condition"),
+    class = c(
+      paste0("zulake_warning_", class),
+      "zulake_warning",
+      "warning",
+      "condition"
+    ),
     list(message = message, call = NULL, ...)
   )
   warning(cnd)

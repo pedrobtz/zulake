@@ -26,7 +26,10 @@
 storage_for <- function(uri, credentials = NULL) {
   check_string(uri, "uri")
   if (!is.null(credentials) && !is.function(credentials)) {
-    zulake_abort("argument", "`credentials` must be NULL or a function of no arguments.")
+    zulake_abort(
+      "argument",
+      "`credentials` must be NULL or a function of no arguments."
+    )
   }
   if (grepl("^[A-Za-z][A-Za-z0-9+.-]*://", uri)) {
     if (is_azure_uri(uri)) {
@@ -57,7 +60,11 @@ storage_local <- function(root) {
 
   list_files <- function(prefix, after = NULL) {
     dir <- full(prefix)
-    files <- if (dir.exists(dir)) list.files(dir, all.files = TRUE, no.. = TRUE) else character()
+    files <- if (dir.exists(dir)) {
+      list.files(dir, all.files = TRUE, no.. = TRUE)
+    } else {
+      character()
+    }
     info <- file.info(file.path(dir, files), extra_cols = FALSE)
     keep <- !is.na(info$isdir) & !info$isdir
     files <- files[keep]
@@ -97,7 +104,10 @@ storage_local <- function(root) {
         "storage",
         sprintf(
           "cannot read bytes %s to %s of %s, which has %s.",
-          format_number(from), format_number(to), format_string(path), format_number(size)
+          format_number(from),
+          format_number(to),
+          format_string(path),
+          format_number(size)
         ),
         path = path
       )
@@ -128,7 +138,12 @@ storage_local <- function(root) {
   }
 
   list(
-    kind = "local", root = root, list = list_files, get = get, get_range = get_range, head = head,
+    kind = "local",
+    root = root,
+    list = list_files,
+    get = get,
+    get_range = get_range,
+    head = head,
     local_path = local_path
   )
 }
@@ -152,5 +167,10 @@ as_utc <- function(x) {
 # The error for a file the backend does not have; `...` adds fields (the
 # Azure backend's `status`).
 abort_no_file <- function(path, ...) {
-  zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path, ...)
+  zulake_abort(
+    "storage",
+    sprintf("cannot read %s: no such file.", format_string(path)),
+    path = path,
+    ...
+  )
 }

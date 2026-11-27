@@ -111,9 +111,20 @@
 #' tbl <- lake_open("abfss://lake@myaccount.dfs.core.windows.net/sales", credentials = token)
 #' lake_files(tbl)
 #' }
-lake_open <- function(uri, version = NULL, timestamp = NULL, credentials = NULL) {
+lake_open <- function(
+  uri,
+  version = NULL,
+  timestamp = NULL,
+  credentials = NULL
+) {
   storage <- storage_for(uri, credentials)
-  snapshot_build(storage, uri, check_version(version), check_timestamp(timestamp), new_downloads())
+  snapshot_build(
+    storage,
+    uri,
+    check_version(version),
+    check_timestamp(timestamp),
+    new_downloads()
+  )
 }
 
 #' @rdname lake_open
@@ -121,7 +132,13 @@ lake_open <- function(uri, version = NULL, timestamp = NULL, credentials = NULL)
 #' @export
 lake_load <- function(tbl, version = NULL, timestamp = NULL) {
   check_table(tbl)
-  snapshot_build(tbl$storage, tbl$uri, check_version(version), check_timestamp(timestamp), tbl$downloads)
+  snapshot_build(
+    tbl$storage,
+    tbl$uri,
+    check_version(version),
+    check_timestamp(timestamp),
+    tbl$downloads
+  )
 }
 
 #' Is there a table here?
@@ -177,7 +194,13 @@ lake_version <- function(tbl) {
 #   storage          the storage backend (storage.R)
 #   downloads        the download cache of the lake_open() it came from
 #                    (new_downloads(), read.R), shared with lake_load()
-snapshot_build <- function(storage, uri, version = NULL, timestamp = NULL, downloads = new_downloads()) {
+snapshot_build <- function(
+  storage,
+  uri,
+  version = NULL,
+  timestamp = NULL,
+  downloads = new_downloads()
+) {
   if (!is.null(version) && !is.null(timestamp)) {
     zulake_abort("argument", "Give `version` or `timestamp`, not both.")
   }
@@ -185,7 +208,10 @@ snapshot_build <- function(storage, uri, version = NULL, timestamp = NULL, downl
   if (!any(entries$kind %in% c("commit", "checkpoint"))) {
     zulake_abort(
       "not_table",
-      sprintf("%s is not a Delta table: it has no `_delta_log/` with a commit in it.", format_string(uri)),
+      sprintf(
+        "%s is not a Delta table: it has no `_delta_log/` with a commit in it.",
+        format_string(uri)
+      ),
       uri = uri
     )
   }
@@ -195,7 +221,10 @@ snapshot_build <- function(storage, uri, version = NULL, timestamp = NULL, downl
   if (!length(commits) && !length(whole)) {
     zulake_abort(
       "checkpoint_unreadable",
-      sprintf("%s has no commits, and no checkpoint that is whole.", format_string(uri)),
+      sprintf(
+        "%s has no commits, and no checkpoint that is whole.",
+        format_string(uri)
+      ),
       checkpoint = max(entries$version[entries$kind == "checkpoint"])
     )
   }
@@ -208,7 +237,8 @@ snapshot_build <- function(storage, uri, version = NULL, timestamp = NULL, downl
         "corrupt_log",
         sprintf(
           "_last_checkpoint names version %s, but the log ends at version %s.",
-          format_number(named), format_number(latest)
+          format_number(named),
+          format_number(latest)
         )
       )
     }
@@ -247,7 +277,13 @@ snapshot_build <- function(storage, uri, version = NULL, timestamp = NULL, downl
     # so it must itself be one zulake can read.
     state <- state_at(latest)
     check_reader_features(state$protocol, state$metadata, latest)
-    version <- version_at(timestamp, entries, state$protocol, state$metadata, read)
+    version <- version_at(
+      timestamp,
+      entries,
+      state$protocol,
+      state$metadata,
+      read
+    )
     if (version != latest) state <- NULL
   } else if (is.null(version)) {
     version <- latest
@@ -256,7 +292,9 @@ snapshot_build <- function(storage, uri, version = NULL, timestamp = NULL, downl
       "version",
       sprintf(
         "%s has no version %s: its log ends at version %s.",
-        format_string(uri), format_number(version), format_number(latest)
+        format_string(uri),
+        format_number(version),
+        format_number(latest)
       ),
       version = version
     )
@@ -271,7 +309,11 @@ snapshot_build <- function(storage, uri, version = NULL, timestamp = NULL, downl
   files <- file_frame(state$adds)
   check_partition_values(files$action, state$metadata, mode)
 
-  entry <- entries[entries$kind == "commit" & entries$version == version, , drop = FALSE]
+  entry <- entries[
+    entries$kind == "commit" & entries$version == version,
+    ,
+    drop = FALSE
+  ]
   commit_info <- NULL
   time <- NA_real_
   if (nrow(entry)) {
@@ -284,7 +326,12 @@ snapshot_build <- function(storage, uri, version = NULL, timestamp = NULL, downl
     }
     commits <- listing_commits(entries)
     commits <- commits[commits$version <= version, , drop = FALSE]
-    time <- commit_times_ms(commits, ict_info(state$protocol, state$metadata), read, nrow(commits))
+    time <- commit_times_ms(
+      commits,
+      ict_info(state$protocol, state$metadata),
+      read,
+      nrow(commits)
+    )
   }
 
   structure(
@@ -324,7 +371,12 @@ sort_by_name <- function(x) {
 file_frame <- function(env) {
   actions <- mget(ls(env, all.names = TRUE, sorted = FALSE), envir = env)
   path <- vapply(actions, function(a) a[["path"]], "", USE.NAMES = FALSE)
-  dv <- vapply(actions, function(a) dv_unique_id(a[["deletionVector"]]), "", USE.NAMES = FALSE)
+  dv <- vapply(
+    actions,
+    function(a) dv_unique_id(a[["deletionVector"]]),
+    "",
+    USE.NAMES = FALSE
+  )
   ord <- order(path, dv, method = "radix")
   new_data_frame(list(
     path = path[ord],

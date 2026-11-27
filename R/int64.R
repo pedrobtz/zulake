@@ -43,7 +43,10 @@ mark_numbers <- function(text, all = FALSE) {
     warning = function(w) {
       zulake_abort(
         "corrupt_log",
-        sprintf("the log's JSON could not be scanned for 64-bit integers: %s", conditionMessage(w))
+        sprintf(
+          "the log's JSON could not be scanned for 64-bit integers: %s",
+          conditionMessage(w)
+        )
       )
     }
   )
@@ -100,7 +103,9 @@ seal_marks <- function(x) {
   if (all(num)) {
     return(make_marked(substring(x, 2L)))
   }
-  lapply(seq_along(x), function(i) if (num[i]) make_marked(substring(x[i], 2L)) else x[i])
+  lapply(seq_along(x), function(i) {
+    if (num[i]) make_marked(substring(x[i], 2L)) else x[i]
+  })
 }
 
 # Text parsed as JSON with its numbers marked, as a commit's line is.
@@ -113,7 +118,9 @@ integer_past_exact <- function(tok) {
   int <- grepl("^-?[0-9]+$", tok)
   digits <- sub("^-?0*", "", tok)
   limit <- sprintf("%.0f", max_exact)
-  int & (nchar(digits) > nchar(limit) | (nchar(digits) == nchar(limit) & sorts_after(digits, limit)))
+  int &
+    (nchar(digits) > nchar(limit) |
+      (nchar(digits) == nchar(limit) & sorts_after(digits, limit)))
 }
 
 is_marked <- function(x) {
@@ -147,7 +154,10 @@ check_int64 <- function(int64) {
     zulake_abort("argument", "`int64` must be \"double\" or \"integer64\".")
   }
   if (int64 == "integer64" && !has_bit64()) {
-    zulake_abort("argument", "`int64 = \"integer64\"` needs the bit64 package, which is not installed.")
+    zulake_abort(
+      "argument",
+      "`int64 = \"integer64\"` needs the bit64 package, which is not installed."
+    )
   }
   int64
 }
@@ -169,34 +179,51 @@ int64_values <- function(x, int64, what) {
   num <- rep(NA_real_, n)
   for (i in seq_len(n)) {
     v <- x[[i]]
-    if (is.null(v) || (length(v) == 1L && is.atomic(v) && is.na(v))) next
+    if (is.null(v) || (length(v) == 1L && is.atomic(v) && is.na(v))) {
+      next
+    }
     if (is_marked(v)) {
       text[i] <- marked_text(v)
     } else if (length(v) == 1L && is.numeric(v) && !inherits(v, "integer64")) {
       num[i] <- as.numeric(v)
     } else {
-      zulake_abort("corrupt_log", sprintf("%s holds a value that is not a number.", what))
+      zulake_abort(
+        "corrupt_log",
+        sprintf("%s holds a value that is not a number.", what)
+      )
     }
   }
   have_num <- !is.na(num)
   if (any(have_num & (!is.finite(num) | num != trunc(num)))) {
-    zulake_abort("corrupt_log", sprintf("%s holds a value that is not a whole number.", what))
+    zulake_abort(
+      "corrupt_log",
+      sprintf("%s holds a value that is not a whole number.", what)
+    )
   }
   have_text <- !is.na(text)
   if (any(have_text & !grepl("^-?[0-9]+$", text))) {
-    zulake_abort("corrupt_log", sprintf("%s holds a value that is not a whole number.", what))
+    zulake_abort(
+      "corrupt_log",
+      sprintf("%s holds a value that is not a whole number.", what)
+    )
   }
-  past <- (have_num & abs(num) > max_exact) | (have_text & integer_past_exact(text))
+  past <- (have_num & abs(num) > max_exact) |
+    (have_text & integer_past_exact(text))
   small_text <- have_text & !past
   num[small_text] <- as.numeric(text[small_text])
   if (int64 == "double") {
     if (any(past)) {
-      v <- if (have_text[past][1L]) text[past][1L] else format_number(num[past][1L])
+      v <- if (have_text[past][1L]) {
+        text[past][1L]
+      } else {
+        format_number(num[past][1L])
+      }
       zulake_abort(
         "int64",
         sprintf(
           "%s holds %s, which a double cannot hold exactly (the limit is 2^53 - 1); use `int64 = \"integer64\"`.",
-          what, v
+          what,
+          v
         ),
         value = v
       )
@@ -213,7 +240,11 @@ int64_values <- function(x, int64, what) {
     v <- out[!is.na(out) & is.na(res)][1L]
     zulake_abort(
       "int64",
-      sprintf("%s holds %s, outside what an integer64 holds (-2^63 + 1 to 2^63 - 1; bit64 keeps -2^63 for NA).", what, v),
+      sprintf(
+        "%s holds %s, outside what an integer64 holds (-2^63 + 1 to 2^63 - 1; bit64 keeps -2^63 for NA).",
+        what,
+        v
+      ),
       value = v
     )
   }
@@ -247,7 +278,8 @@ int64_sum <- function(x, int64, what) {
       "int64",
       sprintf(
         "%s is %s or more, which a double cannot hold exactly (the limit is 2^53 - 1); use `int64 = \"integer64\"`.",
-        what, format_number(total)
+        what,
+        format_number(total)
       ),
       value = format_number(total)
     )

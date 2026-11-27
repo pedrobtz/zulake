@@ -5,7 +5,8 @@
 ict_info <- function(protocol, metadata) {
   conf <- metadata[["configuration"]]
   writer <- as.character(protocol[["writerFeatures"]])
-  on <- protocol[["minWriterVersion"]] >= 7 && "inCommitTimestamp" %in% writer &&
+  on <- protocol[["minWriterVersion"]] >= 7 &&
+    "inCommitTimestamp" %in% writer &&
     identical(conf[["delta.enableInCommitTimestamps"]], "true")
   if (!on) {
     return(list(enabled = FALSE))
@@ -15,7 +16,10 @@ ict_info <- function(protocol, metadata) {
     return(list(enabled = TRUE, version = 0))
   }
   if (!grepl("^[0-9]+$", from)) {
-    zulake_abort("corrupt_log", "the table's in-commit timestamp enablement version is not a whole number.")
+    zulake_abort(
+      "corrupt_log",
+      "the table's in-commit timestamp enablement version is not a whole number."
+    )
   }
   list(enabled = TRUE, version = as.numeric(from))
 }
@@ -37,7 +41,11 @@ commit_times_ms <- function(commits, ict, read, rows = seq_len(nrow(commits))) {
   }
   out <- ms[rows]
   in_commit <- ict$enabled & commits$version[rows] >= ict$version
-  out[in_commit] <- vapply(rows[in_commit], function(i) in_commit_time_ms(commits[i, , drop = FALSE], read), 0)
+  out[in_commit] <- vapply(
+    rows[in_commit],
+    function(i) in_commit_time_ms(commits[i, , drop = FALSE], read),
+    0
+  )
   out
 }
 

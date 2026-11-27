@@ -19,10 +19,15 @@ type_kind <- function(type) {
   if (is.na(type)) {
     return(NA_character_)
   }
-  if (type %in% c("byte", "short", "integer", "long") || grepl("^decimal", type)) {
+  if (
+    type %in% c("byte", "short", "integer", "long") || grepl("^decimal", type)
+  ) {
     return("exact")
   }
-  if (type %in% c("float", "double", "boolean", "date", "timestamp", "timestamp_ntz")) {
+  if (
+    type %in%
+      c("float", "double", "boolean", "date", "timestamp", "timestamp_ntz")
+  ) {
     return("number")
   }
   if (type == "string") {
@@ -33,7 +38,10 @@ type_kind <- function(type) {
 
 # Precision and scale of "decimal(p,s)", or NULL for another type.
 decimal_ps <- function(type) {
-  m <- regmatches(type, regexec("^decimal\\(\\s*([0-9]+)\\s*,\\s*([0-9]+)\\s*\\)$", type))[[1L]]
+  m <- regmatches(
+    type,
+    regexec("^decimal\\(\\s*([0-9]+)\\s*,\\s*([0-9]+)\\s*\\)$", type)
+  )[[1L]]
   if (length(m) != 3L) {
     return(NULL)
   }
@@ -71,7 +79,9 @@ exact_parse <- function(x) {
   ok <- is_exact_text(x)
   if (any(ok)) {
     y <- x[ok]
-    part <- function(i) sub(exact_pattern, sprintf("\\%d", as.integer(i)), y, perl = TRUE)
+    part <- function(i) {
+      sub(exact_pattern, sprintf("\\%d", as.integer(i)), y, perl = TRUE)
+    }
     int <- part(2)
     frac <- part(3)
     e <- part(4)
@@ -155,10 +165,14 @@ literal_keys <- function(value, kind, type, expr) {
   if (is.factor(value)) {
     value <- as.character(value)
   }
-  switch(kind,
+  switch(
+    kind,
     exact = literal_exact(value, expr),
     number = literal_number(value, type, expr),
-    bytes = list(keys = enc2utf8(as.character(value)), nan = rep(FALSE, length(value)))
+    bytes = list(
+      keys = enc2utf8(as.character(value)),
+      nan = rep(FALSE, length(value))
+    )
   )
 }
 
@@ -171,7 +185,10 @@ literal_exact <- function(value, expr) {
   } else if (is.character(value)) {
     bad <- !is.na(value) & !is_exact_text(value)
     if (any(bad)) {
-      filter_error(expr, sprintf("%s is not a number", format_string(value[bad][1L])))
+      filter_error(
+        expr,
+        sprintf("%s is not a number", format_string(value[bad][1L]))
+      )
     }
     text <- value
   } else if (is.logical(value) || is.integer(value)) {
@@ -193,7 +210,8 @@ literal_exact <- function(value, expr) {
           expr,
           sprintf(
             "the double %s has no exact decimal form of 15 digits; write it as text, such as \"%s\", to compare it exactly",
-            sprintf("%.17g", bad), sprintf("%.15g", bad)
+            sprintf("%.17g", bad),
+            sprintf("%.15g", bad)
           )
         )
       }
@@ -201,7 +219,13 @@ literal_exact <- function(value, expr) {
       text[fin] <- out
     }
   } else {
-    filter_error(expr, sprintf("a %s value cannot be compared with a number column", class(value)[1L]))
+    filter_error(
+      expr,
+      sprintf(
+        "a %s value cannot be compared with a number column",
+        class(value)[1L]
+      )
+    )
   }
   list(keys = exact_parse(text), nan = nan)
 }
@@ -212,7 +236,8 @@ literal_exact <- function(value, expr) {
 literal_number <- function(value, type, expr) {
   n <- length(value)
   if (is.character(value)) {
-    x <- switch(type,
+    x <- switch(
+      type,
       date = as.numeric(unclass(parse_date_text(value))),
       timestamp = as.numeric(unclass(parse_time_text(value, zone = TRUE))),
       timestamp_ntz = as.numeric(unclass(parse_time_text(value, zone = FALSE))),
@@ -224,22 +249,48 @@ literal_number <- function(value, type, expr) {
         expr,
         sprintf(
           "%s is text, which zulake does not compare with a %s column (R would compare them as strings); give a number",
-          format_string(value[bad][1L]), type
+          format_string(value[bad][1L]),
+          type
         )
       )
     }
     if (any(bad)) {
-      filter_error(expr, sprintf("%s is not a %s", format_string(value[bad][1L]), type))
+      filter_error(
+        expr,
+        sprintf("%s is not a %s", format_string(value[bad][1L]), type)
+      )
     }
     return(list(keys = x, nan = rep(FALSE, n)))
   }
-  if (type == "date" && inherits(value, "POSIXt") || type %in% c("timestamp", "timestamp_ntz") && inherits(value, "Date")) {
-    filter_error(expr, sprintf("a %s value cannot be compared with a %s column", class(value)[1L], type))
+  if (
+    type == "date" &&
+      inherits(value, "POSIXt") ||
+      type %in% c("timestamp", "timestamp_ntz") && inherits(value, "Date")
+  ) {
+    filter_error(
+      expr,
+      sprintf(
+        "a %s value cannot be compared with a %s column",
+        class(value)[1L],
+        type
+      )
+    )
   }
   if (!is.numeric(unclass(value)) && !is.logical(value)) {
-    filter_error(expr, sprintf("a %s value cannot be compared with a %s column", class(value)[1L], type))
+    filter_error(
+      expr,
+      sprintf(
+        "a %s value cannot be compared with a %s column",
+        class(value)[1L],
+        type
+      )
+    )
   }
-  x <- if (inherits(value, "integer64")) as.numeric(as.character(value)) else as.numeric(unclass(value))
+  x <- if (inherits(value, "integer64")) {
+    as.numeric(as.character(value))
+  } else {
+    as.numeric(unclass(value))
+  }
   list(keys = x, nan = is.nan(x))
 }
 
@@ -247,7 +298,8 @@ literal_number <- function(value, type, expr) {
 # keys of `kind`: decimal text for "exact", doubles for "number", strings for
 # "bytes". `type` gives a decimal's scale.
 column_keys <- function(x, kind, type) {
-  switch(kind,
+  switch(
+    kind,
     exact = exact_parse(column_exact_text(x, type)),
     number = as.numeric(unclass(x)),
     bytes = enc2utf8(as.character(x))
@@ -275,7 +327,8 @@ column_exact_text <- function(x, type) {
 # -1, 0 or 1 comparing keys of one kind, `b` recycled; NA where either is NA
 # (or NaN).
 keys_cmp <- function(a, b, kind) {
-  switch(kind,
+  switch(
+    kind,
     exact = exact_cmp(a, b),
     number = {
       n <- max(length(a), length(b))

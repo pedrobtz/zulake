@@ -91,7 +91,12 @@
 #' lake_partitions(tbl)
 #' lake_removed(tbl)[c("path", "deletion_timestamp")]
 #' lake_count(tbl)
-lake_files <- function(tbl, filter = NULL, stats = TRUE, int64 = c("double", "integer64")) {
+lake_files <- function(
+  tbl,
+  filter = NULL,
+  stats = TRUE,
+  int64 = c("double", "integer64")
+) {
   check_table(tbl)
   int64 <- check_int64(int64)
   if (!isTRUE(stats) && !isFALSE(stats)) {
@@ -103,7 +108,11 @@ lake_files <- function(tbl, filter = NULL, stats = TRUE, int64 = c("double", "in
 
 #' @rdname lake_files
 #' @export
-lake_partitions <- function(tbl, filter = NULL, int64 = c("double", "integer64")) {
+lake_partitions <- function(
+  tbl,
+  filter = NULL,
+  int64 = c("double", "integer64")
+) {
   check_table(tbl)
   int64 <- check_int64(int64)
   keep <- filter_files(tbl, substitute(filter), parent.frame(), int64)
@@ -114,14 +123,27 @@ lake_partitions <- function(tbl, filter = NULL, int64 = c("double", "integer64")
   # Distinct on the log's own text, as deltalake 1.7.0 is: typed values
   # print to 15 digits, lose the sign of zero, and NaN is.na() (#55).
   actions <- tbl$files$action[keep]
-  key <- do.call(paste, c(lapply(names(parts), function(col) {
-    raw <- partition_raw(actions, tbl, col)
-    ifelse(is.na(raw), "N", paste0("V", raw))
-  }), sep = "\x1e"))
+  key <- do.call(
+    paste,
+    c(
+      lapply(names(parts), function(col) {
+        raw <- partition_raw(actions, tbl, col)
+        ifelse(is.na(raw), "N", paste0("V", raw))
+      }),
+      sep = "\x1e"
+    )
+  )
   parts <- parts[!duplicated(key), , drop = FALSE]
-  ord <- do.call(order, c(unname(lapply(parts, function(col) {
-    if (inherits(col, "integer64")) integer64_order_key(col) else col
-  })), method = "radix", na.last = TRUE))
+  ord <- do.call(
+    order,
+    c(
+      unname(lapply(parts, function(col) {
+        if (inherits(col, "integer64")) integer64_order_key(col) else col
+      })),
+      method = "radix",
+      na.last = TRUE
+    )
+  )
   parts <- parts[ord, , drop = FALSE]
   row.names(parts) <- NULL
   parts
@@ -134,7 +156,11 @@ integer64_order_key <- function(x) {
   neg <- !is.na(text) & startsWith(text, "-")
   digits <- sub("^-", "", text)
   padded <- paste0(strrep("0", pmax(0L, 20L - nchar(digits))), digits)
-  out <- ifelse(neg, paste0("0", chartr("0123456789", "9876543210", padded)), paste0("1", padded))
+  out <- ifelse(
+    neg,
+    paste0("0", chartr("0123456789", "9876543210", padded)),
+    paste0("1", padded)
+  )
   out[is.na(text)] <- NA_character_
   out
 }
@@ -145,14 +171,26 @@ lake_removed <- function(tbl, int64 = c("double", "integer64")) {
   check_table(tbl)
   int64 <- check_int64(int64)
   a <- tbl$removed$action
-  ts <- int64_values(lapply(a, function(x) x[["deletionTimestamp"]]), "double", "a remove's `deletionTimestamp`")
+  ts <- int64_values(
+    lapply(a, function(x) x[["deletionTimestamp"]]),
+    "double",
+    "a remove's `deletionTimestamp`"
+  )
   new_data_frame(list(
     path = tbl$removed$path,
     deletion_timestamp = ms_to_posixct(ts),
     data_change = logical_field(a, "dataChange"),
-    size_bytes = int64_values(lapply(a, function(x) x[["size"]]), int64, "a remove's `size`"),
-    partition_values = lapply(a, function(x) string_map(x[["partitionValues"]])),
-    deletion_vector = lapply(a, function(x) dv_descriptor(x[["deletionVector"]], int64)),
+    size_bytes = int64_values(
+      lapply(a, function(x) x[["size"]]),
+      int64,
+      "a remove's `size`"
+    ),
+    partition_values = lapply(a, function(x) {
+      string_map(x[["partitionValues"]])
+    }),
+    deletion_vector = lapply(a, function(x) {
+      dv_descriptor(x[["deletionVector"]], int64)
+    }),
     action = lapply(a, unmark_tree, int64 = int64, what = "a `remove` action")
   ))
 }
@@ -173,16 +211,28 @@ lake_count <- function(tbl, footers = FALSE) {
   }
   if (footers) {
     where <- lapply(counts$missing, function(i) resolve_file(tbl, i))
-    rows <- vapply(seq_along(where), function(k) footer_rows(tbl, counts$missing[k], where[[k]]), 0)
-    known <- int64_sum(counts$per_file[-counts$missing], "double", "The number of records")
-    return(int64_sum(c(known, rows), "double", "The number of records") - counts$deleted)
+    rows <- vapply(
+      seq_along(where),
+      function(k) footer_rows(tbl, counts$missing[k], where[[k]]),
+      0
+    )
+    known <- int64_sum(
+      counts$per_file[-counts$missing],
+      "double",
+      "The number of records"
+    )
+    return(
+      int64_sum(c(known, rows), "double", "The number of records") -
+        counts$deleted
+    )
   }
   n <- counts$without_records
   zulake_warn(
     "count_unknown",
     sprintf(
       "%s live file%s no `numRecords` statistic, so the row count is unknown (NA); `lake_files()` shows which, and `footers = TRUE` reads their counts from the files.",
-      format_number(n), if (n == 1) " has" else "s have"
+      format_number(n),
+      if (n == 1) " has" else "s have"
     ),
     files = n
   )
@@ -198,18 +248,33 @@ add_frame <- function(tbl, actions, stats, int64) {
   out <- list(
     path = paths,
     uri = file_uri(tbl, paths),
-    size_bytes = int64_values(lapply(actions, function(a) a[["size"]]), int64, "an add's `size`"),
+    size_bytes = int64_values(
+      lapply(actions, function(a) a[["size"]]),
+      int64,
+      "an add's `size`"
+    ),
     modification_time = ms_to_posixct(
-      int64_values(lapply(actions, function(a) a[["modificationTime"]]), "double", "an add's `modificationTime`")
+      int64_values(
+        lapply(actions, function(a) a[["modificationTime"]]),
+        "double",
+        "an add's `modificationTime`"
+      )
     ),
     data_change = logical_field(actions, "dataChange"),
     partition = lapply(seq_along(actions), function(i) frame_row(parts, i)),
-    deletion_vector = lapply(actions, function(a) dv_descriptor(a[["deletionVector"]], int64))
+    deletion_vector = lapply(actions, function(a) {
+      dv_descriptor(a[["deletionVector"]], int64)
+    })
   )
   if (stats) {
     out <- c(out, stats_columns(tbl, actions, paths, int64))
   }
-  out$action <- lapply(actions, unmark_tree, int64 = int64, what = "an `add` action")
+  out$action <- lapply(
+    actions,
+    unmark_tree,
+    int64 = int64,
+    what = "an `add` action"
+  )
   new_data_frame(out, length(actions))
 }
 
@@ -222,16 +287,32 @@ stats_columns <- function(tbl, actions, paths, int64) {
   skipped$paths <- list()
   obj <- function(name, kind) {
     lapply(seq_along(parsed), function(i) {
-      what <- sprintf("the %s statistics of file %s", name, format_string(paths[i]))
+      what <- sprintf(
+        "the %s statistics of file %s",
+        name,
+        format_string(paths[i])
+      )
       skipped$path <- paths[i]
-      stats_object(parsed[[i]][[name]], fields, mode, kind, int64, what, if (kind == "value") skipped)
+      stats_object(
+        parsed[[i]][[name]],
+        fields,
+        mode,
+        kind,
+        int64,
+        what,
+        if (kind == "value") skipped
+      )
     })
   }
   num_records <- int64_values(
-    lapply(seq_along(parsed), function(i) parsed[[i]][["numRecords"]]), int64, "a file's `numRecords`"
+    lapply(seq_along(parsed), function(i) parsed[[i]][["numRecords"]]),
+    int64,
+    "a file's `numRecords`"
   )
   cardinality <- int64_values(
-    lapply(actions, function(a) a[["deletionVector"]][["cardinality"]]), int64, "a deletion vector's `cardinality`"
+    lapply(actions, function(a) a[["deletionVector"]][["cardinality"]]),
+    int64,
+    "a deletion vector's `cardinality`"
   )
   check_record_counts(num_records, cardinality, paths)
   out <- list(
@@ -259,9 +340,14 @@ warn_int64 <- function(value, column, path, int64) {
     "int64",
     sprintf(
       "The `long` statistics of column %s include %s (file %s), shown as NA: %s. The exact value stays in `action`.",
-      format_string(column), value, format_string(path), limit
+      format_string(column),
+      value,
+      format_string(path),
+      limit
     ),
-    value = value, column = column, path = path
+    value = value,
+    column = column,
+    path = path
   )
 }
 
@@ -270,24 +356,43 @@ warn_int64 <- function(value, column, path, int64) {
 # no table can have (#59). NA (no statistic, no vector) is not checked.
 check_record_counts <- function(records, cardinality, paths) {
   bad <- function(why, i) {
-    zulake_abort("corrupt_log", sprintf("file %s %s.", format_string(paths[i]), why), file = paths[i])
+    zulake_abort(
+      "corrupt_log",
+      sprintf("file %s %s.", format_string(paths[i]), why),
+      file = paths[i]
+    )
   }
-  num <- function(x) if (inherits(x, "integer64")) as.character(x) else format_number(x)
+  num <- function(x) {
+    if (inherits(x, "integer64")) as.character(x) else format_number(x)
+  }
   neg <- which(!is.na(records) & records < 0)
   if (length(neg)) {
-    bad(sprintf("has a negative `numRecords` (%s)", num(records[neg[1L]])), neg[1L])
+    bad(
+      sprintf("has a negative `numRecords` (%s)", num(records[neg[1L]])),
+      neg[1L]
+    )
   }
   neg <- which(!is.na(cardinality) & cardinality < 0)
   if (length(neg)) {
-    bad(sprintf("has a deletion vector of negative `cardinality` (%s)", num(cardinality[neg[1L]])), neg[1L])
+    bad(
+      sprintf(
+        "has a deletion vector of negative `cardinality` (%s)",
+        num(cardinality[neg[1L]])
+      ),
+      neg[1L]
+    )
   }
   over <- which(!is.na(records) & !is.na(cardinality) & cardinality > records)
   if (length(over)) {
     i <- over[1L]
-    bad(sprintf(
-      "has a deletion vector of %s rows, more than its %s records",
-      num(cardinality[i]), num(records[i])
-    ), i)
+    bad(
+      sprintf(
+        "has a deletion vector of %s rows, more than its %s records",
+        num(cardinality[i]),
+        num(records[i])
+      ),
+      i
+    )
   }
   invisible()
 }
@@ -299,15 +404,26 @@ file_counts <- function(tbl, int64) {
   actions <- tbl$files$action
   paths <- tbl$files$path
   parsed <- parse_stats(file_stats_text(actions), paths)
-  records <- int64_values(lapply(parsed, function(p) p[["numRecords"]]), int64, "a file's `numRecords`")
+  records <- int64_values(
+    lapply(parsed, function(p) p[["numRecords"]]),
+    int64,
+    "a file's `numRecords`"
+  )
   dvs <- lapply(actions, function(a) a[["deletionVector"]])
   has_dv <- !vapply(dvs, is.null, NA)
-  deleted <- int64_values(lapply(dvs, function(d) d[["cardinality"]]), int64, "a deletion vector's `cardinality`")
+  deleted <- int64_values(
+    lapply(dvs, function(d) d[["cardinality"]]),
+    int64,
+    "a deletion vector's `cardinality`"
+  )
   missing_dv <- has_dv & is.na(deleted)
   if (any(missing_dv)) {
     zulake_abort(
       "corrupt_log",
-      sprintf("file %s has a deletion vector without a `cardinality`.", format_string(paths[missing_dv][1L])),
+      sprintf(
+        "file %s has a deletion vector without a `cardinality`.",
+        format_string(paths[missing_dv][1L])
+      ),
       file = paths[missing_dv][1L]
     )
   }
@@ -349,7 +465,11 @@ dv_descriptor <- function(dv, int64) {
   }
   num <- function(name) {
     v <- dv[[name]]
-    if (is.null(v)) NULL else int64_values(list(v), int64, sprintf("a deletion vector's `%s`", name))
+    if (is.null(v)) {
+      NULL
+    } else {
+      int64_values(list(v), int64, sprintf("a deletion vector's `%s`", name))
+    }
   }
   list(
     storageType = dv[["storageType"]],
@@ -361,10 +481,15 @@ dv_descriptor <- function(dv, int64) {
 }
 
 logical_field <- function(actions, name) {
-  vapply(actions, function(a) {
-    v <- a[[name]]
-    if (is.logical(v) && length(v) == 1L) v else NA
-  }, NA, USE.NAMES = FALSE)
+  vapply(
+    actions,
+    function(a) {
+      v <- a[[name]]
+      if (is.logical(v) && length(v) == 1L) v else NA
+    },
+    NA,
+    USE.NAMES = FALSE
+  )
 }
 
 # A map of strings (partition values) as a named character vector, NA for
@@ -383,7 +508,11 @@ file_uri <- function(tbl, paths) {
   absolute <- vapply(paths, is_absolute_path, NA, USE.NAMES = FALSE)
   out <- paths
   rel <- !absolute
-  out[rel] <- paste0(sub("/+$", "", tbl$storage$root), "/", percent_decode(paths[rel]))
+  out[rel] <- paste0(
+    sub("/+$", "", tbl$storage$root),
+    "/",
+    percent_decode(paths[rel])
+  )
   out
 }
 
@@ -392,28 +521,44 @@ file_uri <- function(tbl, paths) {
 # (#49): "corrupt_log" for the log's paths, "uri" for a user's URI,
 # "storage" for Azure's answers.
 percent_decode <- function(x, class = "corrupt_log") {
-  vapply(x, function(s) {
-    if (!grepl("%", s, fixed = TRUE)) {
-      return(s)
-    }
-    m <- gregexpr("%[0-9A-Fa-f]{2}", s)
-    pieces <- regmatches(s, m, invert = TRUE)[[1L]]
-    codes <- regmatches(s, m)[[1L]]
-    bytes <- raw()
-    for (i in seq_along(pieces)) {
-      bytes <- c(bytes, charToRaw(pieces[i]))
-      if (i <= length(codes)) {
-        bytes <- c(bytes, as.raw(strtoi(substring(codes[i], 2L), 16L)))
+  vapply(
+    x,
+    function(s) {
+      if (!grepl("%", s, fixed = TRUE)) {
+        return(s)
       }
-    }
-    if (any(bytes == as.raw(0L))) {
-      zulake_abort(class, sprintf("the path %s decodes to a NUL byte.", format_string(s)), path = s)
-    }
-    out <- rawToChar(bytes)
-    Encoding(out) <- "UTF-8"
-    if (!validUTF8(out)) {
-      zulake_abort(class, sprintf("the path %s does not decode to UTF-8 text.", format_string(s)), path = s)
-    }
-    out
-  }, "", USE.NAMES = FALSE)
+      m <- gregexpr("%[0-9A-Fa-f]{2}", s)
+      pieces <- regmatches(s, m, invert = TRUE)[[1L]]
+      codes <- regmatches(s, m)[[1L]]
+      bytes <- raw()
+      for (i in seq_along(pieces)) {
+        bytes <- c(bytes, charToRaw(pieces[i]))
+        if (i <= length(codes)) {
+          bytes <- c(bytes, as.raw(strtoi(substring(codes[i], 2L), 16L)))
+        }
+      }
+      if (any(bytes == as.raw(0L))) {
+        zulake_abort(
+          class,
+          sprintf("the path %s decodes to a NUL byte.", format_string(s)),
+          path = s
+        )
+      }
+      out <- rawToChar(bytes)
+      Encoding(out) <- "UTF-8"
+      if (!validUTF8(out)) {
+        zulake_abort(
+          class,
+          sprintf(
+            "the path %s does not decode to UTF-8 text.",
+            format_string(s)
+          ),
+          path = s
+        )
+      }
+      out
+    },
+    "",
+    USE.NAMES = FALSE
+  )
 }
