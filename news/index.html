@@ -91,6 +91,9 @@
 <li>Fixed: with <code>int64 = "integer64"</code>, a size or record count summed past 2^63 - 1 is now a <code>zulake_error_int64</code> instead of <code>NA</code> with a bit64 warning (<a href="https://github.com/pedrobtz/zulake/issues/92" class="external-link">#92</a>).</li>
 <li>
 <code>filter = q</code>, with <code>q</code> a quoted expression, is now refused with a message that says how to pass one (<code>eval(bquote(...))</code>), instead of “a value must be a vector” (<a href="https://github.com/pedrobtz/zulake/issues/92" class="external-link">#92</a>).</li>
+<li>Fixed: a JSON object in the log with the same key twice, at any depth (in a commit, a log compaction file, a JSON V2 checkpoint or <code>_last_checkpoint</code>), was read with the key’s first value, where <code>deltalake</code> reads its last, so the two could see different live files. It is now a <code>zulake_error_corrupt_log</code> whose <code>file</code>, <code>line</code> and <code>key</code> fields name it (<a href="https://github.com/pedrobtz/zulake/issues/102" class="external-link">#102</a>).</li>
+<li>Fixed: a commit that both adds and removes one logical file (the same <code>path</code> and deletion vector) left the file live, where <code>deltalake</code> decides by line order. The protocol forbids it, and it is now a <code>zulake_error_corrupt_log</code> with the <code>file</code> and the <code>path</code> (<a href="https://github.com/pedrobtz/zulake/issues/103" class="external-link">#103</a>). A file removed and added with a new deletion vector is still an update.</li>
+<li>An Azure URI with a port, <code>:443</code> included, is still refused, but the message now says that the port is the reason, and the <code>zulake_error_uri</code> has a <code>port</code> field, instead of “cannot open "abfss" URIs” (<a href="https://github.com/pedrobtz/zulake/issues/92" class="external-link">#92</a>).</li>
 </ul></div>
   </main></div>
 
