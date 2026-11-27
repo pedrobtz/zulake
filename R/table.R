@@ -88,7 +88,10 @@
 lake_versions <- function(tbl) {
   check_table(tbl)
   commits <- snapshot_commits(tbl)
-  new_data_frame(list(version = commits$version, timestamp = commit_times(tbl, commits)))
+  new_data_frame(list(
+    version = commits$version,
+    timestamp = commit_times(tbl, commits)
+  ))
 }
 
 #' @rdname lake_versions
@@ -98,7 +101,10 @@ lake_history <- function(tbl, limit = NULL, int64 = c("double", "integer64")) {
   int64 <- check_int64(int64)
   limit <- arg_number(limit)
   if (!is.null(limit) && (!is_whole(limit) || limit < 0)) {
-    zulake_abort("argument", "`limit` must be NULL or a whole number of 0 or more.")
+    zulake_abort(
+      "argument",
+      "`limit` must be NULL or a whole number of 0 or more."
+    )
   }
   commits <- snapshot_commits(tbl)
   commits <- commits[rev(seq_len(nrow(commits))), , drop = FALSE]
@@ -108,15 +114,23 @@ lake_history <- function(tbl, limit = NULL, int64 = c("double", "integer64")) {
   info <- lapply(commits$name, function(name) {
     for (a in read_actions(tbl$storage, name)) {
       if (!is.null(a[["commitInfo"]])) {
-        return(unmark_tree(a[["commitInfo"]], int64, sprintf("the `commitInfo` of %s", name)))
+        return(unmark_tree(
+          a[["commitInfo"]],
+          int64,
+          sprintf("the `commitInfo` of %s", name)
+        ))
       }
     }
     NULL
   })
-  operation <- vapply(info, function(x) {
-    op <- if (is.list(x)) x[["operation"]]
-    if (is_string(op)) op else NA_character_
-  }, "")
+  operation <- vapply(
+    info,
+    function(x) {
+      op <- if (is.list(x)) x[["operation"]]
+      if (is_string(op)) op else NA_character_
+    },
+    ""
+  )
   new_data_frame(list(
     version = version_column(commits$version, int64),
     timestamp = commit_times(tbl, commits),
@@ -132,14 +146,24 @@ lake_metadata <- function(tbl) {
   m <- tbl$metadata
   str_or_na <- function(x) if (is_string(x)) x else NA_character_
   created <- m[["createdTime"]]
-  created <- if (is.null(created)) NA_real_ else int64_values(list(created), "double", "the table's `createdTime`")
+  created <- if (is.null(created)) {
+    NA_real_
+  } else {
+    int64_values(list(created), "double", "the table's `createdTime`")
+  }
   fmt <- m[["format"]]
   new_data_frame(list(
     id = m[["id"]],
     name = str_or_na(m[["name"]]),
     description = str_or_na(m[["description"]]),
     format_provider = str_or_na(if (is.list(fmt)) fmt[["provider"]]),
-    format_options = list(if (is.list(fmt) && is.list(fmt[["options"]])) fmt[["options"]] else named_list()),
+    format_options = list(
+      if (is.list(fmt) && is.list(fmt[["options"]])) {
+        fmt[["options"]]
+      } else {
+        named_list()
+      }
+    ),
     created_time = ms_to_posixct(created),
     partition_columns = list(m[["partitionColumns"]]),
     configuration = list(as.list(m[["configuration"]] %||% named_list()))
@@ -153,15 +177,23 @@ lake_schema <- function(tbl) {
   fields <- schema_fields(tbl)
   mode <- tbl$column_mapping
   physical <- vapply(fields, field_physical, "", mode = mode)
-  names_ <- vapply(fields, field_name, "")
+  logical_names <- vapply(fields, field_name, "")
   new_data_frame(list(
-    name = names_,
+    name = logical_names,
     type = vapply(fields, field_type, ""),
     nullable = vapply(fields, function(f) isTRUE(f[["nullable"]]), NA),
-    partition = names_ %in% tbl$metadata[["partitionColumns"]],
-    physical_name = if (mode == "none") rep(NA_character_, length(fields)) else physical,
-    metadata = lapply(fields, function(f) if (is.list(f[["metadata"]])) f[["metadata"]] else named_list()),
-    type_detail = lapply(fields, function(f) if (is.list(f[["type"]])) f[["type"]] else NULL)
+    partition = logical_names %in% tbl$metadata[["partitionColumns"]],
+    physical_name = if (mode == "none") {
+      rep(NA_character_, length(fields))
+    } else {
+      physical
+    },
+    metadata = lapply(fields, function(f) {
+      if (is.list(f[["metadata"]])) f[["metadata"]] else named_list()
+    }),
+    type_detail = lapply(fields, function(f) {
+      if (is.list(f[["type"]])) f[["type"]] else NULL
+    })
   ))
 }
 
@@ -191,13 +223,21 @@ property_defaults <- c(
 lake_properties <- function(tbl) {
   check_table(tbl)
   conf <- tbl$metadata[["configuration"]]
-  set <- if (length(conf)) vapply(conf, function(v) if (is.null(v)) NA_character_ else v, "") else character()
-  missing <- setdiff(names(property_defaults), names(set))
-  key <- c(names(set), missing)
-  value <- c(unname(set), unname(property_defaults[missing]))
-  default <- c(rep(FALSE, length(set)), rep(TRUE, length(missing)))
+  set <- if (length(conf)) {
+    vapply(conf, function(v) if (is.null(v)) NA_character_ else v, "")
+  } else {
+    character()
+  }
+  absent <- setdiff(names(property_defaults), names(set))
+  key <- c(names(set), absent)
+  value <- c(unname(set), unname(property_defaults[absent]))
+  default <- c(rep(FALSE, length(set)), rep(TRUE, length(absent)))
   ord <- order(key, method = "radix")
-  new_data_frame(list(key = key[ord], value = value[ord], default = default[ord]))
+  new_data_frame(list(
+    key = key[ord],
+    value = value[ord],
+    default = default[ord]
+  ))
 }
 
 #' @rdname lake_versions
@@ -213,7 +253,11 @@ lake_summary <- function(tbl, int64 = c("double", "integer64")) {
   check_table(tbl)
   int64 <- check_int64(int64)
   counts <- file_counts(tbl, int64)
-  sizes <- int64_values(lapply(tbl$files$action, function(a) a[["size"]]), int64, "an add's `size`")
+  sizes <- int64_values(
+    lapply(tbl$files$action, function(a) a[["size"]]),
+    int64,
+    "an add's `size`"
+  )
   new_data_frame(list(
     version = version_column(tbl$version, int64),
     timestamp = tbl$timestamp,
@@ -228,8 +272,6 @@ lake_summary <- function(tbl, int64 = c("double", "integer64")) {
 
 # ---- helpers -------------------------------------------------------------
 
-named_list <- function() structure(list(), names = character())
-
 # Versions as the `int64` argument asks: always exact, since the log's
 # versions are below 2^53.
 version_column <- function(v, int64) {
@@ -239,7 +281,11 @@ version_column <- function(v, int64) {
 # The commits of the log listing up to the snapshot's version, oldest first.
 snapshot_commits <- function(tbl) {
   log <- tbl$log
-  commits <- log[log$kind == "commit" & log$version <= tbl$version, , drop = FALSE]
+  commits <- log[
+    log$kind == "commit" & log$version <= tbl$version,
+    ,
+    drop = FALSE
+  ]
   commits <- commits[order(commits$version), , drop = FALSE]
   row.names(commits) <- NULL
   commits
@@ -251,7 +297,12 @@ snapshot_commits <- function(tbl) {
 commit_times <- function(tbl, commits) {
   ict <- ict_info(tbl$protocol, tbl$metadata)
   read <- function(name) read_actions(tbl$storage, name)
-  all <- snapshot_commits(tbl)
-  ms <- commit_times_ms(all, ict, read, match(commits$version, all$version))
+  commits_all <- snapshot_commits(tbl)
+  ms <- commit_times_ms(
+    commits_all,
+    ict,
+    read,
+    match(commits$version, commits_all$version)
+  )
   ms_to_posixct(ms)
 }

@@ -34,12 +34,20 @@
 # deltalake's storage layer, sends.
 azure_version <- "2023-11-03"
 
-# ---- URIs ------------------------------------------------------------------
+# ---- URIs ----------------------------------------------------------------
 
 # Whether `uri` is one of the three Azure forms, by scheme and host only.
 is_azure_uri <- function(uri) {
-  grepl("^abfss://[^/]*@[^/]*[.]dfs[.]core[.]windows[.]net(/|$)", uri, ignore.case = TRUE) ||
-    grepl("^https://[^/]*[.](blob|dfs)[.]core[.]windows[.]net(/|$)", uri, ignore.case = TRUE)
+  grepl(
+    "^abfss://[^/]*@[^/]*[.]dfs[.]core[.]windows[.]net(/|$)",
+    uri,
+    ignore.case = TRUE
+  ) ||
+    grepl(
+      "^https://[^/]*[.](blob|dfs)[.]core[.]windows[.]net(/|$)",
+      uri,
+      ignore.case = TRUE
+    )
 }
 
 # The parts of an Azure URI: account, container, path (the table's blob
@@ -58,7 +66,14 @@ parse_azure_uri <- function(uri) {
     )
   }
   if (grepl("^abfss://", uri, ignore.case = TRUE)) {
-    m <- regmatches(uri, regexec("^abfss://([^/@]*)@([^/]*)[.]dfs[.]core[.]windows[.]net(/.*)?$", uri, ignore.case = TRUE))[[1L]]
+    m <- regmatches(
+      uri,
+      regexec(
+        "^abfss://([^/@]*)@([^/]*)[.]dfs[.]core[.]windows[.]net(/.*)?$",
+        uri,
+        ignore.case = TRUE
+      )
+    )[[1L]]
     # Where abfss has its container, a ":" makes user information with a
     # password, which is neither quoted nor kept with the condition (#48).
     if (length(m) && grepl(":", m[2L], fixed = TRUE)) {
@@ -68,22 +83,42 @@ parse_azure_uri <- function(uri) {
     account <- tolower(m[3L])
     path <- m[4L]
   } else {
-    m <- regmatches(uri, regexec("^https://([^/]*)[.](blob|dfs)[.]core[.]windows[.]net(/([^/]*)(/.*)?)?$", uri, ignore.case = TRUE))[[1L]]
+    m <- regmatches(
+      uri,
+      regexec(
+        "^https://([^/]*)[.](blob|dfs)[.]core[.]windows[.]net(/([^/]*)(/.*)?)?$",
+        uri,
+        ignore.case = TRUE
+      )
+    )[[1L]]
     account <- tolower(m[2L])
     container <- m[5L]
     path <- m[6L]
   }
   if (!length(m) || grepl("@", account)) {
-    zulake_abort("uri", "An Azure URI must not hold user information; give a token through `credentials`.")
+    zulake_abort(
+      "uri",
+      "An Azure URI must not hold user information; give a token through `credentials`."
+    )
   }
   if (!grepl("^[a-z0-9]{3,24}$", account)) {
     zulake_abort(
       "uri",
-      sprintf("%s is not an Azure storage account name: 3 to 24 lowercase letters and digits.", format_string(account)),
+      sprintf(
+        "%s is not an Azure storage account name: 3 to 24 lowercase letters and digits.",
+        format_string(account)
+      ),
       uri = uri
     )
   }
-  if (!grepl("^[a-z0-9]([a-z0-9]|-(?!-)){1,61}[a-z0-9]$", container, perl = TRUE) && container != "$root") {
+  if (
+    !grepl(
+      "^[a-z0-9]([a-z0-9]|-(?!-)){1,61}[a-z0-9]$",
+      container,
+      perl = TRUE
+    ) &&
+      container != "$root"
+  ) {
     zulake_abort(
       "uri",
       sprintf(
@@ -98,11 +133,27 @@ parse_azure_uri <- function(uri) {
   path <- sub("^/", "", path)
   trailing <- endsWith(path, "/")
   path <- percent_decode(sub("/$", "", path), "uri")
-  if ((trailing && !nzchar(path)) || endsWith(path, "/") ||
-      (nzchar(path) && any(strsplit(path, "/", fixed = TRUE)[[1L]] %in% c("", ".", "..")))) {
-    zulake_abort("uri", sprintf("%s has an empty, \".\" or \"..\" path segment.", format_string(uri)), uri = uri)
+  if (
+    (trailing && !nzchar(path)) ||
+      endsWith(path, "/") ||
+      (nzchar(path) &&
+        any(strsplit(path, "/", fixed = TRUE)[[1L]] %in% c("", ".", "..")))
+  ) {
+    zulake_abort(
+      "uri",
+      sprintf(
+        "%s has an empty, \".\" or \"..\" path segment.",
+        format_string(uri)
+      ),
+      uri = uri
+    )
   }
-  list(account = account, container = container, path = unname(path), uri = sub("/+$", "", uri))
+  list(
+    account = account,
+    container = container,
+    path = unname(path),
+    uri = sub("/+$", "", uri)
+  )
 }
 
 # The Blob endpoint for `account`: zulake.azure_endpoint when set.
@@ -112,7 +163,10 @@ azure_endpoint <- function(account) {
     return(sprintf("https://%s.blob.core.windows.net", account))
   }
   if (!is_string(endpoint) || !grepl("^https?://", endpoint)) {
-    zulake_abort("argument", "Option `zulake.azure_endpoint` must be NULL or an http(s) URL.")
+    zulake_abort(
+      "argument",
+      "Option `zulake.azure_endpoint` must be NULL or an http(s) URL."
+    )
   }
   sub("/+$", "", endpoint)
 }
@@ -134,24 +188,17 @@ url_encode <- function(x) {
   paste(out, collapse = "")
 }
 
-unreserved_bytes <- charToRaw("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+unreserved_bytes <- charToRaw(
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+)
 
-# ---- credentials -----------------------------------------------------------
+# ---- credentials ---------------------------------------------------------
 
-# Made in .onLoad(), not here: an environment made when the package is
-# built is stored in its lazy-load database, and the loader's own
-# environments keep a reference to it, which a srcref or a byte-code
-# constant in a snapshot can reach (seen with the source kept, Stage 6).
+# Made in .onLoad() (zulake-package.R, which says why), not here.
 # `credential_env` holds the entries and nothing else; `credential_state`
 # the session's nonce and counter.
 credential_env <- NULL
 credential_state <- NULL
-
-.onLoad <- function(libname, pkgname) {
-  ns <- topenv()
-  assign("credential_env", new.env(parent = emptyenv()), envir = ns)
-  assign("credential_state", new.env(parent = emptyenv()), envir = ns)
-}
 
 # A handle on `credentials` (a function, or NULL for anonymous requests)
 # for the table at `root` (its URI): an environment holding only an id and
@@ -170,7 +217,11 @@ credential_handle <- function(credentials, root) {
   handle <- new.env(parent = emptyenv())
   handle$id <- id
   handle$root <- root
-  assign(id, list(fn = credentials, token = NULL, root = root), envir = credential_env)
+  assign(
+    id,
+    list(fn = credentials, token = NULL, root = root),
+    envir = credential_env
+  )
   reg.finalizer(handle, credential_release)
   handle
 }
@@ -179,13 +230,25 @@ credential_handle <- function(credentials, root) {
 # is one, else from R's, seeded afresh from the clock and the process id and
 # leaving the session's own random stream (`.Random.seed`) as it was.
 random_hex <- function(n) {
-  bytes <- tryCatch(system_random_bytes(n), error = function(e) raw(), warning = function(w) raw())
+  bytes <- tryCatch(
+    system_random_bytes(n),
+    error = function(e) raw(),
+    warning = function(w) raw()
+  )
   if (length(bytes) != n) {
     genv <- globalenv()
     had <- exists(".Random.seed", envir = genv, inherits = FALSE)
     old <- if (had) get(".Random.seed", envir = genv, inherits = FALSE)
-    on.exit(if (had) assign(".Random.seed", old, envir = genv) else rm(".Random.seed", envir = genv))
-    if (had) rm(".Random.seed", envir = genv)
+    on.exit(
+      if (had) {
+        assign(".Random.seed", old, envir = genv)
+      } else {
+        rm(".Random.seed", envir = genv)
+      }
+    )
+    if (had) {
+      rm(".Random.seed", envir = genv)
+    }
     bytes <- as.raw(sample.int(256L, n, replace = TRUE) - 1L)
   }
   paste(sprintf("%02x", as.integer(bytes)), collapse = "")
@@ -211,7 +274,9 @@ credential_release <- function(handle) {
 credential_entry <- function(handle) {
   id <- if (is.environment(handle)) handle$id
   root <- if (is.environment(handle)) handle$root
-  entry <- if (is_string(id) && exists(id, envir = credential_env, inherits = FALSE)) {
+  entry <- if (
+    is_string(id) && exists(id, envir = credential_env, inherits = FALSE)
+  ) {
     get(id, envir = credential_env, inherits = FALSE)
   }
   if (is.null(entry) || !is_string(root) || !identical(entry$root, root)) {
@@ -237,17 +302,25 @@ credential_token <- function(handle, refresh = FALSE) {
     return(entry$token)
   }
   token <- tryCatch(entry$fn(), error = function(e) {
-    zulake_abort("auth", sprintf("`credentials()` failed: %s", conditionMessage(e)))
+    zulake_abort(
+      "auth",
+      sprintf("`credentials()` failed: %s", conditionMessage(e))
+    )
   })
   # A leading "Bearer " (any case) is the header's, not the token's: dropped
   # before the token is checked, so that "Bearer " alone is no token (#47).
   if (is_string(token)) {
     token <- sub("^[Bb][Ee][Aa][Rr][Ee][Rr] +", "", token)
   }
-  if (!is_string(token) || !nzchar(token) || grepl("[[:cntrl:][:space:]]", token)) {
+  if (
+    !is_string(token) || !nzchar(token) || grepl("[[:cntrl:][:space:]]", token)
+  ) {
     zulake_abort(
       "auth",
-      "`credentials()` must return a bearer token: a single non-empty string without spaces or control characters."
+      paste(
+        "`credentials()` must return a bearer token: a single non-empty string",
+        "without spaces or control characters."
+      )
     )
   }
   entry$token <- token
@@ -255,7 +328,7 @@ credential_token <- function(handle, refresh = FALSE) {
   token
 }
 
-# ---- requests --------------------------------------------------------------
+# ---- requests ------------------------------------------------------------
 
 azure_env <- new.env(parent = emptyenv())
 
@@ -265,7 +338,10 @@ azure_client <- function() {
   client <- getOption("zulake.azure_client")
   if (!is.null(client)) {
     if (!inherits(client, "zu_client")) {
-      zulake_abort("argument", "Option `zulake.azure_client` must be NULL or a zuhttp client.")
+      zulake_abort(
+        "argument",
+        "Option `zulake.azure_client` must be NULL or a zuhttp client."
+      )
     }
     return(client)
   }
@@ -285,36 +361,67 @@ azure_timeout <- 600
 # `range` c(from, to). Returns the response, whatever its status; a
 # transport failure is a zulake_error_storage that keeps zuhttp's message
 # and class, not its request.
-azure_request <- function(loc, method, blob, query = NULL, range = NULL, path = blob) {
+azure_request <- function(
+  loc,
+  method,
+  blob,
+  query = NULL,
+  range = NULL,
+  path = blob
+) {
   url <- paste0(loc$endpoint, "/", url_encode(loc$container))
   if (nzchar(blob)) {
     url <- paste0(url, "/", blob_path_url(blob))
   }
   headers <- c(`x-ms-version` = azure_version)
   if (!is.null(range)) {
-    headers <- c(headers, Range = sprintf("bytes=%s-%s", format_number(range[1L]), format_number(range[2L])))
+    headers <- c(
+      headers,
+      Range = sprintf(
+        "bytes=%s-%s",
+        format_number(range[1L]),
+        format_number(range[2L])
+      )
+    )
   }
   for (attempt in 1:2) {
     token <- credential_token(loc$handle, refresh = attempt == 2L)
-    h <- if (is.null(token)) headers else c(headers, Authorization = paste("Bearer", token))
+    h <- if (is.null(token)) {
+      headers
+    } else {
+      c(headers, Authorization = paste("Bearer", token))
+    }
     token <- NULL
     perform <- if (method == "HEAD") zuhttp::zu_head else zuhttp::zu_get
     resp <- tryCatch(
       perform(
         url,
-        query = query, headers = h, check = FALSE, decode = FALSE, max_body = Inf,
-        timeout = azure_timeout, client = azure_client()
+        query = query,
+        headers = h,
+        check = FALSE,
+        decode = FALSE,
+        max_body = Inf,
+        timeout = azure_timeout,
+        client = azure_client()
       ),
       zu_error = function(e) {
         zulake_abort(
           "storage",
-          sprintf("cannot reach Azure for %s: %s", format_string(path), conditionMessage(e)),
-          path = path, reason = class(e)[1L]
+          sprintf(
+            "cannot reach Azure for %s: %s",
+            format_string(path),
+            conditionMessage(e)
+          ),
+          path = path,
+          reason = class(e)[1L]
         )
       }
     )
     h <- NULL
-    if (zuhttp::zu_resp_status(resp) != 401L || is.null(credential_entry(loc$handle)$fn)) {
+    if (
+      zuhttp::zu_resp_status(resp) != 401L ||
+        is.null(credential_entry(loc$handle)$fn)
+    ) {
       break
     }
   }
@@ -328,19 +435,23 @@ azure_fail <- function(resp, what, path) {
   status <- zuhttp::zu_resp_status(resp)
   code <- zuhttp::zu_resp_header(resp, "x-ms-error-code")
   code <- if (length(code)) code[1L] else NA_character_
-  class <- if (status %in% c(401L, 403L)) "auth" else "storage"
+  kind <- if (status %in% c(401L, 403L)) "auth" else "storage"
   zulake_abort(
-    class,
+    kind,
     sprintf(
       "cannot %s %s: Azure answered HTTP %s%s.",
-      what, format_string(path), format_number(status),
+      what,
+      format_string(path),
+      format_number(status),
       if (is.na(code)) "" else sprintf(" (%s)", format_string(code))
     ),
-    path = path, status = status, code = code
+    path = path,
+    status = status,
+    code = code
   )
 }
 
-# ---- the backend -----------------------------------------------------------
+# ---- the backend ---------------------------------------------------------
 
 # The Azure backend for a parsed URI (parse_azure_uri()) and a credential
 # handle. Its functions hold the location and the handle, nothing else.
@@ -349,10 +460,15 @@ storage_azure <- function(parts, handle) {
   parts <- parts
   handle <- handle
   loc <- list(
-    account = parts$account, container = parts$container, path = parts$path,
-    endpoint = azure_endpoint(parts$account), handle = handle
+    account = parts$account,
+    container = parts$container,
+    path = parts$path,
+    endpoint = azure_endpoint(parts$account),
+    handle = handle
   )
-  blob <- function(path) if (nzchar(loc$path)) paste0(loc$path, "/", path) else path
+  blob <- function(path) {
+    if (nzchar(loc$path)) paste0(loc$path, "/", path) else path
+  }
 
   list_files <- function(prefix, after = NULL) {
     if (!is.null(after)) {
@@ -363,7 +479,13 @@ storage_azure <- function(parts, handle) {
     marker <- NULL
     seen <- character()
     repeat {
-      query <- list(restype = "container", comp = "list", prefix = full, delimiter = "/", include = "metadata")
+      query <- list(
+        restype = "container",
+        comp = "list",
+        prefix = full,
+        delimiter = "/",
+        include = "metadata"
+      )
       if (!is.null(marker)) {
         query$marker <- marker
       }
@@ -371,8 +493,14 @@ storage_azure <- function(parts, handle) {
       status <- zuhttp::zu_resp_status(resp)
       # No container lists nothing, as a missing directory does; but a
       # container gone after the first page would list part of the log (#46).
-      if (status == 404L && is.null(marker) &&
-          identical(zuhttp::zu_resp_header(resp, "x-ms-error-code"), "ContainerNotFound")) {
+      if (
+        status == 404L &&
+          is.null(marker) &&
+          identical(
+            zuhttp::zu_resp_header(resp, "x-ms-error-code"),
+            "ContainerNotFound"
+          )
+      ) {
         break
       }
       if (status != 200L) {
@@ -385,16 +513,34 @@ storage_azure <- function(parts, handle) {
       }
       # Any marker seen before, not only the last one, would loop (#45).
       if (page$next_marker %in% seen) {
-        zulake_abort("storage", sprintf("Azure returned the same listing marker twice for %s.", format_string(prefix)), path = prefix)
+        zulake_abort(
+          "storage",
+          sprintf(
+            "Azure returned the same listing marker twice for %s.",
+            format_string(prefix)
+          ),
+          path = prefix
+        )
       }
       marker <- page$next_marker
       seen <- c(seen, marker)
     }
-    names <- unlist(lapply(pages, function(p) p$name), use.names = FALSE) %||% character()
-    size <- unlist(lapply(pages, function(p) p$size), use.names = FALSE) %||% numeric()
-    mtime <- unlist(lapply(pages, function(p) p$modification_time), use.names = FALSE) %||% numeric()
-    rel <- substr(names, nchar(full) + 1L, nchar(names))
-    keep <- startsWith(names, full) & nzchar(rel) & !grepl("/", rel, fixed = TRUE)
+    blob_names <- unlist(
+      lapply(pages, function(p) p$name),
+      use.names = FALSE
+    ) %||%
+      character()
+    size <- unlist(lapply(pages, function(p) p$size), use.names = FALSE) %||%
+      numeric()
+    mtime <- unlist(
+      lapply(pages, function(p) p$modification_time),
+      use.names = FALSE
+    ) %||%
+      numeric()
+    rel <- substr(blob_names, nchar(full) + 1L, nchar(blob_names))
+    keep <- startsWith(blob_names, full) &
+      nzchar(rel) &
+      !grepl("/", rel, fixed = TRUE)
     if (!is.null(after)) {
       keep <- keep & sorts_after(rel, after)
     }
@@ -403,7 +549,10 @@ storage_azure <- function(parts, handle) {
     new_data_frame(list(
       name = rel[ord],
       size = as.numeric(size[keep][ord]),
-      modification_time = as_utc(.POSIXct(as.numeric(mtime[keep][ord]), tz = "UTC"))
+      modification_time = as_utc(.POSIXct(
+        as.numeric(mtime[keep][ord]),
+        tz = "UTC"
+      ))
     ))
   }
 
@@ -411,7 +560,7 @@ storage_azure <- function(parts, handle) {
     resp <- azure_request(loc, "GET", blob(path), path = path)
     status <- zuhttp::zu_resp_status(resp)
     if (status == 404L) {
-      zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path, status = status)
+      abort_no_file(path, status = status)
     }
     if (status != 200L) {
       azure_fail(resp, "read", path)
@@ -420,17 +569,34 @@ storage_azure <- function(parts, handle) {
   }
 
   get_range <- function(path, from, to) {
-    if (!(is_whole(from) && is_whole(to) && from >= 0 && to >= from && to <= max_exact)) {
+    if (
+      !(is_whole(from) &&
+        is_whole(to) &&
+        from >= 0 &&
+        to >= from &&
+        to <= max_exact)
+    ) {
       zulake_abort(
         "storage",
-        sprintf("cannot read bytes %s to %s of %s.", format_number(from), format_number(to), format_string(path)),
+        sprintf(
+          "cannot read bytes %s to %s of %s.",
+          format_number(from),
+          format_number(to),
+          format_string(path)
+        ),
         path = path
       )
     }
-    resp <- azure_request(loc, "GET", blob(path), range = c(from, to), path = path)
+    resp <- azure_request(
+      loc,
+      "GET",
+      blob(path),
+      range = c(from, to),
+      path = path
+    )
     status <- zuhttp::zu_resp_status(resp)
     if (status == 404L) {
-      zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path, status = status)
+      abort_no_file(path, status = status)
     }
     total <- content_range_total(zuhttp::zu_resp_header(resp, "content-range"))
     body <- if (status == 206L) zuhttp::zu_resp_raw(resp) else raw()
@@ -439,7 +605,9 @@ storage_azure <- function(parts, handle) {
         "storage",
         sprintf(
           "cannot read bytes %s to %s of %s, which has %s.",
-          format_number(from), format_number(to), format_string(path),
+          format_number(from),
+          format_number(to),
+          format_string(path),
           if (is.na(total)) "fewer" else format_number(total)
         ),
         path = path
@@ -467,7 +635,14 @@ storage_azure <- function(parts, handle) {
     size <- byte_count(zuhttp::zu_resp_header(resp, "content-length")[1L])
     time <- parse_http_date(zuhttp::zu_resp_header(resp, "last-modified")[1L])
     if (is.na(size) || is.na(time)) {
-      zulake_abort("storage", sprintf("Azure's properties of %s lack a size or a time.", format_string(path)), path = path)
+      zulake_abort(
+        "storage",
+        sprintf(
+          "Azure's properties of %s lack a size or a time.",
+          format_string(path)
+        ),
+        path = path
+      )
     }
     list(size = size, modification_time = as_utc(.POSIXct(time, tz = "UTC")))
   }
@@ -477,10 +652,22 @@ storage_azure <- function(parts, handle) {
   # reaches environments of the session, which serialize() then writes into
   # a saved snapshot, the caller's token included (seen on CI, Stage 6).
   for (name in c("blob", "list_files", "get", "get_range", "head")) {
-    assign(name, utils::removeSource(base::get(name, envir = environment(), inherits = FALSE)))
+    assign(
+      name,
+      utils::removeSource(base::get(
+        name,
+        envir = environment(),
+        inherits = FALSE
+      ))
+    )
   }
   list(
-    kind = "azure", root = parts$uri, list = list_files, get = get, get_range = get_range, head = head,
+    kind = "azure",
+    root = parts$uri,
+    list = list_files,
+    get = get,
+    get_range = get_range,
+    head = head,
     location = loc
   )
 }
@@ -497,7 +684,13 @@ storage_for_absolute <- function(storage, path) {
     if (!identical(storage$kind, "local")) {
       zulake_abort(
         "uri",
-        sprintf("%s is not a location of this table's storage: a remote table's files are not read from local disk.", format_string(path)),
+        sprintf(
+          paste(
+            "%s is not a location of this table's storage: a remote table's files",
+            "are not read from local disk."
+          ),
+          format_string(path)
+        ),
         path = path
       )
     }
@@ -505,12 +698,20 @@ storage_for_absolute <- function(storage, path) {
   }
   parts <- parse_azure_uri(path)
   own <- storage$location
-  if (!identical(parts$account, own$account) || !identical(parts$container, own$container)) {
+  if (
+    !identical(parts$account, own$account) ||
+      !identical(parts$container, own$container)
+  ) {
     zulake_abort(
       "uri",
       sprintf(
-        "%s is not in this table's account and container (%s, %s): zulake reads a table's files only there.",
-        format_string(path), format_string(own$account), format_string(own$container)
+        paste(
+          "%s is not in this table's account and container (%s, %s): zulake reads",
+          "a table's files only there."
+        ),
+        format_string(path),
+        format_string(own$account),
+        format_string(own$container)
       ),
       path = path
     )
@@ -520,7 +721,7 @@ storage_for_absolute <- function(storage, path) {
   list(storage = storage_azure(parts, storage$location$handle), rel = name)
 }
 
-# ---- responses -------------------------------------------------------------
+# ---- responses -----------------------------------------------------------
 
 # One page of a List Blobs answer (EnumerationResults): `blobs` (full names,
 # sizes, modification times in seconds) and `next_marker` (NA on the last
@@ -529,7 +730,15 @@ storage_for_absolute <- function(storage, path) {
 # that is not such a document is a zulake_error_storage.
 parse_blob_list <- function(bytes, prefix) {
   bad <- function(why) {
-    zulake_abort("storage", sprintf("Azure's listing of %s is not a blob list: %s.", format_string(prefix), why), path = prefix)
+    zulake_abort(
+      "storage",
+      sprintf(
+        "Azure's listing of %s is not a blob list: %s.",
+        format_string(prefix),
+        why
+      ),
+      path = prefix
+    )
   }
   if (any(bytes == as.raw(0L))) {
     bad("it holds a NUL byte")
@@ -539,14 +748,30 @@ parse_blob_list <- function(bytes, prefix) {
   if (!validUTF8(text)) {
     bad("it is not UTF-8")
   }
-  if (!grepl("<EnumerationResults[ >]", text) || !grepl("</EnumerationResults>", text, fixed = TRUE)) {
+  if (
+    !grepl("<EnumerationResults[ >]", text) ||
+      !grepl("</EnumerationResults>", text, fixed = TRUE)
+  ) {
     bad("it has no EnumerationResults element")
   }
   # The Blobs element alone, so that a name cannot be taken for markup.
-  blobs <- regmatches(text, regexpr("(?s)<Blobs>.*</Blobs>|<Blobs ?/>", text, perl = TRUE))
-  rest <- if (length(blobs)) sub("(?s)<Blobs>.*</Blobs>|<Blobs ?/>", "", text, perl = TRUE) else text
+  blobs <- regmatches(
+    text,
+    regexpr("(?s)<Blobs>.*</Blobs>|<Blobs ?/>", text, perl = TRUE)
+  )
+  rest <- if (length(blobs)) {
+    sub("(?s)<Blobs>.*</Blobs>|<Blobs ?/>", "", text, perl = TRUE)
+  } else {
+    text
+  }
   marker <- xml_element(rest, "NextMarker")
-  items <- if (length(blobs)) regmatches(blobs, gregexpr("(?s)<Blob>.*?</Blob>", blobs, perl = TRUE))[[1L]] else character()
+  items <- if (length(blobs)) {
+    regmatches(blobs, gregexpr("(?s)<Blob>.*?</Blob>", blobs, perl = TRUE))[[
+      1L
+    ]]
+  } else {
+    character()
+  }
   n <- length(items)
   name <- character(n)
   size <- numeric(n)
@@ -555,7 +780,10 @@ parse_blob_list <- function(bytes, prefix) {
   for (i in seq_len(n)) {
     item <- items[i]
     encoded <- grepl("<Name Encoded=\"true\">", item, fixed = TRUE)
-    nm <- xml_element(sub("<Name Encoded=\"(true|false)\">", "<Name>", item), "Name")
+    nm <- xml_element(
+      sub("<Name Encoded=\"(true|false)\">", "<Name>", item),
+      "Name"
+    )
     props <- xml_element(item, "Properties", decode = FALSE)
     if (is.na(nm) || !nzchar(nm) || is.na(props)) {
       bad("a Blob element lacks its Name or Properties")
@@ -567,13 +795,24 @@ parse_blob_list <- function(bytes, prefix) {
       bad(sprintf("the Blob %s lacks a size or a time", format_string(name[i])))
     }
     meta <- xml_element(item, "Metadata", decode = FALSE)
-    if (!is.na(meta) && identical(tolower(xml_element(meta, "hdi_isfolder")), "true")) {
+    if (
+      !is.na(meta) &&
+        identical(tolower(xml_element(meta, "hdi_isfolder")), "true")
+    ) {
       keep[i] <- FALSE
     }
   }
   list(
-    blobs = list(name = unname(name[keep]), size = size[keep], modification_time = mtime[keep]),
-    next_marker = if (is.na(marker) || !nzchar(marker)) NA_character_ else marker
+    blobs = list(
+      name = unname(name[keep]),
+      size = size[keep],
+      modification_time = mtime[keep]
+    ),
+    next_marker = if (is.na(marker) || !nzchar(marker)) {
+      NA_character_
+    } else {
+      marker
+    }
   )
 }
 
@@ -587,7 +826,10 @@ xml_element <- function(x, tag, decode = TRUE) {
       return("")
     }
   }
-  m <- regmatches(x, regexec(sprintf("(?s)<%s>(.*?)</%s>", tag, tag), x, perl = TRUE))[[1L]]
+  m <- regmatches(
+    x,
+    regexec(sprintf("(?s)<%s>(.*?)</%s>", tag, tag), x, perl = TRUE)
+  )[[1L]]
   if (!length(m)) {
     return(NA_character_)
   }
@@ -603,19 +845,31 @@ xml_decode <- function(x) {
   refs <- regmatches(x, m)[[1L]]
   pieces <- regmatches(x, m, invert = TRUE)[[1L]]
   named <- c(amp = "&", lt = "<", gt = ">", quot = "\"", apos = "'")
-  out <- vapply(refs, function(r) {
-    body <- substr(r, 2L, nchar(r) - 1L)
-    if (startsWith(body, "#")) {
-      # A code point XML allows, or the reference left as it is.
-      code <- if (startsWith(body, "#x")) strtoi(substring(body, 3L), 16L) else suppressWarnings(as.numeric(substring(body, 2L)))
-      ok <- !is.na(code) && code >= 1 && code <= 0x10FFFF && !(code >= 0xD800 && code <= 0xDFFF)
-      if (ok) intToUtf8(code) else r
-    } else if (body %in% names(named)) {
-      named[[body]]
-    } else {
-      r
-    }
-  }, "", USE.NAMES = FALSE)
+  out <- vapply(
+    refs,
+    function(r) {
+      body <- substr(r, 2L, nchar(r) - 1L)
+      if (startsWith(body, "#")) {
+        # A code point XML allows, or the reference left as it is.
+        code <- if (startsWith(body, "#x")) {
+          strtoi(substring(body, 3L), 16L)
+        } else {
+          suppressWarnings(as.numeric(substring(body, 2L)))
+        }
+        ok <- !is.na(code) &&
+          code >= 1 &&
+          code <= 0x10FFFF &&
+          !(code >= 0xD800 && code <= 0xDFFF)
+        if (ok) intToUtf8(code) else r
+      } else if (body %in% names(named)) {
+        named[[body]]
+      } else {
+        r
+      }
+    },
+    "",
+    USE.NAMES = FALSE
+  )
   text <- paste0(pieces, c(out, ""), collapse = "")
   Encoding(text) <- "UTF-8"
   text
@@ -627,13 +881,30 @@ parse_http_date <- function(x) {
   if (!is_string(x)) {
     return(NA_real_)
   }
-  m <- regmatches(x, regexec(
-    "^[A-Za-z]{3}, ([0-9]{2}) ([A-Za-z]{3}) ([0-9]{4}) ([0-9]{2}):([0-9]{2}):([0-9]{2}) GMT$", x
-  ))[[1L]]
+  m <- regmatches(
+    x,
+    regexec(
+      "^[A-Za-z]{3}, ([0-9]{2}) ([A-Za-z]{3}) ([0-9]{4}) ([0-9]{2}):([0-9]{2}):([0-9]{2}) GMT$",
+      x
+    )
+  )[[1L]]
   if (!length(m)) {
     return(NA_real_)
   }
-  months <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+  months <- c(
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+  )
   mon <- match(m[3L], months)
   day <- as.integer(m[2L])
   if (is.na(mon)) {
@@ -641,7 +912,13 @@ parse_http_date <- function(x) {
   }
   date <- as.Date(sprintf("%s-%02d-%02d", m[4L], mon, day), format = "%Y-%m-%d")
   hms <- as.integer(m[5:7])
-  if (is.na(date) || as.integer(format(date, "%d")) != day || hms[1L] > 23L || hms[2L] > 59L || hms[3L] > 60L) {
+  if (
+    is.na(date) ||
+      as.integer(format(date, "%d")) != day ||
+      hms[1L] > 23L ||
+      hms[2L] > 59L ||
+      hms[3L] > 60L
+  ) {
     return(NA_real_)
   }
   as.numeric(date) * 86400 + hms[1L] * 3600 + hms[2L] * 60 + hms[3L]
@@ -665,7 +942,10 @@ byte_count <- function(x) {
   }
   digits <- sub("^0+(?=.)", "", x, perl = TRUE)
   limit <- format_number(max_exact)
-  if (nchar(digits) > nchar(limit) || (nchar(digits) == nchar(limit) && sorts_after(digits, limit))) {
+  if (
+    nchar(digits) > nchar(limit) ||
+      (nchar(digits) == nchar(limit) && sorts_after(digits, limit))
+  ) {
     return(NA_real_)
   }
   as.numeric(digits)

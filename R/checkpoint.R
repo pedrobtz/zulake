@@ -17,7 +17,11 @@ checkpoint_sets <- function(entries) {
     at <- cp[cp$version == v, , drop = FALSE]
     single <- at[is.na(at$parts), , drop = FALSE]
     classic <- endsWith(single$name, ".checkpoint.parquet")
-    single <- single[order(!classic, single$name, method = "radix"), , drop = FALSE]
+    single <- single[
+      order(!classic, single$name, method = "radix"),
+      ,
+      drop = FALSE
+    ]
     for (i in seq_len(nrow(single))) {
       out[[length(out) + 1L]] <- single[i, , drop = FALSE]
     }
@@ -34,9 +38,9 @@ checkpoint_sets <- function(entries) {
 
 # Versions that have a checkpoint file but no whole checkpoint.
 incomplete_checkpoints <- function(entries, sets) {
-  all <- unique(entries$version[entries$kind == "checkpoint"])
+  versions <- unique(entries$version[entries$kind == "checkpoint"])
   whole <- vapply(sets, function(s) s$version[1L], 0)
-  setdiff(all, whole)
+  setdiff(versions, whole)
 }
 
 # The actions of one checkpoint (`set`, from checkpoint_sets()): every part,
@@ -54,7 +58,11 @@ read_checkpoint <- function(storage, set, read) {
     {
       actions <- list()
       for (name in set$name) {
-        part <- if (endsWith(name, ".json")) read(name) else log_parquet_actions(storage, paste0(log_dir, name))
+        part <- if (endsWith(name, ".json")) {
+          read(name)
+        } else {
+          log_parquet_actions(storage, paste0(log_dir, name))
+        }
         actions <- c(actions, part)
       }
       sidecars <- list()
@@ -70,7 +78,9 @@ read_checkpoint <- function(storage, set, read) {
     },
     # One handler for zulake_error: tryCatch() nests its handlers, so an
     # auth error re-raised from a handler of its own would reach this one.
-    zulake_error = function(e) if (inherits(e, "zulake_error_auth")) stop(e) else unreadable(e),
+    zulake_error = function(e) {
+      if (inherits(e, "zulake_error_auth")) stop(e) else unreadable(e)
+    },
     zulake_checkpoint_refusal = function(e) unreadable(e)
   )
 }
@@ -82,7 +92,9 @@ checkpoint_unreadable <- function(e, version, name) {
     "checkpoint_unreadable",
     sprintf(
       "the checkpoint at version %s (%s) cannot be read: %s",
-      format_number(version), format_string(name), conditionMessage(e)
+      format_number(version),
+      format_string(name),
+      conditionMessage(e)
     ),
     checkpoint = version,
     file = name,
@@ -102,7 +114,9 @@ checkpoint_refusal <- function(message, parent = NULL) {
 # `expr`, a qio call, with qio's (unclassed) errors classed as read failures.
 qio_read <- function(expr) {
   tryCatch(expr, error = function(e) {
-    if (inherits(e, c("zulake_error", "zulake_checkpoint_refusal"))) stop(e)
+    if (inherits(e, c("zulake_error", "zulake_checkpoint_refusal"))) {
+      stop(e)
+    }
     checkpoint_refusal(conditionMessage(e), parent = e)
   })
 }
@@ -112,15 +126,30 @@ qio_read <- function(expr) {
 sidecar_actions <- function(storage, sidecar, checkpoint) {
   path <- sidecar[["path"]]
   if (!is_string(path) || !nzchar(path) || grepl("/", path, fixed = TRUE)) {
-    bad_action(checkpoint, "sidecar", "whose `path` is not a file name in `_delta_log/_sidecars/`")
+    bad_action(
+      checkpoint,
+      "sidecar",
+      "whose `path` is not a file name in `_delta_log/_sidecars/`"
+    )
   }
-  actions <- log_parquet_actions(storage, paste0(log_dir, "_sidecars/", percent_decode(path)))
+  actions <- log_parquet_actions(
+    storage,
+    paste0(log_dir, "_sidecars/", percent_decode(path))
+  )
   Filter(function(a) !is.null(a[["add"]]) || !is.null(a[["remove"]]), actions)
 }
 
 # The actions a checkpoint replays; the others (`commitInfo`, `cdc`,
 # `checkpointMetadata`, statistics as structs) are not read.
-checkpoint_actions <- c("protocol", "metaData", "txn", "domainMetadata", "remove", "add", "sidecar")
+checkpoint_actions <- c(
+  "protocol",
+  "metaData",
+  "txn",
+  "domainMetadata",
+  "remove",
+  "add",
+  "sidecar"
+)
 
 # A field of an action that a JSON field of the same name could hold in its
 # place, and that is not read: `stats_parsed` and `partitionValues_parsed`
@@ -164,7 +193,12 @@ read_log_parquet <- function(file, selectors) {
       # Only qio's 64-bit coercion warning means a re-read with integer64
       # can help; any other (an INT32 of -2^31 read as NA) is the reason
       # the checkpoint is unreadable, as it says (#71).
-      if (!grepl("^Some INT64 or UINT64 values in column .* were coerced to NA", conditionMessage(w))) {
+      if (
+        !grepl(
+          "^Some INT64 or UINT64 values in column .* were coerced to NA",
+          conditionMessage(w)
+        )
+      ) {
         checkpoint_refusal(conditionMessage(w))
       }
       lossy <<- TRUE
@@ -175,7 +209,12 @@ read_log_parquet <- function(file, selectors) {
     return(data)
   }
   if (!has_bit64()) {
-    checkpoint_refusal("it holds a 64-bit integer that a double cannot hold exactly, and reading it needs the bit64 package")
+    checkpoint_refusal(
+      paste(
+        "it holds a 64-bit integer that a double cannot hold exactly, and",
+        "reading it needs the bit64 package"
+      )
+    )
   }
   withCallingHandlers(
     qio_read(qio::read_parquet(file, columns = selectors, int64 = "integer64")),
@@ -195,7 +234,9 @@ parquet_actions <- function(data) {
     for (k in seq_along(rows)) {
       i <- rows[k]
       a <- actions[[i]]
-      if (is.null(a)) a <- list()
+      if (is.null(a)) {
+        a <- list()
+      }
       a[[name]] <- values[[k]]
       actions[[i]] <- a
     }
@@ -259,7 +300,9 @@ nested_value <- function(x) {
     # The JSON array a commit would hold, parsed the way a commit is.
     text <- as.character(x)
     text[is.na(text)] <- "null"
-    return(parse_marked(paste0("{\"v\":[", paste(text, collapse = ","), "]}"))$v)
+    return(
+      parse_marked(paste0("{\"v\":[", paste(text, collapse = ","), "]}"))$v
+    )
   }
   if (is.double(x) && all(is_int32_value(x[!is.na(x)]))) {
     return(as.integer(x))
@@ -288,7 +331,9 @@ atomic_values <- function(x) {
     return(out)
   }
   if (inherits(x, c("Date", "POSIXct"))) {
-    checkpoint_refusal("an action field has a date or time type, where the protocol has a long")
+    checkpoint_refusal(
+      "an action field has a date or time type, where the protocol has a long"
+    )
   }
   ok <- !is.na(x)
   if (is.double(x)) {

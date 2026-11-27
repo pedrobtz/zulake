@@ -26,7 +26,10 @@
 storage_for <- function(uri, credentials = NULL) {
   check_string(uri, "uri")
   if (!is.null(credentials) && !is.function(credentials)) {
-    zulake_abort("argument", "`credentials` must be NULL or a function of no arguments.")
+    zulake_abort(
+      "argument",
+      "`credentials` must be NULL or a function of no arguments."
+    )
   }
   if (grepl("^[A-Za-z][A-Za-z0-9+.-]*://", uri)) {
     if (is_azure_uri(uri)) {
@@ -57,20 +60,24 @@ storage_local <- function(root) {
 
   list_files <- function(prefix, after = NULL) {
     dir <- full(prefix)
-    names <- if (dir.exists(dir)) list.files(dir, all.files = TRUE, no.. = TRUE) else character()
-    info <- file.info(file.path(dir, names), extra_cols = FALSE)
+    files <- if (dir.exists(dir)) {
+      list.files(dir, all.files = TRUE, no.. = TRUE)
+    } else {
+      character()
+    }
+    info <- file.info(file.path(dir, files), extra_cols = FALSE)
     keep <- !is.na(info$isdir) & !info$isdir
-    names <- names[keep]
+    files <- files[keep]
     info <- info[keep, , drop = FALSE]
     if (!is.null(after)) {
       check_string(after, "after")
-      later <- sorts_after(names, after)
-      names <- names[later]
+      later <- sorts_after(files, after)
+      files <- files[later]
       info <- info[later, , drop = FALSE]
     }
-    ord <- order(names, method = "radix")
+    ord <- order(files, method = "radix")
     new_data_frame(list(
-      name = names[ord],
+      name = files[ord],
       size = as.numeric(info$size[ord]),
       modification_time = as_utc(info$mtime[ord])
     ))
@@ -80,7 +87,7 @@ storage_local <- function(root) {
     f <- full(path)
     size <- file.size(f)
     if (is.na(size) || dir.exists(f)) {
-      zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path)
+      abort_no_file(path)
     }
     readBin(f, "raw", size)
   }
@@ -89,7 +96,7 @@ storage_local <- function(root) {
     f <- full(path)
     size <- file.size(f)
     if (is.na(size) || dir.exists(f)) {
-      zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path)
+      abort_no_file(path)
     }
     ok <- is_whole(from) && is_whole(to) && from >= 0 && to >= from && to < size
     if (!ok) {
@@ -97,7 +104,10 @@ storage_local <- function(root) {
         "storage",
         sprintf(
           "cannot read bytes %s to %s of %s, which has %s.",
-          format_number(from), format_number(to), format_string(path), format_number(size)
+          format_number(from),
+          format_number(to),
+          format_string(path),
+          format_number(size)
         ),
         path = path
       )
@@ -122,13 +132,18 @@ storage_local <- function(root) {
   local_path <- function(path) {
     f <- full(path)
     if (!file.exists(f) || dir.exists(f)) {
-      zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path)
+      abort_no_file(path)
     }
     f
   }
 
   list(
-    kind = "local", root = root, list = list_files, get = get, get_range = get_range, head = head,
+    kind = "local",
+    root = root,
+    list = list_files,
+    get = get,
+    get_range = get_range,
+    head = head,
     local_path = local_path
   )
 }
@@ -138,9 +153,9 @@ sorts_after <- function(x, y) {
   if (!length(x)) {
     return(logical())
   }
-  all <- unique(c(y, x))
-  rank <- match(all, all[order(all, method = "radix")])
-  rank[match(x, all)] > rank[1L]
+  values <- unique(c(y, x))
+  rank <- match(values, values[order(values, method = "radix")])
+  rank[match(x, values)] > rank[1L]
 }
 
 as_utc <- function(x) {
@@ -149,7 +164,13 @@ as_utc <- function(x) {
   x
 }
 
-new_data_frame <- function(cols) {
-  n <- if (length(cols)) length(cols[[1L]]) else 0L
-  structure(cols, class = "data.frame", row.names = .set_row_names(n))
+# The error for a file the backend does not have; `...` adds fields (the
+# Azure backend's `status`).
+abort_no_file <- function(path, ...) {
+  zulake_abort(
+    "storage",
+    sprintf("cannot read %s: no such file.", format_string(path)),
+    path = path,
+    ...
+  )
 }

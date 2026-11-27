@@ -91,27 +91,50 @@ lake_deletion_vectors <- function(tbl, files = NULL, rows = TRUE) {
   pick <- seq_along(paths)
   if (!is.null(files)) {
     if (!is.character(files) || anyNA(files)) {
-      zulake_abort("argument", "`files` must be NULL or a character vector of file paths or URIs.")
+      zulake_abort(
+        "argument",
+        "`files` must be NULL or a character vector of file paths or URIs."
+      )
     }
-    at <- ifelse(is.na(match(files, paths)), match(files, uris), match(files, paths))
+    at <- match(files, paths)
+    at[is.na(at)] <- match(files[is.na(at)], uris)
     if (anyNA(at)) {
       zulake_abort(
         "argument",
-        sprintf("`files` names %s, which is not a live file of this snapshot.", format_string(files[is.na(at)][1L]))
+        sprintf(
+          "`files` names %s, which is not a live file of this snapshot.",
+          format_string(files[is.na(at)][1L])
+        )
       )
     }
     pick <- sort(unique(at))
   }
   actions <- tbl$files$action
-  pick <- pick[!vapply(actions[pick], function(a) is.null(a[["deletionVector"]]), NA)]
+  pick <- pick[
+    !vapply(actions[pick], function(a) is.null(a[["deletionVector"]]), NA)
+  ]
   dvs <- lapply(actions[pick], function(a) a[["deletionVector"]])
   num <- function(name, what) {
-    int64_values(lapply(dvs, function(d) d[[name]]), "double", sprintf("a deletion vector's `%s`", what))
+    int64_values(
+      lapply(dvs, function(d) d[[name]]),
+      "double",
+      sprintf("a deletion vector's `%s`", what)
+    )
   }
   out <- list(
     uri = uris[pick],
-    storage_type = vapply(dvs, function(d) d[["storageType"]], "", USE.NAMES = FALSE),
-    path_or_inline_dv = vapply(dvs, function(d) d[["pathOrInlineDv"]], "", USE.NAMES = FALSE),
+    storage_type = vapply(
+      dvs,
+      function(d) d[["storageType"]],
+      "",
+      USE.NAMES = FALSE
+    ),
+    path_or_inline_dv = vapply(
+      dvs,
+      function(d) d[["pathOrInlineDv"]],
+      "",
+      USE.NAMES = FALSE
+    ),
     offset = num("offset", "offset"),
     size_in_bytes = num("sizeInBytes", "sizeInBytes"),
     cardinality = num("cardinality", "cardinality")
@@ -119,10 +142,10 @@ lake_deletion_vectors <- function(tbl, files = NULL, rows = TRUE) {
   if (rows) {
     out$rows <- dv_rows_of(tbl, pick)
   }
-  new_data_frame_n(out, length(pick))
+  new_data_frame(out, length(pick))
 }
 
-# ---- the rows of deletion vectors -------------------------------------------
+# ---- the rows of deletion vectors ----------------------------------------
 
 # The deleted row positions (sorted, 0-based doubles) of live files `idx`,
 # each of which has a deletion vector. Every vector is read and checked
@@ -166,7 +189,11 @@ dv_rows <- function(tbl, i, versions) {
   bad <- function(problem) {
     zulake_abort(
       "corrupt_log",
-      sprintf("The deletion vector of file %s %s.", format_string(file), problem),
+      sprintf(
+        "The deletion vector of file %s %s.",
+        format_string(file),
+        problem
+      ),
       file = file
     )
   }
@@ -180,27 +207,44 @@ dv_rows <- function(tbl, i, versions) {
     bad("has no valid `cardinality`")
   }
   if (dv[["storageType"]] == "i") {
-    bytes <- tryCatch(z85_decode(dv[["pathOrInlineDv"]]), zulake_error_z85 = function(e) {
-      bad(sprintf("is not valid Z85 (%s)", conditionMessage(e)))
-    })
+    bytes <- tryCatch(
+      z85_decode(dv[["pathOrInlineDv"]]),
+      zulake_error_z85 = function(e) {
+        bad(sprintf("is not valid Z85 (%s)", conditionMessage(e)))
+      }
+    )
     if (length(bytes) < size) {
-      bad(sprintf("holds %s bytes inline, fewer than its `sizeInBytes` of %s", format_number(length(bytes)), format_number(size)))
+      bad(sprintf(
+        "holds %s bytes inline, fewer than its `sizeInBytes` of %s",
+        format_number(length(bytes)),
+        format_number(size)
+      ))
     }
     data <- bytes[seq_len(size)]
   } else {
-    offset <- if (is.null(dv[["offset"]])) 0 else int64_values(list(dv[["offset"]]), "double", what("offset"))
+    offset <- if (is.null(dv[["offset"]])) {
+      0
+    } else {
+      int64_values(list(dv[["offset"]]), "double", what("offset"))
+    }
     where <- dv_file(tbl, dv, bad)
     if (is.na(where$size) || offset + 4 + size + 4 > where$size) {
       bad(sprintf(
         "runs past the end of %s: %s bytes from offset %s, in a file of %s bytes",
-        format_string(where$name), format_number(4 + size + 4), format_number(offset),
+        format_string(where$name),
+        format_number(4 + size + 4),
+        format_number(offset),
         format_number(where$size)
       ))
     }
     if (is.null(versions[[where$name]])) {
       version <- where$range(0, 0)
       if (!identical(version, as.raw(1L))) {
-        bad(sprintf("is in %s, whose format version is %s, not 1", format_string(where$name), format_number(as.integer(version[1L]))))
+        bad(sprintf(
+          "is in %s, whose format version is %s, not 1",
+          format_string(where$name),
+          format_number(as.integer(version[1L]))
+        ))
       }
       versions[[where$name]] <- TRUE
     }
@@ -210,36 +254,64 @@ dv_rows <- function(tbl, i, versions) {
     }
     stored <- be_uint32(block[1:4])
     if (stored != size) {
-      bad(sprintf("has %s bytes in its file but %s in the log", format_number(stored), format_number(size)))
+      bad(sprintf(
+        "has %s bytes in its file but %s in the log",
+        format_number(stored),
+        format_number(size)
+      ))
     }
     data <- block[4 + seq_len(size)]
     crc <- be_uint32(block[4 + size + 1:4])
     if (crc32(data) != crc) {
-      bad(sprintf("fails its CRC-32 check (stored %s, computed %s)", hex32(crc), hex32(crc32(data))))
+      bad(sprintf(
+        "fails its CRC-32 check (stored %s, computed %s)",
+        hex32(crc),
+        hex32(crc32(data))
+      ))
     }
   }
   magic <- sum(as.numeric(data[1:4]) * 256^(0:3))
   if (magic != dv_magic) {
-    bad(sprintf("starts with magic number %s, not %s", format_number(magic), format_number(dv_magic)))
+    bad(sprintf(
+      "starts with magic number %s, not %s",
+      format_number(magic),
+      format_number(dv_magic)
+    ))
   }
   bitmap <- tryCatch(
     zuroar::roar64_unserialize(data[-(1:4)]),
-    zuroar_error = function(e) bad(sprintf("is not a valid 64-bit Roaring bitmap (%s)", conditionMessage(e)))
+    zuroar_error = function(e) {
+      bad(sprintf(
+        "is not a valid 64-bit Roaring bitmap (%s)",
+        conditionMessage(e)
+      ))
+    }
   )
   n <- zuroar::roar64_length(bitmap)
   if (n != format_number(card)) {
-    bad(sprintf("deletes %s rows, but its `cardinality` is %s", n, format_number(card)))
+    bad(sprintf(
+      "deletes %s rows, but its `cardinality` is %s",
+      n,
+      format_number(card)
+    ))
   }
   if (card == 0) {
     return(numeric())
   }
   top <- max(bitmap)
-  if (nchar(top) > 16L || nchar(top) == 16L && sorts_after(top, "9007199254740991")) {
+  if (
+    nchar(top) > 16L ||
+      (nchar(top) == 16L && sorts_after(top, "9007199254740991"))
+  ) {
     zulake_abort(
       "int64",
       sprintf(
-        "The deletion vector of file %s deletes row %s, which a double cannot hold exactly (the limit is 2^53 - 1).",
-        format_string(file), top
+        paste(
+          "The deletion vector of file %s deletes row %s, which a double cannot",
+          "hold exactly (the limit is 2^53 - 1)."
+        ),
+        format_string(file),
+        top
       ),
       value = top
     )
@@ -256,12 +328,23 @@ dv_file <- function(tbl, dv, bad) {
       bad("has a `pathOrInlineDv` shorter than the 20 characters of a UUID")
     }
     n <- nchar(text)
-    uuid <- tryCatch(z85_decode(substr(text, n - 19L, n)), zulake_error_z85 = function(e) {
-      bad(sprintf("has a UUID that is not valid Z85 (%s)", conditionMessage(e)))
-    })
+    uuid <- tryCatch(
+      z85_decode(substr(text, n - 19L, n)),
+      zulake_error_z85 = function(e) {
+        bad(sprintf(
+          "has a UUID that is not valid Z85 (%s)",
+          conditionMessage(e)
+        ))
+      }
+    )
     rel <- dv_relative_path(substr(text, 1L, n - 20L), uuid)
     if (bad_relative_path(rel)) {
-      bad("has a prefix with an empty, \".\" or \"..\" path segment, which would leave the table's root")
+      bad(
+        paste(
+          "has a prefix with an empty, \".\" or \"..\" path segment, which would",
+          "leave the table's root"
+        )
+      )
     }
     storage <- tbl$storage
     info <- storage$head(rel)
@@ -281,7 +364,11 @@ dv_file <- function(tbl, dv, bad) {
     ))
   }
   local <- absolute_local_path(text)
-  size <- if (file.exists(local) && !dir.exists(local)) file.size(local) else NA_real_
+  size <- if (file.exists(local) && !dir.exists(local)) {
+    file.size(local)
+  } else {
+    NA_real_
+  }
   list(
     name = text,
     size = size,
@@ -299,7 +386,10 @@ dv_file <- function(tbl, dv, bad) {
 dv_relative_path <- function(prefix, uuid) {
   hex <- paste(sprintf("%02x", as.integer(uuid)), collapse = "")
   canonical <- paste(
-    substr(hex, 1L, 8L), substr(hex, 9L, 12L), substr(hex, 13L, 16L), substr(hex, 17L, 20L),
+    substr(hex, 1L, 8L),
+    substr(hex, 9L, 12L),
+    substr(hex, 13L, 16L),
+    substr(hex, 17L, 20L),
     substr(hex, 21L, 32L),
     sep = "-"
   )
@@ -315,25 +405,36 @@ be_uint32 <- function(b) {
   sum(as.numeric(b) * 256^(3:0))
 }
 
-# ---- Z85 (ZeroMQ RFC 32) -------------------------------------------------------
+# ---- Z85 (ZeroMQ RFC 32) -------------------------------------------------
 
-z85_alphabet <- utf8ToInt("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#")
+z85_alphabet <- utf8ToInt(
+  "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#"
+)
 
 # The bytes Z85 text encodes: each 5 characters a big-endian 32-bit value.
 z85_decode <- function(text) {
   z85_error <- function(problem) {
-    stop(structure(class = c("zulake_error_z85", "error", "condition"), list(message = problem, call = NULL)))
+    stop(structure(
+      class = c("zulake_error_z85", "error", "condition"),
+      list(message = problem, call = NULL)
+    ))
   }
   if (!is_string(text)) {
     z85_error("not a string")
   }
   chars <- utf8ToInt(enc2utf8(text))
   if (length(chars) %% 5L) {
-    z85_error(sprintf("%s characters, not a multiple of 5", format_number(length(chars))))
+    z85_error(sprintf(
+      "%s characters, not a multiple of 5",
+      format_number(length(chars))
+    ))
   }
   digits <- match(chars, z85_alphabet) - 1
   if (anyNA(digits)) {
-    z85_error(sprintf("character %s is not in the Z85 alphabet", format_string(intToUtf8(chars[is.na(digits)][1L]))))
+    z85_error(sprintf(
+      "character %s is not in the Z85 alphabet",
+      format_string(intToUtf8(chars[is.na(digits)][1L]))
+    ))
   }
   if (!length(digits)) {
     return(raw())
@@ -343,11 +444,16 @@ z85_decode <- function(text) {
   if (any(value > 2^32 - 1)) {
     z85_error("a group of 5 characters encodes more than 32 bits")
   }
-  bytes <- rbind(value %/% 2^24, value %/% 2^16 %% 256, value %/% 2^8 %% 256, value %% 256)
+  bytes <- rbind(
+    value %/% 2^24,
+    value %/% 2^16 %% 256,
+    value %/% 2^8 %% 256,
+    value %% 256
+  )
   as.raw(as.vector(bytes))
 }
 
-# ---- CRC-32 (IEEE 802.3, as zlib and java.util.zip compute it) -----------------
+# ---- CRC-32 (IEEE 802.3, as zlib and java.util.zip compute it) -----------
 
 # The table, as 16-bit halves so that no value reaches R's NA_integer_.
 crc32_table <- local({
@@ -379,7 +485,10 @@ crc32 <- function(x) {
   thi <- crc32_table$hi
   for (b in as.integer(x)) {
     j <- bitwAnd(bitwXor(lo, b), 255L) + 1L
-    lo <- bitwXor(tlo[j], bitwOr(bitwShiftR(lo, 8L), bitwShiftL(bitwAnd(hi, 255L), 8L)))
+    lo <- bitwXor(
+      tlo[j],
+      bitwOr(bitwShiftR(lo, 8L), bitwShiftL(bitwAnd(hi, 255L), 8L))
+    )
     hi <- bitwXor(thi[j], bitwShiftR(hi, 8L))
   }
   (65535 - hi) * 65536 + (65535 - lo)

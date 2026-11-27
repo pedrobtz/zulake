@@ -8,7 +8,13 @@
 # to the protocol or not, is refused by name: reading past one silently
 # returns wrong rows. `writerFeatures` is never consulted here: zulake does
 # not write.
-supported_reader_features <- c("columnMapping", "deletionVectors", "timestampNtz", "v2Checkpoint", "vacuumProtocolCheck")
+supported_reader_features <- c(
+  "columnMapping",
+  "deletionVectors",
+  "timestampNtz",
+  "v2Checkpoint",
+  "vacuumProtocolCheck"
+)
 
 # Reader features the protocol defines that zulake refuses, and why. Names
 # not here and not supported are refused as unknown.
@@ -34,7 +40,9 @@ check_reader_features <- function(protocol, metadata, version) {
     refuse_feature(
       sprintf("readerVersion %s", format_number(reader)),
       sprintf("reader version %s", format_number(reader)),
-      version, protocol, metadata
+      version,
+      protocol,
+      metadata
     )
   }
   features <- reader_features(protocol)
@@ -43,7 +51,9 @@ check_reader_features <- function(protocol, metadata, version) {
     refuse_feature(
       unknown,
       paste("reader feature", paste(feature_label(unknown), collapse = ", ")),
-      version, protocol, metadata
+      version,
+      protocol,
+      metadata
     )
   }
   # A mode set where the protocol does not declare column mapping: the
@@ -57,15 +67,22 @@ check_reader_features <- function(protocol, metadata, version) {
         "column mapping (its %s mode is set, but its protocol does not declare the feature)",
         format_string(set)
       ),
-      version, protocol, metadata
+      version,
+      protocol,
+      metadata
     )
   }
   mode <- column_mapping_mode(protocol, metadata)
   if (!mode %in% c("none", "name")) {
     refuse_feature(
       "columnMapping",
-      sprintf("column mapping in %s mode (only \"name\" mode is supported)", format_string(mode)),
-      version, protocol, metadata
+      sprintf(
+        "column mapping in %s mode (only \"name\" mode is supported)",
+        format_string(mode)
+      ),
+      version,
+      protocol,
+      metadata
     )
   }
   invisible()
@@ -75,13 +92,21 @@ check_reader_features <- function(protocol, metadata, version) {
 # the quoted name alone for a feature the package does not know.
 feature_label <- function(features) {
   why <- unname(refused_reader_features[features])
-  ifelse(is.na(why), format_string(features), sprintf("%s (it needs %s)", format_string(features), why))
+  ifelse(
+    is.na(why),
+    format_string(features),
+    sprintf("%s (it needs %s)", format_string(features), why)
+  )
 }
 
 refuse_feature <- function(feature, what, version, protocol, metadata) {
   zulake_abort(
     "unsupported_feature",
-    sprintf("Version %s of this table needs %s, which zulake does not support.", format_number(version), what),
+    sprintf(
+      "Version %s of this table needs %s, which zulake does not support.",
+      format_number(version),
+      what
+    ),
     feature = feature,
     version = version,
     protocol = protocol_frame(protocol, metadata)
@@ -96,7 +121,11 @@ refuse_feature <- function(feature, what, version, protocol, metadata) {
 protocol_frame <- function(protocol, metadata) {
   reader <- protocol[["minReaderVersion"]]
   rf <- reader_features(protocol)
-  wf <- if (protocol[["minWriterVersion"]] >= 7) as.character(protocol[["writerFeatures"]]) else character()
+  wf <- if (protocol[["minWriterVersion"]] >= 7) {
+    as.character(protocol[["writerFeatures"]])
+  } else {
+    character()
+  }
   features <- unique(c(rf, wf))
   mode <- column_mapping_mode(protocol, metadata)
   in_reader <- features %in% rf
@@ -106,7 +135,11 @@ protocol_frame <- function(protocol, metadata) {
     name = c("readerVersion", "writerVersion", features),
     reader = c(TRUE, FALSE, in_reader),
     writer = c(FALSE, TRUE, features %in% wf),
-    version = c(as.numeric(reader), as.numeric(protocol[["minWriterVersion"]]), rep(NA_real_, length(features))),
+    version = c(
+      as.numeric(reader),
+      as.numeric(protocol[["minWriterVersion"]]),
+      rep(NA_real_, length(features))
+    ),
     supported = c(reader >= 1 && reader <= max_reader_version, TRUE, ok)
   ))
 }
@@ -146,7 +179,10 @@ check_physical_names <- function(metadata, mode) {
       zulake_abort(
         "corrupt_log",
         sprintf(
-          "field %s has no `delta.columnMapping.physicalName`, which column mapping in \"name\" mode requires.",
+          paste(
+            "field %s has no `delta.columnMapping.physicalName`, which column",
+            "mapping in \"name\" mode requires."
+          ),
           format_string(name)
         ),
         column = name
@@ -167,32 +203,42 @@ check_partition_values <- function(adds, metadata, mode) {
     return(invisible())
   }
   fields <- metadata[["schema"]][["fields"]]
-  field_names <- vapply(fields, function(f) {
-    if (is.list(f) && is_string(f[["name"]])) f[["name"]] else NA_character_
-  }, "")
   for (col in columns) {
-    i <- match(col, field_names)
-    if (is.na(i)) {
+    field <- field_by_name(fields, col)
+    if (is.null(field)) {
       zulake_abort(
         "corrupt_log",
-        sprintf("partition column %s is not in the table's schema.", format_string(col))
+        sprintf(
+          "partition column %s is not in the table's schema.",
+          format_string(col)
+        )
       )
     }
-    field <- fields[[i]]
     key <- field_physical(field, mode)
     type <- field[["type"]]
     if (!is_string(type)) {
-      zulake_abort("corrupt_log", sprintf("partition column %s is not of a primitive type.", format_string(col)))
+      zulake_abort(
+        "corrupt_log",
+        sprintf(
+          "partition column %s is not of a primitive type.",
+          format_string(col)
+        )
+      )
     }
     for (a in adds) {
       value <- a[["partitionValues"]][[key]]
-      if (is.null(value) || !nzchar(value)) next
+      if (is.null(value) || !nzchar(value)) {
+        next
+      }
       if (!partition_value_ok(value, type)) {
         zulake_abort(
           "corrupt_log",
           sprintf(
             "file %s has partition value %s for column %s, which is not a %s.",
-            format_string(a[["path"]]), format_string(value), format_string(col), type
+            format_string(a[["path"]]),
+            format_string(value),
+            format_string(col),
+            type
           ),
           file = a[["path"]],
           column = col
@@ -218,12 +264,15 @@ partition_value_ok <- function(x, type) {
   if (type %in% names(integer_limits)) {
     return(integer_in_range(x, integer_limits[[type]]))
   }
-  switch(type,
+  switch(
+    type,
     string = ,
     binary = TRUE,
     boolean = tolower(x) %in% c("true", "false"),
     float = ,
-    double = grepl(number, x) || is.nan(double_special(x)) || is.infinite(double_special(x)),
+    double = grepl(number, x) ||
+      is.nan(double_special(x)) ||
+      is.infinite(double_special(x)),
     date = !is.na(parse_date_text(x)),
     timestamp = !is.na(parse_time_text(x, zone = TRUE)),
     timestamp_ntz = !is.na(parse_time_text(x, zone = FALSE)),
@@ -239,5 +288,6 @@ integer_in_range <- function(x, limits) {
   neg <- startsWith(x, "-")
   digits <- sub("^[+-]?0*", "", x)
   bound <- sub("^-", "", limits[if (neg) 1L else 2L])
-  nchar(digits) < nchar(bound) || (nchar(digits) == nchar(bound) && !sorts_after(digits, bound))
+  nchar(digits) < nchar(bound) ||
+    (nchar(digits) == nchar(bound) && !sorts_after(digits, bound))
 }

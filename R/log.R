@@ -17,8 +17,16 @@ log_entries <- function(listing) {
   patterns <- c(
     commit = paste0("^", digits, "[.]json$"),
     checkpoint = paste0("^", digits, "[.]checkpoint[.]parquet$"),
-    checkpoint = paste0("^", digits, "[.]checkpoint[.][0-9]{10}[.][0-9]{10}[.]parquet$"),
-    checkpoint = paste0("^", digits, "[.]checkpoint[.][0-9a-fA-F-]{36}[.](json|parquet)$"),
+    checkpoint = paste0(
+      "^",
+      digits,
+      "[.]checkpoint[.][0-9]{10}[.][0-9]{10}[.]parquet$"
+    ),
+    checkpoint = paste0(
+      "^",
+      digits,
+      "[.]checkpoint[.][0-9a-fA-F-]{36}[.](json|parquet)$"
+    ),
     compaction = paste0("^", digits, "[.]", digits, "[.]compacted[.]json$"),
     checksum = paste0("^", digits, "[.]crc$"),
     last_checkpoint = "^_last_checkpoint$"
@@ -32,10 +40,16 @@ log_entries <- function(listing) {
   kind <- kind[keep]
   versioned <- kind != "last_checkpoint"
   version <- rep(NA_real_, length(name))
-  version[versioned] <- parse_version(substr(name[versioned], 1L, 20L), name[versioned])
+  version[versioned] <- parse_version(
+    substr(name[versioned], 1L, 20L),
+    name[versioned]
+  )
   end_version <- rep(NA_real_, length(name))
   compaction <- kind == "compaction"
-  end_version[compaction] <- parse_version(substr(name[compaction], 22L, 41L), name[compaction])
+  end_version[compaction] <- parse_version(
+    substr(name[compaction], 22L, 41L),
+    name[compaction]
+  )
   # The protocol names a compaction file only for y > x: any other is not a
   # log file, and is left out like other names it does not define (#69).
   named <- !compaction | end_version > version
@@ -44,7 +58,8 @@ log_entries <- function(listing) {
   version <- version[named]
   end_version <- end_version[named]
   keep[keep] <- named
-  multi <- kind == "checkpoint" & grepl("[.]checkpoint[.][0-9]{10}[.][0-9]{10}[.]parquet$", name)
+  multi <- kind == "checkpoint" &
+    grepl("[.]checkpoint[.][0-9]{10}[.][0-9]{10}[.]parquet$", name)
   part <- rep(NA_real_, length(name))
   parts <- rep(NA_real_, length(name))
   part[multi] <- as.numeric(substr(name[multi], 33L, 42L))
@@ -93,7 +108,11 @@ read_actions <- function(storage, name) {
     zujson_error = function(e) {
       zulake_abort(
         "corrupt_log",
-        sprintf("log file %s is not valid JSON: %s", format_string(name), conditionMessage(e)),
+        sprintf(
+          "log file %s is not valid JSON: %s",
+          format_string(name),
+          conditionMessage(e)
+        ),
         file = name,
         parent = e
       )
@@ -107,7 +126,11 @@ read_actions <- function(storage, name) {
     if (!is.list(a) || is.null(names(a)) || !length(a)) {
       zulake_abort(
         "corrupt_log",
-        sprintf("line %d of log file %s is not a JSON object with an action.", i, format_string(name)),
+        sprintf(
+          "line %d of log file %s is not a JSON object with an action.",
+          i,
+          format_string(name)
+        ),
         file = name
       )
     }
@@ -151,7 +174,12 @@ read_last_checkpoint <- function(storage, entries) {
       )
     }
   )
-  if (!is.list(x) || !is_whole(x[["version"]]) || x[["version"]] < 0 || x[["version"]] > max_exact) {
+  if (
+    !is.list(x) ||
+      !is_whole(x[["version"]]) ||
+      x[["version"]] < 0 ||
+      x[["version"]] > max_exact
+  ) {
     zulake_abort(
       "corrupt_log",
       "_last_checkpoint has no `version` that is a whole number from 0 to 2^53 - 1.",

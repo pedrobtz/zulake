@@ -1,4 +1,23 @@
-# Argument checks and small predicates.
+# Argument checks, small predicates and package-wide helpers.
+
+`%||%` <- function(x, y) if (is.null(x)) y else x
+
+# A data frame from a named list of columns, with `n` rows (by default the
+# length of the first column, 0 when there is none).
+new_data_frame <- function(
+  cols,
+  n = if (length(cols)) length(cols[[1L]]) else 0L
+) {
+  structure(
+    cols,
+    names = names(cols) %||% character(),
+    class = "data.frame",
+    row.names = .set_row_names(n)
+  )
+}
+
+# An empty named list.
+named_list <- function() structure(list(), names = character())
 
 # Largest whole number a double holds exactly together with its neighbours:
 # versions and timestamps are doubles, exact below 2^53 (design section 7).
@@ -9,7 +28,10 @@ is_string <- function(x) {
 }
 
 is_number <- function(x) {
-  is.numeric(x) && !inherits(x, c("factor", "POSIXt", "Date")) && length(x) == 1L && !is.na(x)
+  is.numeric(x) &&
+    !inherits(x, c("factor", "POSIXt", "Date")) &&
+    length(x) == 1L &&
+    !is.na(x)
 }
 
 is_whole <- function(x) {
@@ -18,7 +40,10 @@ is_whole <- function(x) {
 
 check_string <- function(x, arg) {
   if (!is_string(x) || !nzchar(x)) {
-    zulake_abort("argument", sprintf("`%s` must be a single non-empty string.", arg))
+    zulake_abort(
+      "argument",
+      sprintf("`%s` must be a single non-empty string.", arg)
+    )
   }
   invisible(x)
 }
@@ -58,8 +83,15 @@ check_timestamp <- function(timestamp) {
   if (is.null(timestamp)) {
     return(NULL)
   }
-  if (!inherits(timestamp, "POSIXct") || length(timestamp) != 1L || !is.finite(unclass(timestamp))) {
-    zulake_abort("argument", "`timestamp` must be NULL or a single POSIXct date-time.")
+  if (
+    !inherits(timestamp, "POSIXct") ||
+      length(timestamp) != 1L ||
+      !is.finite(unclass(timestamp))
+  ) {
+    zulake_abort(
+      "argument",
+      "`timestamp` must be NULL or a single POSIXct date-time."
+    )
   }
   timestamp
 }
