@@ -638,17 +638,17 @@ test_that("text functions of a timestamp column are refused on R before 4.3 (#74
   # tolower() and grepl(), which call it) chose one format for the whole
   # vector, so its value for a row depended on the other rows of the file.
   tbl <- lake_open(fixture_table("zl-types"))
-  rows <- suppressWarnings(lake_read(tbl, columns = c("i32", "d", "ts", "ntz")))
+  rows <- suppressWarnings(lake_read(tbl, columns = c("i16", "d", "ts", "ntz")))
   refused <- list(
     quote(as.character(ts) == "2024-01-01"), quote(substr(ntz, 1, 4) == "2024"),
     quote(toupper(ts) == "X"), quote(tolower(ntz) == "x"), quote(grepl("2024", ts)),
-    quote(as.character(ts + 1) == "x"), quote(i32 > 0 | nchar(as.character(ntz)) > 0)
+    quote(as.character(ts + 1) == "x"), quote(i16 > 0 | nchar(as.character(ntz)) > 0)
   )
   allowed <- list(
-    quote(as.character(d) == "2024-01-01"), quote(as.numeric(ts) > 0), quote(nchar(as.character(i32)) > 1),
+    quote(as.character(d) == "2024-01-01"), quote(as.numeric(ts) > 0), quote(nchar(as.character(i16)) > 1),
     quote(ts > as.POSIXct("2000-01-01", tz = "UTC"))
   )
-  read <- function(expr) eval(bquote(lake_read(tbl, columns = c("i32", "d", "ts", "ntz"), filter = .(expr))))
+  read <- function(expr) eval(bquote(lake_read(tbl, columns = c("i16", "d", "ts", "ntz"), filter = .(expr))))
   for (old in c("4.2.3", "3.5.0")) {
     local({
       local_mocked_bindings(r_version = function() package_version(old))
