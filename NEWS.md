@@ -229,3 +229,7 @@
   is not decimal digits up to 2^53 - 1, such as `Inf`, `0x10`, `1e3` or
   `9007199254740993`, is now a `zulake_error_storage` instead of a number
   read loosely or rounded (#68).
+* Fixed: `double` and `float` partition values written as `inf`, `-inf`
+  (as `deltalake` writes them) or in any case of `infinity` and `nan` with
+  a sign are now read as infinities and NaN, instead of refusing the table
+  as a corrupt log (#67).

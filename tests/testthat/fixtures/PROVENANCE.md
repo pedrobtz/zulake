@@ -53,6 +53,7 @@ DAT (`delta-incubator/dat`) is not used: it has no licence (design §12, Q3).
 | `zl-checkpoint-no-last` | zulake | `deltalake` 1.7.0; edited | 0–3 | a checkpoint at 2 and no `_last_checkpoint` (deleted after writing) |
 | `zl-domains` | zulake | `deltalake` 1.7.0; edited | 0–4 | `domainMetadata` added, changed and removed, in commits 1–3 written by hand with the `domainMetadata` writer feature |
 | `zl-file-times` | zulake | `deltalake` 1.7.0; edited | 0–2 | commit times that go back: each `commitInfo.timestamp` set to 2025-01-01 00:01:40, 00:00:50 and 00:03:20 UTC, so the commit files dated by them (`answers.py`) have decreasing times from 0 to 1, as a copy that drops times can leave them; `deltalake` makes them increasing before a timestamp lookup (added 2026-11-27, #52) |
+| `zl-inf-partitions` | zulake | `deltalake` 1.7.0 | 0 | `double` and `float` partition columns holding infinities and NaN, which `deltalake` writes as `inf`, `-inf` and `NaN` (added 2026-11-27, #67) |
 | `zl-int32-min` | zulake | `deltalake` 1.7.0 | 0 | an `int32` column holding -2^31 and no null (`nullCount` 0), which qio reads as `NA`: `is.na()` must not be pruned on the null count (added 2026-11-27, #79) |
 | `zl-log-compaction` | zulake | `deltalake` 1.7.0 | 0–5 | a log compaction file for commits 1 to 3 (`compact_logs()`) |
 | `zl-multipart-checkpoint` | zulake | `deltalake` 1.7.0; edited | 0–5 | a three-part checkpoint at 4: the single-part checkpoint `deltalake` wrote, split into three Parquet files by row, `_last_checkpoint` with `parts = 3` |

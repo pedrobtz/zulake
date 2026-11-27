@@ -169,6 +169,7 @@ oracle_partition_frame <- function(table, version) {
       out[[name]] <- switch(arrow,
         int8 = , int16 = , int32 = as.integer(vals),
         int64 = as.numeric(vals),
+        float = , double = as.numeric(sub("^([+-]?)inf$", "\\1Inf", vals, ignore.case = TRUE)),
         `date32[day]` = as.Date(vals),
         vals
       )
@@ -176,6 +177,22 @@ oracle_partition_frame <- function(table, version) {
   }
   df <- as.data.frame(out, stringsAsFactors = FALSE, check.names = FALSE)
   df[order(df$path, method = "radix"), , drop = FALSE]
+}
+
+# deltalake's partitions() rows, with each float or double value (the
+# text the log holds: "inf", "-inf", "NaN", "1.5") in the canonical
+# spelling of the double it means ("Infinity", "-Infinity", "NaN"), as
+# lake_partitions() returns it typed (#67). `types` are the table's Delta
+# types by column name.
+oracle_partition_rows <- function(rows, types) {
+  lapply(rows, function(r) {
+    for (col in names(r)) {
+      if (types[[col]] %in% c("float", "double") && is.character(r[[col]])) {
+        r[[col]] <- as.numeric(sub("^([+-]?)inf$", "\\1Inf", r[[col]], ignore.case = TRUE))
+      }
+    }
+    r
+  })
 }
 
 filter_atom_calls <- c("==", "!=", "<", "<=", ">", ">=", "%in%", "is.na")

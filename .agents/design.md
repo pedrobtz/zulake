@@ -370,6 +370,12 @@ a choice:
   0-59, offsets to 18:00), which statistics and filter literals use too,
   and a time is the double qio reads for the same microseconds: the count
   rounded once, then divided by 1e6 (2026-11-27, #53, #54). An empty string or a missing key is null.
+  A `float` or `double` value is a decimal number or an infinity or NaN in
+  any spelling Rust's f64 parser takes: `inf`, `infinity` or `nan` in any
+  case, with an optional sign (2026-11-27, #67, on a design adviser's
+  recommendation: `deltalake` writes `inf`, `-inf` and `NaN`, Spark
+  `Infinity` and `NaN`, and the union cannot collide with a number;
+  fixture `zl-inf-partitions`).
 
 ### 4.3 Reading
 

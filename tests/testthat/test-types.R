@@ -407,3 +407,31 @@ test_that("a long string before a number past 2^53 leaves it exact, and a scan f
   })
   expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
 })
+
+test_that("double and float partition values inf, -inf and NaN read as deltalake writes them (#67)", {
+  # zl-inf-partitions: deltalake 1.7.0 writes "inf", "-inf" and "NaN".
+  tbl <- lake_open(fixture_table("zl-inf-partitions"))
+  expect_oracle(replay_files_frame(tbl, "path"), "zl-inf-partitions", 0, "add_actions")
+  rows <- lake_read(tbl)
+  expect_read_oracle(rows, "zl-inf-partitions", 0)
+  expect_identical(rows$f64[order(rows$id)], c(Inf, -Inf, NaN, 1.5))
+  expect_identical(lake_read(tbl, filter = f64 == Inf)$id, 0)
+  expect_identical(sort(lake_read(tbl, filter = f32 < 0 | is.nan(f64))$id), c(0, 2))
+  expect_identical(nrow(lake_files(tbl, filter = f64 == -Inf)), 1L)
+  # Every spelling of an infinity or NaN Rust's f64 parser takes, in any
+  # case and with a sign; nothing more.
+  ok <- c("inf", "-inf", "+inf", "INF", "Inf", "infinity", "-Infinity", "+INFINITY", "nan", "NaN", "-nan", "+NAN",
+          "Infinity", "-Infinity", "1.5", "-0", "1e10")
+  bad <- c("in", "infin", "infinit", "infinityy", "na", "nann", " inf", "inf ", "--inf", "+-inf", "0x10", "1e")
+  for (type in c("double", "float")) {
+    for (x in ok) expect_true(zulake:::partition_value_ok(x, type), label = paste(type, x))
+    for (x in bad) expect_false(zulake:::partition_value_ok(x, type), label = paste(type, x))
+  }
+  meta <- metadata_line(c(id = "long", p = "double"), partition = "p")
+  for (x in ok) {
+    t <- lake_open(hand_table(c(protocol_line(), meta, add_line("a.parquet", list(p = x)))))
+    want <- switch(tolower(sub("^[+-]", "", x)), inf = , infinity = if (startsWith(x, "-")) -Inf else Inf,
+                   nan = NaN, as.numeric(x))
+    expect_identical(lake_files(t)$partition[[1L]]$p, want, label = x)
+  }
+})

@@ -132,6 +132,17 @@ def int32_min():
     write_deltalake(p, t, name="int32-min")
 
 
+def inf_partitions():
+    """Double and float partition columns holding infinities and NaN (#67)."""
+    p = fresh("zl-inf-partitions")
+    t = pa.table({
+        "id": pa.array([0, 1, 2, 3], pa.int64()),
+        "f64": pa.array([float("inf"), float("-inf"), float("nan"), 1.5], pa.float64()),
+        "f32": pa.array([float("-inf"), float("inf"), 2.5, float("nan")], pa.float32()),
+    })
+    write_deltalake(p, t, name="inf-partitions", partition_by=["f64", "f32"])
+
+
 def partitioned():
     """Partitioned by string, integer and date; nulls and characters that need escaping."""
     p = fresh("zl-partitioned")
@@ -474,7 +485,7 @@ def main():
         wanted = set(sys.argv[1:])
     else:
         wanted = None
-    for fn in (basic, types, int32_min, partitioned, checkpointed, checkpoint_no_last, multipart_checkpoint, compacted, file_times, domains,
+    for fn in (basic, types, int32_min, inf_partitions, partitioned, checkpointed, checkpoint_no_last, multipart_checkpoint, compacted, file_times, domains,
                unknown_feature, catalog_managed, vacuum_protocol_check, inline_dv, column_mapping_id, orders):
         if wanted is None or fn.__name__ in wanted:
             fn()

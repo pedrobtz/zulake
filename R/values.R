@@ -146,7 +146,7 @@ parse_partition_values <- function(x, type, int64, column) {
     timestamp_ntz = parse_time_text(x, zone = FALSE),
     x
   )
-  bad <- !is.na(x) & is.na(out) & !(type %in% c("float", "double") & x == "NaN")
+  bad <- !is.na(x) & is.na(out) & !(type %in% c("float", "double") & is.nan(double_special(x)))
   if (any(bad)) {
     zulake_abort(
       "corrupt_log",
@@ -165,10 +165,23 @@ whole_double <- function(x) {
 }
 
 partition_double <- function(x) {
-  y <- sub("^[+]", "", x)
-  y[y == "Infinity"] <- "Inf"
-  y[y == "-Infinity"] <- "-Inf"
-  suppressWarnings(as.numeric(y))
+  out <- suppressWarnings(as.numeric(sub("^[+]", "", x)))
+  special <- double_special(x)
+  out[!is.na(special) | is.nan(special)] <- special[!is.na(special) | is.nan(special)]
+  out
+}
+
+# Inf, -Inf or NaN for the spellings of an infinity or NaN that Rust's f64
+# parser takes (deltalake writes "inf", "-inf" and "NaN"; Spark "Infinity"
+# and "NaN"): "inf", "infinity" or "nan" in any case, with an optional sign.
+# NA for anything else (#67).
+double_special <- function(x) {
+  word <- tolower(sub("^[+-]", "", x))
+  out <- rep(NA_real_, length(x))
+  inf <- !is.na(word) & word %in% c("inf", "infinity")
+  out[inf] <- ifelse(startsWith(x[inf], "-"), -Inf, Inf)
+  out[!is.na(word) & word == "nan"] <- NaN
+  out
 }
 
 # The typed partition values of `actions` (add or remove actions), one

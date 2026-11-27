@@ -223,7 +223,7 @@ partition_value_ok <- function(x, type) {
     binary = TRUE,
     boolean = tolower(x) %in% c("true", "false"),
     float = ,
-    double = grepl(number, x) || x %in% c("NaN", "Infinity", "-Infinity", "+Infinity"),
+    double = grepl(number, x) || is.nan(double_special(x)) || is.infinite(double_special(x)),
     date = !is.na(parse_date_text(x)),
     timestamp = !is.na(parse_time_text(x, zone = TRUE)),
     timestamp_ntz = !is.na(parse_time_text(x, zone = FALSE)),

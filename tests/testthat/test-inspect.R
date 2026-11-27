@@ -139,7 +139,7 @@ test_that("lake_partitions() equals deltalake's partitions", {
   for (case in inspect_cases()) {
     tbl <- case_snapshot(case)
     p <- lake_partitions(tbl)
-    expected <- oracle_field(case$table, case$version, "partitions")
+    expected <- oracle_partition_rows(oracle_field(case$table, case$version, "partitions"), column_types(tbl))
     label <- paste(case$table, case$version)
     actual <- lapply(seq_len(nrow(p)), function(i) as.list(p[i, , drop = FALSE]))
     key <- function(x) vapply(x, function(r) paste(unlist(oracle_canon(r)), collapse = "\x1f"), "")

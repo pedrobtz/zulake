@@ -14,6 +14,11 @@ test_that("full reads of every fixture equal deltalake's", {
                         function(w) w$column, "")
       expect_setequal(skipped, c("dec38", "st", "li", "mp"))
       expect_read_oracle(got$value, case$table, case$version, skipped = skipped)
+    } else if (case$table == "zl-int32-min") {
+      # qio warns that it read the int32 -2^31 as NA (#79).
+      expect_length(got$warnings, 1L)
+      expect_match(conditionMessage(got$warnings[[1L]]), "INT32 values in column 'i32' were coerced to NA", fixed = TRUE)
+      expect_read_oracle(got$value, case$table, case$version)
     } else {
       expect_length(got$warnings, 0L)
       expect_read_oracle(got$value, case$table, case$version)
