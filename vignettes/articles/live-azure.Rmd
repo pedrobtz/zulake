@@ -1,0 +1,226 @@
+---
+title: "Test zulake against a live ADLS Gen2 account"
+description: "What only a real Azure account can show, how to run the live suite, and the live tests worth adding."
+---
+
+```{r, include = FALSE}
+# Not evaluated: every chunk needs an Azure account and a token.
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+This guide is for whoever runs zulake's tests against a real Azure Data
+Lake Storage Gen2 account. It describes the live test the package has
+now, how to run it, and the further live tests worth writing. None of the
+code on this page runs when the site is built, because it needs an Azure
+account and a token.
+
+## What a live account adds
+
+zulake's Azure backend is tested in three layers. A fake over the
+fixtures and the recorded cassettes run everywhere, CRAN included. Azurite,
+Microsoft's emulator, runs in CI against `deltalake` 1.7.0 reading the
+same tables. The third layer, one table on ADLS Gen2, runs only when
+someone with an account runs it.
+
+Azurite is an independent implementation of the Blob REST API, so it
+catches most mistakes. It does not show these, which only Azure does:
+
+| Behaviour | Azurite | Azure |
+| --- | --- | --- |
+| A rejected token | `403` | `401`, and zulake then asks for a new token once |
+| Access control | any token its `--oauth basic` mode accepts | Entra ID roles: "Storage Blob Data Reader" is needed, "Reader" is not enough |
+| Hierarchical namespace | none | real directories, which a listing can return as entries |
+| The `dfs` endpoint | none | `abfss://` and `https://<account>.dfs…` URIs name it, and zulake sends their requests to the `blob` endpoint |
+| Tokens | an unsigned test JWT | real tokens that expire after about an hour |
+| Certificates | a test CA passed to zuhttp | the public certificate chain |
+| Tables written by Spark or Databricks | only what was uploaded | the files and directories those writers leave |
+
+## Set up an account
+
+You need a storage account with the hierarchical namespace on, a
+container, and the "Storage Blob Data Reader" role on that container for
+whoever runs the tests. "Storage Blob Data Contributor" is needed only to
+upload tables. With the Azure CLI:
+
+```sh
+az storage account create --name <account> --resource-group <group> \
+  --kind StorageV2 --hns true --sku Standard_LRS
+az storage container create --account-name <account> --name lake --auth-mode login
+az role assignment create --assignee <you-or-app-id> \
+  --role "Storage Blob Data Reader" \
+  --scope "/subscriptions/<sub>/resourceGroups/<group>/providers/Microsoft.Storage/storageAccounts/<account>/blobServices/default/containers/lake"
+```
+
+Then upload a table. The example table the package ships is small and
+has partitions, a delete and in-commit timestamps:
+
+```sh
+az storage blob upload-batch --account-name <account> --auth-mode login \
+  --destination lake/orders --source "$(Rscript -e 'cat(system.file("extdata", "orders", package = "zulake"))')"
+```
+
+Uploading sets each blob's `Last-Modified` to the time of the upload. A
+table without in-commit timestamps takes its commit times from those, so
+its times on Azure are not the ones its local copy has. `live.py` asks
+`deltalake` about the uploaded table itself, so the comparison still
+holds.
+
+## Run the live suite
+
+`tests/testthat/test-azure-live.R` opens one table and compares zulake
+with `deltalake` 1.7.0 reading the same table. It checks the version,
+the live files and every row. It also checks that the three URI forms
+give the same files, and that the token appears nowhere in the snapshot,
+its print or an auth error. Locally:
+
+```sh
+export ZULAKE_AZURE_URI=abfss://lake@<account>.dfs.core.windows.net/orders
+export ZULAKE_AZURE_TOKEN="$(az account get-access-token \
+  --resource https://storage.azure.com --query accessToken --output tsv)"
+(cd tools/oracle && uv run --frozen python live.py /tmp/zulake-live)
+R CMD INSTALL .
+ZULAKE_AZURE_ANSWERS=/tmp/zulake-live Rscript -e 'devtools::test(filter = "azure-live")'
+```
+
+In CI, `.github/workflows/azure-live.yaml` does the same on dispatch
+(`gh workflow run azure-live.yaml --ref main`). It logs in with a
+federated credential from the repository secrets `AZURE_CLIENT_ID`,
+`AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`, and reads the table named
+by `ZULAKE_AZURE_URI`. It fails if the suite skips. Its log goes on
+[#24](https://github.com/pedrobtz/zulake/issues/24).
+
+## Live tests worth adding
+
+Each test below states what it checks, its oracle, and what it needs on
+the account. They would go in `test-azure-live.R` and skip, like the
+existing one, when the variables are unset. A test that needs a second
+table or identity reads it from a variable of its own, such as
+`ZULAKE_AZURE_URI_DV`.
+
+### Every fixture table
+
+Upload all 31 tables from `tests/testthat/fixtures/tables/` under one
+prefix and loop the existing comparison over them, with `live.py` run
+once per table. This is the strongest single test. It covers deletion
+vectors, V2 and multi-part checkpoints, column mapping, log compaction,
+and the refusals of unsupported reader features, all over the network.
+The oracle is `deltalake` reading the same blobs. Refused tables
+(`zl-unknown-reader-feature`, `column_mapping_id_mode`) must still give
+the same error class as they do locally.
+
+```r
+for (name in strsplit(Sys.getenv("ZULAKE_AZURE_TABLES"), ",")[[1]]) {
+  uri <- paste0(Sys.getenv("ZULAKE_AZURE_ROOT"), "/", name)
+  tbl <- lake_open(uri, credentials = credentials)
+  expect_oracle(lake_version(tbl), name, lake_version(tbl), "loaded_version")
+}
+```
+
+### A table written by Databricks or Spark
+
+Uploaded tables hold only the files the fixtures have. A table that a
+real writer created on ADLS also has directory entries in the
+hierarchical namespace, `.crc` files next to the commits and,
+from Databricks, deletion vectors and V2 checkpoints with sidecars.
+`deltalake` reading it is the oracle. Run `lake_files()` and
+`lake_read()` at the latest version and at one older version.
+
+### The token is asked for again after a 401
+
+Azure answers a token it rejects with `401`, and zulake then calls
+`credentials()` once more. Azurite answers `403`, so this path has never
+run against a real service. Count the calls with a function whose first
+token is malformed:
+
+```r
+calls <- 0
+credentials <- function() {
+  calls <<- calls + 1
+  if (calls == 1) "not-a-token" else Sys.getenv("ZULAKE_AZURE_TOKEN")
+}
+tbl <- lake_open(Sys.getenv("ZULAKE_AZURE_URI"), credentials = credentials)
+expect_identical(calls, 2)
+expect_identical(nrow(lake_read(tbl)), as.integer(lake_count(tbl)))
+```
+
+A token that is still rejected the second time must give
+`zulake_error_auth` with `status` 401 and Azure's `code`.
+
+### An identity without the data role
+
+A service principal with "Reader" on the account but no data role is
+refused with `403 AuthorizationPermissionMismatch`. zulake must raise
+`zulake_error_auth` with that code, before reading any data, and the
+error must not contain the token. This needs a second identity, whose
+token goes in `ZULAKE_AZURE_TOKEN_NO_DATA`.
+
+### Missing account, container and table
+
+Each failure has its own answer from Azure, and each maps to a class:
+
+| URI | Azure | zulake |
+| --- | --- | --- |
+| an account that does not exist | DNS failure | `zulake_error_storage`, with zuhttp's reason |
+| a container that does not exist | `404 ContainerNotFound` on the first listing | `zulake_error_not_table`, as for an empty listing |
+| a prefix with no `_delta_log/` | an empty listing | `zulake_error_not_table`, and `lake_is_table()` is `FALSE` |
+
+The oracle is the class and its fields. The test also checks that none
+of these errors contains the token.
+
+### A public container
+
+With anonymous read access on a second container,
+`lake_open(uri, credentials = NULL)` must read the table with no
+`Authorization` header and never retry. Azure accounts often disallow
+public access, so this test may have to wait for a dedicated account.
+
+### Names that need encoding
+
+Upload a table under a prefix with a space, a `%`, a `+` and a non-ASCII
+letter (`lake/a b%+ü/orders`), and give each of the three URI forms
+percent-encoded and plain. Azure decodes paths differently from Azurite in
+corner cases. The oracle is `deltalake` on the same table, and the three
+URI forms must agree with it and with each other. `zl-partitioned` adds
+partition values that need encoding in file paths.
+
+### A log longer than one listing page
+
+List Blobs returns at most 5,000 entries per page, so a `_delta_log/`
+with more than that is read in pages. Write 5,100 commits with
+`deltalake` straight to the account, then compare `lake_versions()` and
+`lake_version()` with `deltalake`. The fake already pages, but only a
+real listing shows the markers Azure returns.
+
+### Time travel on a live table
+
+Open the table, append a commit with `deltalake`, and check four things.
+The old snapshot still returns the old version and rows. `lake_load()`
+sees the new version. `lake_load(timestamp =)` with a time between the
+two commits returns the old version. `lake_changes()` from the old
+version to the new one lists the appended file.
+
+### Ranged reads and footers
+
+`lake_count(footers = TRUE)` and the reading of deletion vectors use
+`Range` requests. On a table with large Parquet files (hundreds of
+megabytes), compare `lake_count(footers = TRUE)` with `deltalake`'s row
+count. The test also checks, by timing, that the footers are fetched
+without downloading whole files.
+
+### A token that expires during a long read
+
+Real tokens last about an hour. Use `lake_walk()` on a table big enough
+to take longer than that, with a credentials function that fetches a new
+token from `az` each time it is called. The walk must finish, and the
+function must be called more than once. This test is slow, so it belongs
+in a dispatch of its own.
+
+## Where next
+
+- `tools/azurite/README.md` in the repository runs Azurite locally and
+  records the cassettes.
+- [Get started](zulake.html) opens a table on Azure with a token from the
+  Azure CLI.
+- `?lake_open` documents the URI forms and the `credentials` function.
+- [The reference](https://pedrobtz.github.io/zulake/reference/index.html)
+  lists every function.

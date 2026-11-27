@@ -2,3 +2,9 @@ url: https://pedrobtz.github.io/zulake/
 template:
   bootstrap: 5
 
+
+articles:
+  - title: Guides
+    navbar: ~
+    contents:
+      - articles/live-azure
