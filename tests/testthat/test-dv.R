@@ -340,3 +340,38 @@ test_that("a deletion vector of cardinality 0 deletes no row", {
   expect_identical(lake_read(tbl), qio::read_parquet(fetch_file(tbl, 1L)))
   expect_identical(lake_count(tbl), 10)
 })
+
+test_that("counts refuse a deletion vector of more rows than numRecords, and a negative numRecords (#59)", {
+  dv <- function(k) {
+    list(storageType = "u", pathOrInlineDv = "vBn[lx{q8@P<9BNH/isA", offset = 1L, sizeInBytes = 36L, cardinality = k)
+  }
+  for (k in c(9L, 10L)) {
+    tbl <- lake_open(dv_table(dv(k), n = 10L))
+    expect_identical(lake_count(tbl), 10 - k)
+    expect_identical(lake_count(tbl, footers = TRUE), 10 - k)
+    expect_identical(lake_summary(tbl)$records, 10 - k)
+    expect_identical(lake_files(tbl)$num_records, 10)
+  }
+  for (k in c(11L, 20L, -1L)) {
+    tbl <- lake_open(dv_table(dv(k), n = 10L))
+    expect_error(lake_count(tbl), class = "zulake_error_corrupt_log", label = k)
+    expect_error(lake_count(tbl, footers = TRUE), class = "zulake_error_corrupt_log", label = k)
+    expect_error(lake_summary(tbl), class = "zulake_error_corrupt_log", label = k)
+    expect_error(lake_files(tbl), class = "zulake_error_corrupt_log", label = k)
+    # The print says the count is unknown, never a negative one.
+    expect_match(format(tbl)[5L], "unknown (the statistics cannot be read)", fixed = TRUE)
+  }
+  add <- function(n) {
+    json_line(list(add = list(path = "a.parquet", partitionValues = structure(list(), names = character()), size = 100,
+                              modificationTime = 0, dataChange = TRUE, stats = sprintf('{"numRecords":%d}', n))))
+  }
+  expect_identical(lake_count(lake_open(hand_table(c(protocol_line(), metadata_line(), add(0L))))), 0)
+  for (n in c(-1L, -3L)) {
+    tbl <- lake_open(hand_table(c(protocol_line(), metadata_line(), add(n))))
+    expect_error(lake_count(tbl), class = "zulake_error_corrupt_log", label = n)
+    expect_error(lake_summary(tbl), class = "zulake_error_corrupt_log", label = n)
+    expect_error(lake_files(tbl), class = "zulake_error_corrupt_log", label = n)
+    skip_if_not_installed("bit64")
+    expect_error(lake_summary(tbl, int64 = "integer64"), class = "zulake_error_corrupt_log", label = n)
+  }
+})

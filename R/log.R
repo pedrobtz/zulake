@@ -85,9 +85,10 @@ commit_name <- function(version) {
 # A JSON log file's actions, one named list per line. A line that is not
 # JSON, or not a JSON object, is a corrupt log.
 read_actions <- function(storage, name) {
-  bytes <- mark_big_integers(storage$get(paste0(log_dir, name)))
+  bytes <- storage$get(paste0(log_dir, name))
+  marked <- mark_big_integers(bytes)
   actions <- tryCatch(
-    zujson::json_parse_ndjson(bytes),
+    zujson::json_parse_ndjson(marked),
     zujson_error = function(e) {
       zulake_abort(
         "corrupt_log",
@@ -97,6 +98,9 @@ read_actions <- function(storage, name) {
       )
     }
   )
+  if (!identical(marked, bytes)) {
+    actions <- seal_marks(actions)
+  }
   for (i in seq_along(actions)) {
     a <- actions[[i]]
     if (!is.list(a) || is.null(names(a)) || !length(a)) {

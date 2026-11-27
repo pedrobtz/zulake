@@ -18,7 +18,9 @@
 #' The commit time of a version is the commit's in-commit timestamp when
 #' the table records them, and the commit file's modification time
 #' otherwise, as the protocol prescribes and as `lake_open(timestamp =)`
-#' uses it.
+#' uses it. File times are made increasing first, as Delta and `deltalake`
+#' make them: a commit whose file time is not after the previous commit's
+#' counts as 1 millisecond after it.
 #'
 #' @inheritParams lake_files
 #' @param limit The number of commits to return, newest first. `NULL`, the
@@ -94,6 +96,7 @@ lake_versions <- function(tbl) {
 lake_history <- function(tbl, limit = NULL, int64 = c("double", "integer64")) {
   check_table(tbl)
   int64 <- check_int64(int64)
+  limit <- arg_number(limit)
   if (!is.null(limit) && (!is_whole(limit) || limit < 0)) {
     zulake_abort("argument", "`limit` must be NULL or a whole number of 0 or more.")
   }
@@ -242,10 +245,13 @@ snapshot_commits <- function(tbl) {
   commits
 }
 
-# Commit times of `commits` (rows of the listing), as POSIXct in UTC.
+# Commit times of `commits` (rows of the snapshot's commits, in any order
+# or a subset), as POSIXct in UTC; file times made increasing over all of
+# the snapshot's commits.
 commit_times <- function(tbl, commits) {
   ict <- ict_info(tbl$protocol, tbl$metadata)
   read <- function(name) read_actions(tbl$storage, name)
-  ms <- vapply(seq_len(nrow(commits)), function(i) commit_time_ms(commits[i, , drop = FALSE], ict, read), 0)
+  all <- snapshot_commits(tbl)
+  ms <- commit_times_ms(all, ict, read, match(commits$version, all$version))
   ms_to_posixct(ms)
 }

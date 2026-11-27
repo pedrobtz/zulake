@@ -42,7 +42,15 @@ field_type <- function(field) {
 
 # "2024-01-05 10:00:00", "2024-01-05T10:00:00.123456Z" or with an offset
 # ("+01:00"), as POSIXct in UTC, to the microsecond. `NA` for a value that
-# is not a time; the callers decide what that means.
+# is not a time: a calendar date that does not exist, an hour past 23, a
+# minute or second past 59, an offset past 18:00 or with minutes past 59.
+# The one parser for partition values (checked at open with it), statistics
+# and filter literals (#53).
+#
+# The value is the double qio reads for the same instant: the whole count of
+# microseconds, rounded once to a double, divided by 1e6 (#54). Adding a
+# separately rounded fraction to whole seconds differs from it near the
+# epoch.
 parse_time_text <- function(x, zone = TRUE) {
   re <- paste0(
     "^([0-9]{4,})-([0-9]{1,2})-([0-9]{1,2})[ T]([0-9]{1,2}):([0-9]{2}):([0-9]{2})",
@@ -55,27 +63,60 @@ parse_time_text <- function(x, zone = TRUE) {
   if (any(ok)) {
     y <- x[ok]
     part <- function(i) sub(re, sprintf("\\%d", as.integer(i)), y)
-    days <- as.numeric(as.Date(sprintf("%s-%s-%s", part(1), part(2), part(3)), format = "%Y-%m-%d"))
-    secs <- as.numeric(part(4)) * 3600 + as.numeric(part(5)) * 60 + as.numeric(part(6))
+    days <- as.numeric(parse_date_text(sprintf("%s-%s-%s", part(1), part(2), part(3))))
+    h <- as.numeric(part(4))
+    m <- as.numeric(part(5))
+    sec <- as.numeric(part(6))
     frac <- part(7)
     us <- ifelse(nzchar(frac), round(as.numeric(paste0("0", frac)) * 1e6), 0)
     off <- part(8)
-    off_secs <- rep(0, length(y))
+    off_h <- off_m <- rep(0, length(y))
+    sign <- rep(1, length(y))
     has_off <- nzchar(off) & off != "Z"
     if (any(has_off)) {
       o <- gsub(":", "", off[has_off], fixed = TRUE)
-      sign <- ifelse(startsWith(o, "-"), -1, 1)
-      off_secs[has_off] <- sign * (as.numeric(substr(o, 2L, 3L)) * 3600 + as.numeric(substr(o, 4L, 5L)) * 60)
+      sign[has_off] <- ifelse(startsWith(o, "-"), -1, 1)
+      off_h[has_off] <- as.numeric(substr(o, 2L, 3L))
+      off_m[has_off] <- as.numeric(substr(o, 4L, 5L))
     }
-    out[ok] <- (days * 86400 + secs - off_secs) + us / 1e6
+    valid <- !is.na(days) & h <= 23 & m <= 59 & sec <= 59 & off_h <= 18 & off_m <= 59 &
+      !(off_h == 18 & off_m > 0) & us < 1e6
+    whole <- days * 86400 + h * 3600 + m * 60 + sec - sign * (off_h * 3600 + off_m * 60)
+    value <- micros_seconds(whole, us)
+    value[!valid] <- NA_real_
+    out[ok] <- value
   }
   structure(out, class = c("POSIXct", "POSIXt"), tzone = "UTC")
 }
 
+# `whole` seconds and `us` microseconds (0 to 999999) as the double
+# (whole * 1e6 + us) / 1e6, where the count of microseconds is rounded to a
+# double once, exactly as a 64-bit count converted to double would be.
+# `whole` is split at 2^20 so that both products are exact: the count is
+# then the sum of two exact doubles, rounded once.
+micros_seconds <- function(whole, us) {
+  hi <- floor(whole / 2^20)
+  lo <- whole - hi * 2^20
+  ((hi * 1e6) * 2^20 + (lo * 1e6 + us)) / 1e6
+}
+
+# "2024-01-05" as a Date; NA for text that is not a date of the calendar.
 parse_date_text <- function(x) {
   out <- rep(NA_real_, length(x))
   ok <- !is.na(x) & grepl("^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}$", x)
-  out[ok] <- as.numeric(as.Date(x[ok], format = "%Y-%m-%d"))
+  if (any(ok)) {
+    y <- x[ok]
+    d <- as.Date(y, format = "%Y-%m-%d")
+    # as.Date() reads only what the format matches; the day it gives must be
+    # the one written.
+    parts <- strsplit(y, "-", fixed = TRUE)
+    same <- !is.na(d) & vapply(seq_along(y), function(i) {
+      lt <- as.POSIXlt(d[i])
+      p <- as.integer(parts[[i]])
+      lt$year + 1900L == p[1L] && lt$mon + 1L == p[2L] && lt$mday == p[3L]
+    }, NA)
+    out[ok] <- ifelse(same, as.numeric(d), NA_real_)
+  }
   structure(out, class = "Date")
 }
 
@@ -91,7 +132,7 @@ parse_partition_values <- function(x, type, int64, column) {
     byte = ,
     short = suppressWarnings(as.integer(x)),
     integer = whole_double(x),
-    long = int64_values(as.list(ifelse(is.na(x), NA, paste0(num_mark, sub("^[+]", "", x)))), int64, what),
+    long = int64_values(lapply(x, function(v) if (is.na(v)) NA else make_marked(sub("^[+]", "", v))), int64, what),
     float = ,
     double = partition_double(x),
     boolean = ifelse(is.na(x), NA, tolower(x) == "true"),
@@ -194,7 +235,7 @@ parse_stats <- function(stats, paths) {
   for (k in seq_along(idx)) {
     i <- idx[k]
     x <- tryCatch(
-      zujson::json_parse(marked[k]),
+      seal_marks(zujson::json_parse(marked[k])),
       zujson_error = function(e) {
         zulake_abort(
           "corrupt_log",

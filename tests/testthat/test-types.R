@@ -4,8 +4,10 @@
 
 test_that("every 64-bit value from the log straddles 2^53: exact, then an error, or exact as integer64", {
   skip_if_not_installed("bit64")
+  # 17 and 18 digits too, between 2^53's 16 and the 19 of 2^63 (#63).
   for (text in c("9007199254740991", "9007199254740992", "9007199254740993",
-                 "-9007199254740991", "-9007199254740992")) {
+                 "-9007199254740991", "-9007199254740992", "10000000000000001", "123456789012345678",
+                 "-10000000000000001")) {
     path <- int64_table(text)
     tbl <- lake_open(path)
     exact <- text %in% c("9007199254740991", "-9007199254740991")
@@ -269,4 +271,137 @@ test_that("a 64-bit field that is not a whole number is a corrupt log", {
 test_that("a time field that is not a whole number is a corrupt log", {
   lines <- c(raw_header(), raw_add("a.parquet"), '{"txn":{"appId":"a","version":1,"lastUpdated":1.5}}')
   expect_error(lake_transactions(lake_open(raw_table(lines))), class = "zulake_error_corrupt_log")
+})
+
+test_that("time text is range-checked by one parser, at open and in filters (#53)", {
+  bad <- list(
+    date = c("2024-02-30", "2023-02-29", "2024-13-01", "2024-00-10", "2024-04-31"),
+    timestamp = c("2024-01-01 24:00:00", "2024-01-01 12:60:00", "2024-01-01 12:00:60", "2024-01-01 12:00:61",
+                  "2024-01-01 25:61:61", "2024-01-01 12:00:00+99:99", "2024-01-01 12:00:00+01:60",
+                  "2024-01-01 12:00:00+19:00", "2024-02-30 00:00:00"),
+    timestamp_ntz = c("2024-01-01 24:00:00", "2024-01-01 12:60:00", "2024-01-01 12:00:61", "2024-02-30 00:00:00")
+  )
+  good <- list(
+    date = c("2024-02-29", "2024-12-31", "1970-01-01"),
+    timestamp = c("2024-01-01 23:59:59", "2024-01-01 00:00:00", "2024-01-01T23:59:59.999999Z",
+                  "2024-01-01 12:00:00+18:00", "2024-01-01 12:00:00-05:30"),
+    timestamp_ntz = c("2024-01-01 23:59:59.999999", "2024-02-29 00:00:00")
+  )
+  for (type in names(bad)) {
+    for (x in bad[[type]]) {
+      expect_false(partition_value_ok(x, type), label = paste(type, x))
+      expect_true(is.na(if (type == "date") parse_date_text(x) else parse_time_text(x, zone = type == "timestamp")),
+                  label = paste(type, x))
+      path <- hand_table(c(protocol_line(), metadata_line(c(id = "long", p = type), partition = "p"),
+                           add_line("a.parquet", partition = list(p = x))))
+      expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
+      # As a filter literal, against a column of the same type.
+      tbl <- lake_open(hand_table(c(protocol_line(), metadata_line(c(id = "long", p = type), partition = "p"),
+                                    add_line("a.parquet", partition = list(p = good[[type]][1L])))))
+      expect_error(lake_files(tbl, filter = p > x), class = "zulake_error_filter", label = paste(type, x))
+    }
+    for (x in good[[type]]) {
+      expect_true(partition_value_ok(x, type), label = paste(type, x))
+      path <- hand_table(c(protocol_line(), metadata_line(c(id = "long", p = type), partition = "p"),
+                           add_line("a.parquet", partition = list(p = x))))
+      expect_identical(nrow(lake_files(lake_open(path))), 1L, label = paste(type, x))
+    }
+  }
+})
+
+test_that("timestamp text becomes the double qio reads for the same microseconds (#54)", {
+  withr::local_seed(54)
+  us <- c(-1, 1, -1.5e6, -999999, 999999, -86400e6 + 1, sample(-2e6:2e6, 200),
+          round(runif(50, -2^53, 2^53)), 2^53 - 1, -(2^53 - 1), -62135596800000000)
+  text <- us_time_text(us)
+  want <- qio_read_us(us)
+  got <- as.numeric(parse_time_text(text, zone = TRUE))
+  expect_identical(got, want)
+  expect_identical(as.numeric(parse_time_text(text, zone = FALSE)), want)
+  expect_identical(as.numeric(parse_time_text(paste0(sub(" ", "T", text), "Z"))), want)
+  # Past 2^53 microseconds the count is rounded once, as a 64-bit count
+  # converted to double is: 253402300799999999 is 253402300800000000.
+  expect_identical(as.numeric(parse_time_text("9999-12-31 23:59:59.999999")), 253402300800)
+  # With an offset: the same instant.
+  shifted <- us_time_text(us + 3600e6)
+  expect_identical(as.numeric(parse_time_text(paste0(shifted, "+01:00"))), want)
+  # A filter on the column, and on a partition, finds the value qio reads.
+  path <- file.path(withr::local_tempdir(), "t")
+  dir.create(path)
+  ts_us <- c(-1, 0, 1, -1.5e6)
+  qio::write_parquet(data.frame(id = as.numeric(seq_along(ts_us)), ts = .POSIXct(ts_us / 1e6, tz = "UTC")),
+                     file.path(path, "a.parquet"))
+  write_commit(path, 0, c(protocol_line(), metadata_line(c(id = "double", ts = "timestamp")),
+                          add_line("a.parquet", size = file.size(file.path(path, "a.parquet")))))
+  tbl <- lake_open(path)
+  expect_identical(lake_read(tbl, filter = ts == "1969-12-31 23:59:59.999999")$id, 1)
+  expect_identical(lake_read(tbl, filter = ts <= "1969-12-31 23:59:59.999999")$id, c(1, 4))
+  expect_identical(lake_read(tbl, filter = ts != "1969-12-31 23:59:59.999999")$id, c(2, 3, 4))
+  expect_identical(lake_read(tbl, filter = ts %in% "1969-12-31 23:59:58.5")$id, 4)
+  part <- hand_table(c(protocol_line(), metadata_line(c(id = "long", p = "timestamp"), partition = "p"),
+                       add_line("a.parquet", partition = list(p = "1969-12-31 23:59:59.999999"))))
+  expect_identical(nrow(lake_files(lake_open(part), filter = p == as.POSIXct(-1e-6, origin = "1970-01-01", tz = "UTC"))), 1L)
+  expect_identical(nrow(lake_files(lake_open(part), filter = p == -1e-6)), 1L)
+})
+
+test_that("a string that starts with U+001E is a string, never a marked number (#56)", {
+  for (big in c(FALSE, TRUE)) {
+    path <- file.path(withr::local_tempdir(), "t")
+    dir.create(path)
+    s <- c("\x1e12", "\x1eabc", "plain")
+    qio::write_parquet(data.frame(s = s), file.path(path, "a.parquet"))
+    stats <- zujson::json_write(list(numRecords = 3L, minValues = list(s = "\x1e12"), maxValues = list(s = "plain"),
+                                     nullCount = list(s = 0L)), auto_unbox = TRUE)
+    add <- list(path = "a.parquet", partitionValues = list(p = "\x1e77"), size = file.size(file.path(path, "a.parquet")),
+                modificationTime = 0, dataChange = TRUE, stats = stats)
+    info <- list(timestamp = 0, operation = "WRITE", note = "\x1e123", `\x1ekey` = "v",
+                 n = if (big) bit64::as.integer64("9007199254740993") else 5)
+    lines <- c(json_line(list(commitInfo = info)), protocol_line(),
+               metadata_line(c(s = "string", p = "string"), partition = "p"), json_line(list(add = add)))
+    # zujson writes U+001E as \u001e; a writer may write \u001E.
+    lines[4L] <- sub("\\\\u001e77", "\\\\u001E77", lines[4L])
+    if (big) skip_if_not_installed("bit64")
+    write_commit(path, 0, lines)
+    tbl <- lake_open(path)
+    label <- if (big) "with a number past 2^53" else "without one"
+    expect_identical(lake_files(tbl)$min[[1L]]$s, "\x1e12", label = label)
+    expect_identical(lake_files(tbl)$max[[1L]]$s, "plain", label = label)
+    expect_identical(lake_files(tbl)$action[[1L]]$partitionValues$p, "\x1e77", label = label)
+    expect_identical(lake_files(tbl)$partition[[1L]]$p, "\x1e77", label = label)
+    actions <- lake_actions(tbl, 0, int64 = if (big) "integer64" else "double")
+    expect_identical(actions$action[[which(actions$type == "add")]]$partitionValues$p, "\x1e77", label = label)
+    expect_identical(lake_partitions(tbl)$p, "\x1e77", label = label)
+    ci <- lake_history(tbl, int64 = if (big) "integer64" else "double")$commit_info[[1L]]
+    expect_identical(ci$note, "\x1e123", label = label)
+    expect_identical(ci[["\x1ekey"]], "v", label = label)
+    expect_identical(nrow(lake_files(tbl, filter = s == "\x1e12")), 1L, label = label)
+    expect_identical(nrow(lake_files(tbl, filter = p == "\x1e77")), 1L, label = label)
+    expect_identical(lake_read(tbl, filter = s == "\x1e12")$s, "\x1e12", label = label)
+    expect_identical(lake_read(tbl, filter = s %in% "\x1eabc")$s, "\x1eabc", label = label)
+    expect_identical(lake_read(tbl, filter = s < "0")$s, c("\x1e12", "\x1eabc"), label = label)
+  }
+})
+
+test_that("a long string before a number past 2^53 leaves it exact, and a scan failure is an error (#57)", {
+  skip_if_not_installed("bit64")
+  for (n in c(1e3, 1e6, 5e6)) {
+    path <- hand_table(c(
+      json_line(list(commitInfo = list(timestamp = 0, userMetadata = strrep("x", n)))),
+      protocol_line(), metadata_line(), add_line("a.parquet"),
+      '{"txn":{"appId":"a","version":9007199254740993}}'
+    ))
+    expect_identical(as.character(lake_transactions(lake_open(path), int64 = "integer64")$version), "9007199254740993",
+                     label = n)
+    expect_error(lake_transactions(lake_open(path)), class = "zulake_error_int64")
+  }
+  # Escapes all through a long string, too.
+  long <- paste0('{"commitInfo":{"timestamp":0,"userMetadata":"', strrep('\\"', 2e6), '"}}')
+  path <- hand_table(c(long, protocol_line(), metadata_line(), '{"txn":{"appId":"a","version":9007199254740993}}'))
+  expect_identical(as.character(lake_transactions(lake_open(path), int64 = "integer64")$version), "9007199254740993")
+  # PCRE failing (its match limit) is a corrupt log, never unmarked digits.
+  local_mocked_bindings(json_tokens = function(pattern, text) {
+    warning("PCRE error\n\t'match limit exceeded'")
+    gregexpr(pattern, text, perl = TRUE)
+  })
+  expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
 })

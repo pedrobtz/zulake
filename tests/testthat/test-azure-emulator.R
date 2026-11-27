@@ -133,7 +133,11 @@ test_that("cassettes are recorded from Azurite without the token", {
       cassette_session(table)
     })
   }
+  cassettes_to_version2(dir)
   files <- list.files(dir, pattern = "[.]rds$", full.names = TRUE)
   expect_gte(length(files), length(cassette_tables) + 2L)
-  for (f in files) expect_no_token(readRDS(f), azurite_token)
+  for (f in files) {
+    expect_no_token(readRDS(f), azurite_token)
+    expect_identical(rds_version(f), 2L)
+  }
 })

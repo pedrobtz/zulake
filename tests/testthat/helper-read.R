@@ -299,3 +299,29 @@ reference_cmp <- function(a, b) {
   if (!length(d)) return(0L)
   sx * (if (px[d[1L]] > py[d[1L]]) 1L else -1L)
 }
+
+# ---- time text, a second way -------------------------------------------------
+
+# "YYYY-MM-DD HH:MM:SS.ffffff" for whole microseconds since the epoch,
+# written with integer arithmetic only, apart from zulake's parser (#54).
+us_time_text <- function(us) {
+  s <- floor(us / 1e6)
+  f <- us - s * 1e6
+  day <- floor(s / 86400)
+  sec <- s - day * 86400
+  # The date from its parts: format() writes year 1 as "1-01-01" where the
+  # C library's strftime() does not pad %Y (glibc), as on the Linux legs.
+  lt <- as.POSIXlt(as.Date(day, origin = "1970-01-01"))
+  date <- sprintf("%04d-%02d-%02d", lt$year + 1900L, lt$mon + 1L, lt$mday)
+  sprintf("%s %02d:%02d:%02d.%06d", date,
+          as.integer(sec %/% 3600), as.integer(sec %% 3600 %/% 60), as.integer(sec %% 60), as.integer(f))
+}
+
+# The doubles qio reads for whole microseconds `us`, through a Parquet file
+# it writes as TIMESTAMP(MICROS) (#54).
+qio_read_us <- function(us) {
+  f <- tempfile(fileext = ".parquet")
+  on.exit(unlink(f))
+  qio::write_parquet(data.frame(ts = .POSIXct(us / 1e6, tz = "UTC")), f)
+  as.numeric(qio::read_parquet(f)$ts)
+}

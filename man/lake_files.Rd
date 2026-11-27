@@ -48,7 +48,9 @@ column: the descriptor, or \code{NULL}), then, with \code{stats = TRUE},
 
 \code{lake_partitions()} returns a data frame with one column per partition
 column and one row per distinct combination of values among the live
-files the filter keeps; a table without partition columns has none.
+files the filter keeps, distinct as the log writes them (so \code{"1"} and
+\code{"1.0"} are two rows, as in \code{deltalake}); a table without partition
+columns has none.
 
 \code{lake_removed()} returns a data frame with one row per tombstone:
 \code{path}, \code{deletion_timestamp} (\code{POSIXct}), \code{data_change}, \code{size_bytes},

@@ -4,7 +4,8 @@
 # packed again and zl-orders copied to inst/extdata/orders, and any
 # difference from what is committed fails the run. So the answers the R
 # tests compare against are deltalake's, for exactly the tables the package
-# ships.
+# ships. test-fixtures.R then runs against the unpacked trees, which only
+# this workflow has (#64).
 #
 # Gated by the `paths` filter (r-actions README, assurance.yml: a workflow
 # whose pull_request trigger lists `paths` is exempt from the changes gate):
@@ -40,7 +41,7 @@ jobs:
         || contains(github.event.pull_request.labels.*.name, 'ci:minimal')
         || contains(github.event.pull_request.labels.*.name, 'skip-ci:oracle'))
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7.0.1
 
@@ -69,6 +70,22 @@ jobs:
       - name: Pack the fixtures
         working-directory: tools/oracle
         run: uv run --frozen python ../fixtures/pack.py
+
+      # The fixture tests from the source tree, where the unpacked tables/
+      # and hostile/ trees are (.Rbuildignore keeps them out of every R CMD
+      # check leg, so test-fixtures.R's tar test skips there): the shipped
+      # tar must hold exactly those trees, and no test may skip (#64).
+      - uses: r-lib/actions/setup-r-dependencies@v2.14.0
+        with:
+          extra-packages: any::testthat, any::withr, local::.
+
+      - name: The fixture tests, with the unpacked trees (test-fixtures.R)
+        run: |
+          Rscript -e '
+            r <- as.data.frame(testthat::test_file("tests/testthat/test-fixtures.R", package = "zulake",
+                                                   load_package = "installed", reporter = "summary",
+                                                   stop_on_failure = TRUE))
+            if (any(r$skipped)) stop("skipped here: ", paste(r$test[r$skipped], collapse = "; "))'
 
       - name: Regenerated equals committed
         run: |

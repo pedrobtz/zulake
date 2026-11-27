@@ -60,7 +60,9 @@
 #'
 #'   `lake_partitions()` returns a data frame with one column per partition
 #'   column and one row per distinct combination of values among the live
-#'   files the filter keeps; a table without partition columns has none.
+#'   files the filter keeps, distinct as the log writes them (so `"1"` and
+#'   `"1.0"` are two rows, as in `deltalake`); a table without partition
+#'   columns has none.
 #'
 #'   `lake_removed()` returns a data frame with one row per tombstone:
 #'   `path`, `deletion_timestamp` (`POSIXct`), `data_change`, `size_bytes`,
@@ -108,16 +110,32 @@ lake_partitions <- function(tbl, filter = NULL, int64 = c("double", "integer64")
   if (!length(parts)) {
     return(new_data_frame_n(list(), 0L))
   }
-  key <- do.call(paste, c(lapply(parts, function(col) {
-    ifelse(is.na(col), "\x1fNA", as.character(col))
+  # Distinct on the log's own text, as deltalake 1.7.0 is: typed values
+  # print to 15 digits, lose the sign of zero, and NaN is.na() (#55).
+  actions <- tbl$files$action[keep]
+  key <- do.call(paste, c(lapply(names(parts), function(col) {
+    raw <- partition_raw(actions, tbl, col)
+    ifelse(is.na(raw), "N", paste0("V", raw))
   }), sep = "\x1e"))
   parts <- parts[!duplicated(key), , drop = FALSE]
   ord <- do.call(order, c(unname(lapply(parts, function(col) {
-    if (inherits(col, "integer64")) as.character(col) else col
+    if (inherits(col, "integer64")) integer64_order_key(col) else col
   })), method = "radix", na.last = TRUE))
   parts <- parts[ord, , drop = FALSE]
   row.names(parts) <- NULL
   parts
+}
+
+# Text that sorts as the integer64 values `x` do, NA as NA: the sign, then
+# the digits padded to 20 places, complemented for a negative value.
+integer64_order_key <- function(x) {
+  text <- as.character(x)
+  neg <- !is.na(text) & startsWith(text, "-")
+  digits <- sub("^-", "", text)
+  padded <- paste0(strrep("0", pmax(0L, 20L - nchar(digits))), digits)
+  out <- ifelse(neg, paste0("0", chartr("0123456789", "9876543210", padded)), paste0("1", padded))
+  out[is.na(text)] <- NA_character_
+  out
 }
 
 #' @rdname lake_files
@@ -211,10 +229,15 @@ stats_columns <- function(tbl, actions, paths, int64) {
       stats_object(parsed[[i]][[name]], fields, mode, kind, int64, what, if (kind == "value") skipped)
     })
   }
+  num_records <- int64_values(
+    lapply(seq_along(parsed), function(i) parsed[[i]][["numRecords"]]), int64, "a file's `numRecords`"
+  )
+  cardinality <- int64_values(
+    lapply(actions, function(a) a[["deletionVector"]][["cardinality"]]), int64, "a deletion vector's `cardinality`"
+  )
+  check_record_counts(num_records, cardinality, paths)
   out <- list(
-    num_records = int64_values(
-      lapply(seq_along(parsed), function(i) parsed[[i]][["numRecords"]]), int64, "a file's `numRecords`"
-    ),
+    num_records = num_records,
     null_count = obj("nullCount", "count"),
     min = obj("minValues", "value"),
     max = obj("maxValues", "value")
@@ -242,6 +265,33 @@ warn_int64 <- function(value, column, path, int64) {
     ),
     value = value, column = column, path = path
   )
+}
+
+# A file's `numRecords` is never negative, and its deletion vector deletes
+# no more rows than it has, nor fewer than none: either would make a count
+# no table can have (#59). NA (no statistic, no vector) is not checked.
+check_record_counts <- function(records, cardinality, paths) {
+  bad <- function(why, i) {
+    zulake_abort("corrupt_log", sprintf("file %s %s.", format_string(paths[i]), why), file = paths[i])
+  }
+  num <- function(x) if (inherits(x, "integer64")) as.character(x) else format_number(x)
+  neg <- which(!is.na(records) & records < 0)
+  if (length(neg)) {
+    bad(sprintf("has a negative `numRecords` (%s)", num(records[neg[1L]])), neg[1L])
+  }
+  neg <- which(!is.na(cardinality) & cardinality < 0)
+  if (length(neg)) {
+    bad(sprintf("has a deletion vector of negative `cardinality` (%s)", num(cardinality[neg[1L]])), neg[1L])
+  }
+  over <- which(!is.na(records) & !is.na(cardinality) & cardinality > records)
+  if (length(over)) {
+    i <- over[1L]
+    bad(sprintf(
+      "has a deletion vector of %s rows, more than its %s records",
+      num(cardinality[i]), num(records[i])
+    ), i)
+  }
+  invisible()
 }
 
 # numRecords and deletion vector cardinalities of the live files, summed:
@@ -279,6 +329,7 @@ file_counts <- function(tbl, int64) {
       file = paths[bad][1L]
     )
   }
+  check_record_counts(records, deleted, paths)
   deleted[!has_dv] <- 0
   total_deleted <- int64_sum(deleted, int64, "The number of deleted rows")
   total <- if (any(no_records)) {
@@ -342,7 +393,11 @@ file_uri <- function(tbl, paths) {
   out
 }
 
-percent_decode <- function(x) {
+# Percent-decoding of paths the log, a URI or Azure's listing gives. A
+# decoded NUL or bytes that are not UTF-8 are a classed error, of `class`
+# (#49): "corrupt_log" for the log's paths, "uri" for a user's URI,
+# "storage" for Azure's answers.
+percent_decode <- function(x, class = "corrupt_log") {
   vapply(x, function(s) {
     if (!grepl("%", s, fixed = TRUE)) {
       return(s)
@@ -357,8 +412,14 @@ percent_decode <- function(x) {
         bytes <- c(bytes, as.raw(strtoi(substring(codes[i], 2L), 16L)))
       }
     }
+    if (any(bytes == as.raw(0L))) {
+      zulake_abort(class, sprintf("the path %s decodes to a NUL byte.", format_string(s)), path = s)
+    }
     out <- rawToChar(bytes)
     Encoding(out) <- "UTF-8"
+    if (!validUTF8(out)) {
+      zulake_abort(class, sprintf("the path %s does not decode to UTF-8 text.", format_string(s)), path = s)
+    }
     out
   }, "", USE.NAMES = FALSE)
 }

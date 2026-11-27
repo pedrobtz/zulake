@@ -23,11 +23,27 @@ check_string <- function(x, arg) {
   invisible(x)
 }
 
+# A number argument as a double: an integer64 converted exactly, or Inf
+# past 2^53 - 1, where a double is no longer exact, so that every check
+# refuses it; anything else as given. seq_len() and arithmetic read an
+# integer64's bits as a double, so none reaches them (#60).
+arg_number <- function(x) {
+  if (!inherits(x, "integer64")) {
+    return(x)
+  }
+  if (length(x) != 1L || is.na(x)) {
+    return(NA_real_)
+  }
+  text <- as.character(x)
+  if (integer_past_exact(text)) Inf else as.numeric(text)
+}
+
 # A version argument: NULL, or one whole number from 0 to 2^53 - 1.
 check_version <- function(version) {
   if (is.null(version)) {
     return(NULL)
   }
+  version <- arg_number(version)
   if (!is_whole(version) || version < 0 || version > max_exact) {
     zulake_abort(
       "argument",

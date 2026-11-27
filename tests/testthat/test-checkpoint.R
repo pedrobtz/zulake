@@ -10,7 +10,7 @@ test_that("scalars become what zujson parses from the same JSON", {
   skip_if_not_installed("bit64")
   big <- c("9007199254740992", "9007199254740993", "-9223372036854775807", "12", "9007199254740991")
   marked <- lapply(big, function(j) {
-    zujson::json_parse(zulake:::mark_numbers(paste0("{\"v\":", j, "}")))$v
+    zulake:::parse_marked(paste0("{\"v\":", j, "}"))$v
   })
   expect_identical(zulake:::atomic_values(bit64::as.integer64(big)), marked)
   expect_identical(zulake:::atomic_values(bit64::as.integer64(c(NA, "5"))), list(NULL, 5L))
@@ -53,7 +53,7 @@ test_that("lists and maps become what zujson parses from JSON arrays and objects
     "[]" = character()
   )
   for (json in names(longs)) {
-    expected <- zujson::json_parse(zulake:::mark_numbers(paste0("{\"v\":", json, "}")))$v
+    expected <- zulake:::parse_marked(paste0("{\"v\":", json, "}"))$v
     expect_identical(zulake:::nested_value(bit64::as.integer64(longs[[json]])), expected, label = json)
   }
 })
@@ -127,7 +127,7 @@ test_that("a 64-bit integer a double cannot hold is read again as integer64, or 
   skip_if_not_installed("bit64")
   out <- zulake:::read_log_parquet("f.parquet", "txn.version")
   expect_identical(calls, c("double", "integer64"))
-  expect_identical(zulake:::atomic_values(out$x), list(paste0(zulake:::num_mark, "9007199254740993")))
+  expect_identical(zulake:::atomic_values(out$x), list(zulake:::make_marked("9007199254740993")))
 
   # A value integer64 cannot hold either: the warning is an error.
   local_mocked_bindings(read_parquet = function(file, columns, int64 = "double") {

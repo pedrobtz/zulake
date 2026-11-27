@@ -4,37 +4,108 @@
 # would round silently on the way in. Before parsing, number tokens are
 # rewritten as strings that start with `num_mark`, so their digits survive:
 # every number of a `stats` string (decimal statistics stay as their JSON
-# text), and in a commit only integers past 2^53 - 1. The functions that
-# return a value turn a marked string into a double when it is exact, and
-# otherwise into an error or, with `int64 = "integer64"`, a bit64 integer64.
+# text), and in a commit only integers past 2^53 - 1. A string of the text
+# that itself starts with the mark gets a second one, and after parsing
+# seal_marks() tells the two apart once: a marked number becomes a
+# "zulake_int" object (its digits, classed), a string loses the mark it was
+# given (#56). From there on a number is known by its class, never by its
+# first character, so no string can be taken for one. The functions that
+# return a value turn a marked number into a double when it is exact, and
+# otherwise into an error or, with `int64 = "integer64"`, a bit64
+# integer64.
 
 num_mark <- "\x1e"
+
+# The marked number holding the digits `text`.
+make_marked <- function(text) structure(text, class = "zulake_int")
 
 # JSON text with number tokens rewritten as marked strings: every number when
 # `all` is TRUE, otherwise only integers whose magnitude passes 2^53 - 1.
 # Strings and numbers are matched whole, left to right, so digits inside a
-# string, a fraction or an exponent are never taken for an integer.
+# string, a fraction or an exponent are never taken for an integer; a string
+# that starts with U+001E is given a second one. The pattern's quantifiers
+# are possessive, so a string of any length is matched without
+# backtracking; should PCRE still fail, the failure is an error, never text
+# left unmarked (#57).
 mark_numbers <- function(text, all = FALSE) {
   if (!all) {
-    hit <- grepl("[0-9]{16}", text)
+    hit <- grepl("[0-9]{16}", text) | grepl("\"\\\\u001[eE]", text)
     if (!any(hit)) {
       return(text)
     }
   }
   pattern <- paste0(
-    "\"(?:[^\"\\\\]|\\\\.)*\"",
-    "|-?[0-9]+(?:[.][0-9]+)?(?:[eE][+-]?[0-9]+)?"
+    "\"(?:[^\"\\\\]++|\\\\.)*+\"",
+    "|-?[0-9]++(?:[.][0-9]++)?+(?:[eE][+-]?+[0-9]++)?+"
   )
-  m <- gregexpr(pattern, text, perl = TRUE)
+  m <- withCallingHandlers(
+    json_tokens(pattern, text),
+    warning = function(w) {
+      zulake_abort(
+        "corrupt_log",
+        sprintf("the log's JSON could not be scanned for 64-bit integers: %s", conditionMessage(w))
+      )
+    }
+  )
   regmatches(text, m) <- lapply(regmatches(text, m), function(tok) {
     num <- !startsWith(tok, "\"")
     if (!all) {
       num <- num & integer_past_exact(tok)
     }
     tok[num] <- paste0("\"\\u001e", tok[num], "\"")
+    str <- !num & grepl("^\"\\\\u001[eE]", tok)
+    tok[str] <- paste0("\"\\u001e", substring(tok[str], 2L))
     tok
   })
   text
+}
+
+json_tokens <- function(pattern, text) gregexpr(pattern, text, perl = TRUE)
+
+# A value zujson parsed from marked text (mark_numbers()) with its marks
+# read: a string that starts with U+001E twice is a string, with one mark
+# dropped; one that starts with it once is a marked number (make_marked()).
+# An array holding numbers and strings becomes a list. Names are strings.
+seal_marks <- function(x) {
+  if (is.list(x)) {
+    if (!length(x)) {
+      return(x)
+    }
+    keep <- attributes(x)
+    out <- lapply(x, seal_marks)
+    attributes(out) <- keep
+    nm <- names(out)
+    if (!is.null(nm)) {
+      esc <- startsWith(nm, "\x1e\x1e")
+      if (any(esc)) {
+        nm[esc] <- substring(nm[esc], 2L)
+        names(out) <- nm
+      }
+    }
+    return(out)
+  }
+  if (!is.character(x)) {
+    return(x)
+  }
+  m <- !is.na(x) & startsWith(x, num_mark)
+  if (!any(m)) {
+    return(x)
+  }
+  esc <- m & startsWith(x, "\x1e\x1e")
+  num <- m & !esc
+  x[esc] <- substring(x[esc], 2L)
+  if (!any(num)) {
+    return(x)
+  }
+  if (all(num)) {
+    return(make_marked(substring(x, 2L)))
+  }
+  lapply(seq_along(x), function(i) if (num[i]) make_marked(substring(x[i], 2L)) else x[i])
+}
+
+# Text parsed as JSON with its numbers marked, as a commit's line is.
+parse_marked <- function(text, all = FALSE) {
+  seal_marks(zujson::json_parse(mark_numbers(text, all = all)))
 }
 
 # Integer tokens whose magnitude is more than 2^53 - 1, decided on the digits.
@@ -46,10 +117,10 @@ integer_past_exact <- function(tok) {
 }
 
 is_marked <- function(x) {
-  is.character(x) && length(x) == 1L && !is.na(x) && startsWith(x, num_mark)
+  inherits(x, "zulake_int") && length(x) == 1L && !is.na(x)
 }
 
-marked_text <- function(x) substring(x, 2L)
+marked_text <- function(x) as.character(unclass(x))
 
 # A whole number as zujson left it: a double, or a marked integer.
 is_whole_or_marked <- function(x) {
@@ -88,6 +159,9 @@ has_bit64 <- function() requireNamespace("bit64", quietly = TRUE)
 # names the values for the error message.
 int64_values <- function(x, int64, what) {
   n <- length(x)
+  if (inherits(x, "zulake_int")) {
+    x <- lapply(unclass(x), make_marked)
+  }
   if (!is.list(x)) {
     x <- as.list(x)
   }
@@ -178,16 +252,8 @@ unmark_tree <- function(x, int64, what) {
     attributes(out) <- keep
     return(out)
   }
-  if (is.character(x) && any(startsWith(x, num_mark), na.rm = TRUE)) {
-    marked <- !is.na(x) & startsWith(x, num_mark)
-    if (length(x) == 1L) {
-      return(int64_values(x, int64, what))
-    }
-    vals <- lapply(x, function(v) if (!is.na(v) && startsWith(v, num_mark)) int64_values(v, int64, what) else v)
-    if (all(marked)) {
-      return(do.call(c, vals))
-    }
-    return(vals)
+  if (inherits(x, "zulake_int")) {
+    return(int64_values(x, int64, what))
   }
   x
 }

@@ -22,8 +22,10 @@ the latest version.}
 \item{timestamp}{Open the latest version committed at or before this
 time, a \code{POSIXct}. The commit time is the commit's in-commit timestamp
 when the table records them, and the commit file's modification time
-otherwise. A time before the first commit opens the first version. Give
-\code{version} or \code{timestamp}, not both.}
+otherwise, made increasing as \code{\link[=lake_versions]{lake_versions()}} describes. A time
+before the first commit opens the first version; a log with no commit
+file (checkpoints alone) has no commit times, and is a
+\code{zulake_error_version}. Give \code{version} or \code{timestamp}, not both.}
 
 \item{credentials}{A function of no arguments returning a bearer token
 for Azure Storage, as a string (see the Azure section), or \code{NULL} for

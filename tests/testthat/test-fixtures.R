@@ -148,7 +148,8 @@ test_that("each hostile log differs from the table it was made from", {
 
 test_that("the shipped tar holds exactly the unpacked fixture trees", {
   # The unpacked trees are in the source tree only (.Rbuildignore), so this
-  # runs under devtools::test(); oracle.yaml repacks and diffs in CI.
+  # runs under devtools::test() and in oracle.yaml, which also fails if it
+  # skips (#64); every R CMD check leg skips it.
   src <- testthat::test_path("fixtures")
   skip_if_not(dir.exists(file.path(src, "tables")), "unpacked fixture trees not in this tree")
   for (kind in c("tables", "hostile")) {

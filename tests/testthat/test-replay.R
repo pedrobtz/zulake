@@ -575,7 +575,8 @@ test_that("the snapshot is the same in a hostile session and under a non-ASCII p
   withr::local_envvar(LC_ALL = "C")
   withr::local_options(OutDec = ",", scipen = -5, digits = 3)
   withr::local_collate("C")
-  hostile <- lake_open(fixture_table("zl-partitioned"), version = 1)
+  # The variable alone does not change the running session's locale (#50).
+  hostile <- withr::with_locale(c(LC_CTYPE = "C"), lake_open(fixture_table("zl-partitioned"), version = 1))
   expect_identical(hostile$files, base$files)
   expect_identical(hostile$version, base$version)
 
@@ -598,4 +599,89 @@ test_that("a whole-millisecond file time read up to 1 us low (Windows' file.info
     expect_identical(mtime_ms(as.POSIXct((ts + 0.4015) / 1000, origin = "1970-01-01", tz = "UTC")), ts)
     expect_identical(mtime_ms(as.POSIXct((ts + 0.98) / 1000, origin = "1970-01-01", tz = "UTC")), ts)
   }
+})
+
+test_that("a file key past R's 10000-byte limit on names replays like any other (#50)", {
+  # The key is the path, a 0x1f and the deletion vector's id ("" here):
+  # paths of 9998, 9999 and 10000 bytes make keys of 9999, 10000 and 10001.
+  for (n in c(9998L, 9999L, 10000L)) {
+    long <- paste0(strrep("d/", (n - 9L) %/% 2L), if ((n - 9L) %% 2L) "e", "f.parquet")
+    expect_identical(nchar(long, "bytes"), n)
+    path <- hand_table(c(protocol_line(), metadata_line(), add_line(long), add_line("short.parquet")))
+    write_commit(path, 1, remove_line(long))
+    expect_identical(lake_files(lake_open(path, version = 0))$path, sort(c(long, "short.parquet"), method = "radix"),
+                     label = n)
+    expect_identical(lake_files(lake_open(path))$path, "short.parquet", label = n)
+    expect_identical(lake_removed(lake_open(path))$path, long, label = n)
+  }
+})
+
+test_that("an inline deletion vector longer than 10000 characters opens and reads, as deltalake opens it (#50)", {
+  skip_if_not_installed("zuroar")
+  rows <- seq(0, 8198, by = 2)
+  dv <- inline_dv(dv_bytes(rows), length(rows))
+  expect_gt(nchar(dv$pathOrInlineDv), 10000L)
+  tbl <- lake_open(dv_table(dv, n = 8200L))
+  expect_identical(lake_count(tbl), 8200 - length(rows))
+  expect_identical(lake_read(tbl)$id, setdiff(0:8199, rows) + 0)
+})
+
+test_that("non-ASCII paths stay distinct in a session whose encoding is not UTF-8 (#50)", {
+  withr::local_locale(c(LC_CTYPE = "C"))
+  e <- "g=é/a.parquet"
+  escaped <- "g=<U+00E9>/a.parquet"
+  path <- hand_table(c(protocol_line(), metadata_line(), add_line(e), add_line(escaped)))
+  write_commit(path, 1, remove_line(escaped))
+  expect_no_warning(v0 <- lake_files(lake_open(path, version = 0))$path)
+  expect_identical(sort(enc2utf8(v0), method = "radix"), sort(c(enc2utf8(e), escaped), method = "radix"))
+  expect_no_warning(v1 <- lake_files(lake_open(path))$path)
+  expect_identical(enc2utf8(v1), enc2utf8(e))
+})
+
+test_that("timestamp travel on a log of checkpoints alone is a classed error, without a warning (#51)", {
+  path <- local_fixture_copy("zl-checkpoint")
+  log <- file.path(path, "_delta_log")
+  unlink(list.files(log, pattern = "^[0-9]{20}[.]json$", full.names = TRUE))
+  expect_identical(lake_version(lake_open(path)), 10)
+  for (at in list(Sys.time(), as.POSIXct("1970-01-01", tz = "UTC"), as.POSIXct("2100-01-01", tz = "UTC"))) {
+    expect_no_warning(expect_error(lake_open(path, timestamp = at), class = "zulake_error_version"))
+  }
+  expect_identical(nrow(lake_versions(lake_open(path))), 0L)
+})
+
+test_that("file-time commit times are made increasing before a lookup, as deltalake makes them (#52)", {
+  # The oracle: zl-file-times, whose commit 1 is dated before commit 0.
+  path <- set_commit_mtimes(local_fixture_copy("zl-file-times"))
+  ms <- commit_mtimes_ms(path)
+  expect_lt(ms[["1"]], ms[["0"]])
+  for (version in oracle_versions("zl-file-times")) {
+    for (l in oracle_field("zl-file-times", version, "timestamp_lookup")) {
+      expect_identical(lake_version(lake_open(path, timestamp = answer_time(l$at))), as.numeric(l$version),
+                       label = l$at)
+    }
+  }
+  # Commit 1 is dated 1 ms after commit 0, everywhere a commit time is
+  # given, and each time opens its own version.
+  tbl <- lake_open(path)
+  v <- lake_versions(tbl)
+  want <- c(ms[["0"]], ms[["0"]] + 1, ms[["2"]])
+  expect_identical(round(as.numeric(v$timestamp) * 1000), want)
+  expect_identical(lake_history(tbl)$timestamp, rev(v$timestamp))
+  expect_identical(lake_history(tbl, limit = 2)$timestamp, rev(v$timestamp)[1:2])
+  expect_identical(lake_open(path, version = 1)$timestamp, v$timestamp[2L])
+  expect_identical(lake_summary(lake_open(path, version = 1))$timestamp, v$timestamp[2L])
+  for (i in seq_len(nrow(v))) {
+    expect_identical(lake_version(lake_open(path, timestamp = v$timestamp[i])), v$version[i])
+  }
+  # A hand-built log: B + 100 s, B + 50 s, B + 200 s; at B + 75 s, version 0.
+  hand <- hand_table(c(protocol_line(), metadata_line(), add_line("0.parquet")))
+  write_commit(hand, 1, add_line("1.parquet"))
+  write_commit(hand, 2, add_line("2.parquet"))
+  B <- 1.7e9
+  for (v in 0:2) {
+    Sys.setFileTime(file.path(hand, "_delta_log", sprintf("%020d.json", v)), as.POSIXct(B + c(100, 50, 200)[v + 1] + 5e-4, tz = "UTC"))
+  }
+  expect_identical(lake_version(lake_open(hand, timestamp = as.POSIXct(B + 75, tz = "UTC"))), 0)
+  expect_identical(lake_version(lake_open(hand, timestamp = as.POSIXct(B + 100.0005, tz = "UTC"))), 0)
+  expect_identical(lake_version(lake_open(hand, timestamp = as.POSIXct(B + 100.0015, tz = "UTC"))), 1)
 })

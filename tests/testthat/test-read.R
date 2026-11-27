@@ -378,3 +378,26 @@ test_that("a column two files store as different types is a corrupt log", {
   # Each file alone reads.
   expect_identical(nrow(lake_read(lake_open(path), filter = id >= 100)), 2L)
 })
+
+test_that("a cached download deleted from disk is downloaded again, not read as missing (#63)", {
+  local_empty_download_cache()
+  tbl <- lake_open(local_fixture_copy("zl-partitioned"))
+  direct <- lake_read(tbl)
+  env <- new.env()
+  tbl$storage <- remote_storage(tbl$storage, env)
+  expect_identical(lake_read(tbl), direct)
+  gets <- env$calls[startsWith(env$calls, "get ")]
+  cache <- get("cache_env", envir = asNamespace("zulake"))
+  cached <- unlist(cache$files, use.names = FALSE)
+  expect_length(cached, length(gets))
+  # The session's temporary files go (a tempdir cleaner, the user): the
+  # next read downloads each file again and returns the same rows.
+  unlink(cached)
+  expect_identical(lake_read(tbl), direct)
+  expect_identical(env$calls[startsWith(env$calls, "get ")], c(gets, gets))
+  expect_true(all(file.exists(unlist(cache$files, use.names = FALSE))))
+  # Only one of them gone: only that one again.
+  unlink(unlist(cache$files, use.names = FALSE)[1L])
+  expect_identical(lake_read(tbl), direct)
+  expect_length(env$calls[startsWith(env$calls, "get ")], 2L * length(gets) + 1L)
+})

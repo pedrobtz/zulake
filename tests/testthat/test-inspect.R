@@ -442,13 +442,11 @@ test_that("statistics that break the protocol are a corrupt log, and stats = FAL
   expect_identical(lake_files(lake_open(raw_table(lines)))$min[[1L]], list(gone = 12, also = "x", f = 1.5))
 })
 
-test_that("a partition value Stage 2's check lets through but no type holds is a corrupt log", {
+test_that("a partition value no calendar holds is a corrupt log when the snapshot is built (#53)", {
   for (case in list(c("date", "2024-02-31"), c("timestamp", "2024-02-30 10:00:00"))) {
     path <- hand_table(c(protocol_line(), metadata_line(c(id = "long", p = case[1L]), partition = "p"),
                          add_line("a.parquet", partition = list(p = case[2L]))))
-    tbl <- lake_open(path)
-    expect_error(lake_files(tbl), class = "zulake_error_corrupt_log")
-    expect_error(lake_partitions(tbl), class = "zulake_error_corrupt_log")
+    expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
   }
 })
 
@@ -502,4 +500,62 @@ test_that("results do not depend on the locale or on number formatting options",
   expect_identical(capture.output(print(tbl)), ref_print)
   expect_identical(lake_files(tbl, filter = p_str == factor("a"))$path, ref_files$path[2:3])
   expect_identical(lake_files(tbl, filter = p_str %in% factor(c("a", "café")))$path, ref_files$path[2:4])
+})
+
+test_that("lake_partitions() keeps every distinct value the log writes, as deltalake does (#55)", {
+  # deltalake 1.7.0's partitions() for this log: eight rows, one per text.
+  values <- list("0.3", "0.30000000000000004", "0", "-0", "NaN", NULL, "1", "1.0")
+  adds <- vapply(seq_along(values), function(i) {
+    add_line(sprintf("f%d.parquet", i), partition = if (is.null(values[[i]])) list() else list(p = values[[i]]))
+  }, "")
+  tbl <- lake_open(hand_table(c(protocol_line(), metadata_line(c(id = "long", p = "double"), partition = "p"), adds,
+                                add_line("again.parquet", partition = list(p = "0.3")))))
+  p <- lake_partitions(tbl)$p
+  expect_length(p, 8L)
+  expect_identical(sum(is.na(p) & !is.nan(p)), 1L)
+  expect_identical(sum(is.nan(p)), 1L)
+  expect_identical(sum(p %in% 0.3 & p == 0.3), 1L)
+  expect_identical(sum(p == 0.30000000000000004 & p != 0.3, na.rm = TRUE), 1L)
+  expect_identical(sum(p == 0 & 1 / p < 0, na.rm = TRUE), 1L)
+  expect_identical(sum(p == 0 & 1 / p > 0, na.rm = TRUE), 1L)
+  expect_identical(sum(p == 1, na.rm = TRUE), 2L)
+  # A timestamp partition below the second, and long partitions ordered by
+  # value in both int64 modes.
+  ts <- c("2024-01-01 00:00:00.000001", "2024-01-01 00:00:00.000002")
+  tbl <- lake_open(hand_table(c(protocol_line(), metadata_line(c(id = "long", p = "timestamp"), partition = "p"),
+                                vapply(ts, function(x) add_line(paste0(x, ".parquet"), partition = list(p = x)), ""))))
+  expect_identical(nrow(lake_partitions(tbl)), 2L)
+  longs <- c("-10", "-1", "0", "1", "9", "10", "100", "9223372036854775807", "-9223372036854775807")
+  tbl <- lake_open(hand_table(c(protocol_line(), metadata_line(c(id = "long", p = "long"), partition = "p"),
+                                vapply(sample(longs), function(x) add_line(paste0(x, ".parquet"), partition = list(p = x)), ""))))
+  skip_if_not_installed("bit64")
+  expect_identical(as.character(lake_partitions(tbl, int64 = "integer64")$p),
+                   c("-9223372036854775807", "-10", "-1", "0", "1", "9", "10", "100", "9223372036854775807"))
+  small <- lake_open(hand_table(c(protocol_line(), metadata_line(c(id = "long", p = "long"), partition = "p"),
+                                  vapply(sample(longs[1:7]), function(x) add_line(paste0(x, ".parquet"), partition = list(p = x)), ""))))
+  expect_identical(as.character(lake_partitions(small, int64 = "integer64")$p), as.character(lake_partitions(small)$p))
+})
+
+test_that("integer64 arguments count as their values, and past 2^53 - 1 are refused (#60)", {
+  skip_if_not_installed("bit64")
+  i64 <- bit64::as.integer64
+  tbl <- lake_open(fixture_table("zl-basic"))
+  for (n in c(0, 2, 4, 5, 9)) {
+    expect_identical(lake_history(tbl, limit = i64(n)), lake_history(tbl, limit = n), label = n)
+  }
+  expect_identical(nrow(lake_history(tbl, limit = i64("9007199254740991"))), 5L)
+  expect_identical(nrow(lake_history(tbl, limit = .Machine$integer.max + 1)), 5L)
+  for (bad in list(i64("9007199254740992"), i64("9007199254740993"), i64(-1), i64(NA), i64(c(1, 2)), Inf)) {
+    expect_error(lake_history(tbl, limit = bad), class = "zulake_error_argument")
+  }
+  # The sibling arguments: version, from and to.
+  expect_identical(lake_version(lake_open(fixture_table("zl-basic"), version = i64(2))), 2)
+  expect_identical(lake_version(lake_load(tbl, version = i64(1))), 1)
+  expect_identical(lake_actions(tbl, i64(3)), lake_actions(tbl, 3))
+  expect_identical(lake_changes(tbl, from = i64(1), to = i64(3)), lake_changes(tbl, from = 1, to = 3))
+  for (bad in list(i64("9007199254740992"), i64("9223372036854775807"), i64(-1), i64(NA))) {
+    expect_error(lake_open(fixture_table("zl-basic"), version = bad), class = "zulake_error_argument")
+    expect_error(lake_actions(tbl, bad), class = "zulake_error_argument")
+    expect_error(lake_changes(tbl, from = bad), class = "zulake_error_argument")
+  }
 })

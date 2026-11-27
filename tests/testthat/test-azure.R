@@ -288,7 +288,7 @@ test_that("the token is in no print, condition, field, serialized snapshot or ca
   # credential handle, whether or not the package keeps its source (with
   # it kept, srcrefs once reached the loader's environments and the
   # credential registry: CI, Stage 6).
-  expect_identical(serialized_envs(tbl), "blob,get,get_range,handle,head,list_files,loc,name | id")
+  expect_identical(serialized_envs(tbl), "blob,get,get_range,handle,head,list_files,loc,name | id,root")
   expect_no_token(tbl, token, "the snapshot")
   expect_no_token(lake_load(tbl, version = 0), token, "a reloaded snapshot")
   expect_no_token(utils::capture.output(print(tbl), format(tbl), str(tbl)), token, "the print")
@@ -366,7 +366,7 @@ test_that("a snapshot keeps no credentials: restored in another session it asks 
 })
 
 test_that("a handle's credentials go when nothing holds the handle", {
-  h <- credential_handle(function() "tok")
+  h <- credential_handle(function() "tok", "abfss://lake@acct.dfs.core.windows.net/t")
   id <- h$id
   expect_true(exists(id, envir = credential_env))
   rm(h)
@@ -412,7 +412,16 @@ test_that("other schemes and malformed Azure URIs are refused, and a SAS is not 
     "https://acct.blob.core.windows.net/lake/t?sv=2023&sig=SECRETSIG",
     "https://acct.blob.core.windows.net/lake/t#frag",
     "https://user:SECRETPW@acct.blob.core.windows.net/lake/t",
-    "abfss://user:SECRETPW@lake@acct.dfs.core.windows.net/t"
+    "abfss://user:SECRETPW@lake@acct.dfs.core.windows.net/t",
+    # User information where abfss has its container (#48).
+    "abfss://admin:SECRETPW@acct.dfs.core.windows.net/t", "abfss://:SECRETPW@acct.dfs.core.windows.net/t",
+    # An empty leading or inner segment, however many (#61).
+    "https://acct.blob.core.windows.net/lake//zl-basic", "abfss://lake@acct.dfs.core.windows.net///zl-basic//",
+    "abfss://lake@acct.dfs.core.windows.net//zl-basic", "abfss://lake@acct.dfs.core.windows.net/zl-basic//",
+    "https://acct.blob.core.windows.net/lake//", "abfss://lake@acct.dfs.core.windows.net//",
+    # NUL or invalid UTF-8 once decoded (#49).
+    "abfss://lake@acct.dfs.core.windows.net/a%00b", "abfss://lake@acct.dfs.core.windows.net/a%FFb",
+    "https://acct.blob.core.windows.net/lake/a%C3%28b"
   )
   local_azure_fake(zuhttp::zu_mock_transport(function(req) stop("no request may be sent")))
   for (uri in refused) {
@@ -421,6 +430,12 @@ test_that("other schemes and malformed Azure URIs are refused, and a SAS is not 
     expect_no_token(e, "SECRETSIG")
     expect_no_token(e, "SECRETPW")
     expect_error(lake_is_table(uri), class = "zulake_error_uri")
+  }
+  # One trailing separator is not an empty segment.
+  log <- new.env()
+  local_azure_fake(azure_fake(fake_root(), log))
+  for (uri in c(paste0(fake_uri("zl-basic"), "/"), paste0(fake_uri("zl-basic", "blob"), "/"))) {
+    expect_true(lake_is_table(uri), label = uri)
   }
 })
 
@@ -634,4 +649,208 @@ test_that("a deletion vector at an absolute Azure path is read with the table's 
   for (r in got) expect_identical(r$headers$authorization, "Bearer tok")
   ranges <- unlist(lapply(got, function(r) r$headers$range))
   expect_true(sprintf("bytes=1-%.0f", 1 + 4 + length(vec) + 4 - 1) %in% ranges)
+})
+
+test_that("a snapshot restored in another session never sends that session's token (#43)", {
+  log <- new.env()
+  # Every request's token is its own account's: acct's is tok-saved, any
+  # other account's tok-other.
+  local_azure_fake(azure_fake(fake_root(), log, auth = function(h, host) {
+    want <- if (host == "acct.blob.core.windows.net") "Bearer tok-saved" else "Bearer tok-other"
+    if (!is.null(h) && !identical(h, want)) 401L
+  }))
+  other_uri <- "abfss://lake@other.dfs.core.windows.net/zl-basic"
+  for (saved_credentials in list(function() "tok-saved", NULL)) {
+    # Session A opens and saves a snapshot; session B, as fresh as A was,
+    # opens another account's table, then restores A's snapshot.
+    local_fresh_credential_registry()
+    saved <- serialize(lake_open(fake_uri("zl-basic"), credentials = saved_credentials), NULL)
+    local_fresh_credential_registry()
+    local_empty_download_cache()
+    other <- lake_open(other_uri, credentials = function() "tok-other")
+    log$requests <- list()
+    copy <- unserialize(saved)
+    expect_error(lake_load(copy), class = "zulake_error_auth")
+    expect_error(lake_read(copy), class = "zulake_error_auth")
+    expect_length(Filter(function(r) r$host == "acct.blob.core.windows.net", log$requests), 0L)
+    # A handle given another live handle's id (as a guess, or a collision)
+    # still gets no token: the entry is bound to its own table.
+    copy$storage$location$handle$id <- other$storage$location$handle$id
+    expect_error(lake_load(copy), class = "zulake_error_auth")
+    for (id in list("n", "nonce", NA_character_, 1, NULL)) {
+      copy$storage$location$handle$id <- id
+      expect_error(lake_load(copy), class = "zulake_error_auth")
+    }
+    expect_length(log$requests, 0L)
+    # B's own table still reads, with B's token.
+    expect_s3_class(lake_load(other), "zulake_table")
+    expect_true(all(vapply(log$requests, function(r) identical(r$headers$authorization, "Bearer tok-other"), NA)))
+  }
+  # A handle that is not an environment is no handle.
+  expect_error(credential_token(list(id = "x")), class = "zulake_error_auth")
+  expect_error(credential_token("x"), class = "zulake_error_auth")
+})
+
+test_that("two sessions' handle ids differ, and the session's random stream is untouched (#43)", {
+  local_fresh_credential_registry()
+  a <- credential_handle(NULL, "abfss://lake@acct.dfs.core.windows.net/t")
+  local_fresh_credential_registry()
+  b <- credential_handle(NULL, "abfss://lake@acct.dfs.core.windows.net/t")
+  expect_false(identical(a$id, b$id))
+  expect_match(b$id, "^[0-9a-f]{32}-1$")
+  set.seed(42)
+  want <- runif(3)
+  set.seed(42)
+  local_fresh_credential_registry()
+  credential_handle(NULL, "x")
+  expect_identical(runif(3), want)
+  expect_match(random_hex(16L), "^[0-9a-f]{32}$")
+  # Without a system generator (Windows), R's, reseeded, and the session's
+  # stream left as it was, or left unmade.
+  local_mocked_bindings(system_random_bytes = function(n) raw())
+  set.seed(7)
+  want <- runif(2)
+  set.seed(7)
+  expect_match(random_hex(16L), "^[0-9a-f]{32}$")
+  expect_identical(runif(2), want)
+  withr::with_preserve_seed({
+    rm(".Random.seed", envir = globalenv())
+    random_hex(16L)
+    expect_false(exists(".Random.seed", envir = globalenv(), inherits = FALSE))
+  })
+})
+
+test_that("a listing whose markers cycle is an error, not a loop, whatever the cycle's length (#45)", {
+  body <- function(marker) {
+    paste0(
+      "<?xml version=\"1.0\" encoding=\"utf-8\"?><EnumerationResults><Blobs></Blobs>",
+      "<NextMarker>", marker, "</NextMarker></EnumerationResults>"
+    )
+  }
+  for (k in 1:3) {
+    markers <- paste0("m", seq_len(k))
+    log <- new.env()
+    local_azure_fake(azure_fake(fake_root(), log, max_requests = 50L, override = function(r) {
+      at <- if (is.null(r$query$marker)) 0L else match(r$query$marker, markers)
+      zuhttp::zu_response(200L, body = body(markers[at %% k + 1L]))
+    }))
+    storage <- storage_for(fake_uri("zl-basic"), function() "tok")
+    expect_error(storage$list("_delta_log/"), class = "zulake_error_storage", label = k)
+    # Every marker asked for once, then the repeat seen and refused.
+    expect_length(log$requests, k + 1L)
+  }
+})
+
+test_that("ContainerNotFound after the first page fails the listing, not ends it (#46)", {
+  log <- new.env()
+  local_azure_fake(azure_fake(fake_root(), log, page_size = 2L, override = function(r) {
+    if (!is.null(r$query$marker)) zuhttp::zu_response(404L, c(`x-ms-error-code` = "ContainerNotFound"))
+  }))
+  storage <- storage_for(fake_uri("zl-basic"), function() "tok")
+  e <- expect_error(storage$list("_delta_log/"), class = "zulake_error_storage")
+  expect_identical(e$status, 404L)
+  expect_identical(e$code, "ContainerNotFound")
+  expect_error(lake_open(fake_uri("zl-basic"), credentials = function() "tok"), class = "zulake_error_storage")
+  # On the first page it is still a container with nothing in it.
+  expect_false(lake_is_table("abfss://other@acct.dfs.core.windows.net/zl-basic"))
+})
+
+test_that("a token is checked after its Bearer prefix is dropped, in any case (#47)", {
+  for (bad in c("Bearer ", "Bearer   ", "bearer ", " lead", "tok en", "tok\ten", "Bearer tok en")) {
+    log <- new.env()
+    local_azure_fake(azure_fake(fake_root(), log))
+    expect_error(lake_open(fake_uri("zl-basic"), credentials = function() bad), class = "zulake_error_auth",
+                 label = bad)
+    expect_length(log$requests, 0L)
+  }
+  for (good in c("bearer x", "BEARER x", "Bearer x", "BeArEr   x", "x")) {
+    log <- new.env()
+    local_azure_fake(azure_fake(fake_root(), log))
+    lake_open(fake_uri("zl-basic"), credentials = function() good)
+    expect_identical(unique(vapply(log$requests, function(r) r$headers$authorization, "")), "Bearer x", label = good)
+  }
+})
+
+test_that("an Azure table's log naming a local file is refused, and no local file is read (#44)", {
+  dir <- withr::local_tempdir()
+  src <- fixture_table("zl-basic")
+  files <- lake_files(lake_open(src), stats = FALSE)
+  # The table's data files are on this disk too, at the paths its log names.
+  local <- normalizePath(file.path(src, files$path[1L]), winslash = "/")
+  local_uri <- if (startsWith(local, "/")) paste0("file://", local) else paste0("file:///", local)
+  for (path in c(local, local_uri)) {
+    table <- file.path(dir, "abs-local")
+    unlink(table, recursive = TRUE)
+    write_commit(table, 0, c(protocol_line(), metadata_line(c(id = "long", label = "string", x = "double")),
+                             add_line(path, size = files$size_bytes[1L])))
+    log <- new.env()
+    local_azure_fake(azure_fake(dir, log))
+    tbl <- lake_open(fake_uri("abs-local"), credentials = function() "tok")
+    local_empty_download_cache()
+    expect_error(lake_read(tbl), class = "zulake_error_uri", label = path)
+    expect_error(lake_count(tbl, footers = TRUE), class = "zulake_error_uri", label = path)
+    expect_error(fetch_file(tbl, 1L), class = "zulake_error_uri", label = path)
+    # The same log on local disk reads the file.
+    expect_identical(fetch_file(lake_open(table), 1L), local)
+  }
+})
+
+test_that("an Azure table's deletion vector at a local path is refused (#44)", {
+  skip_if_not_installed("zuroar")
+  rows <- c(1, 4, 5)
+  vec <- dv_bytes(rows)
+  local <- normalizePath(withr::local_tempfile(fileext = ".bin"), winslash = "/", mustWork = FALSE)
+  write_dv_file(local, list(vec))
+  local_uri <- if (startsWith(local, "/")) paste0("file://", local) else paste0("file:///", local)
+  for (p in c(local, local_uri)) {
+    dv <- list(storageType = "p", pathOrInlineDv = p, offset = 1L, sizeInBytes = length(vec), cardinality = length(rows))
+    path <- dv_table(dv)
+    log <- new.env()
+    local_azure_fake(azure_fake(dirname(path), log))
+    tbl <- lake_open(fake_uri(basename(path)), credentials = function() "tok")
+    expect_error(lake_deletion_vectors(tbl), class = "zulake_error_uri", label = p)
+    expect_error(lake_read(tbl), class = "zulake_error_uri", label = p)
+    # Read from local disk, the same table applies the vector.
+    expect_identical(lake_deletion_vectors(lake_open(path))$rows[[1L]], rows)
+  }
+})
+
+test_that("NUL and invalid UTF-8 in List Blobs answers are classed errors (#49)", {
+  head <- "<?xml version=\"1.0\" encoding=\"utf-8\"?><EnumerationResults><Blobs>"
+  blob <- function(name, encoded = TRUE) {
+    paste0(if (encoded) "<Blob><Name Encoded=\"true\">" else "<Blob><Name>", name, "</Name><Properties>",
+           "<Last-Modified>Mon, 01 Jan 2024 00:00:00 GMT</Last-Modified><Content-Length>1</Content-Length>",
+           "</Properties></Blob>")
+  }
+  tail <- "</Blobs><NextMarker /></EnumerationResults>"
+  for (name in c("t/a%00b", "t/a%C3%28b", "t/a%FFb")) {
+    expect_error(parse_blob_list(charToRaw(paste0(head, blob(name), tail)), "p"), class = "zulake_error_storage",
+                 label = name)
+  }
+  with_nul <- c(charToRaw(paste0(head, blob("t/a", FALSE))), as.raw(0), charToRaw(tail))
+  expect_error(parse_blob_list(with_nul, "p"), class = "zulake_error_storage")
+  utf16 <- iconv(paste0(head, blob("t/a", FALSE), tail), "UTF-8", "UTF-16LE", toRaw = TRUE)[[1L]]
+  expect_error(parse_blob_list(utf16, "p"), class = "zulake_error_storage")
+  expect_identical(parse_blob_list(charToRaw(paste0(head, blob("t/a%C3%A9"), tail)), "p")$blobs$name, "t/aé")
+})
+
+test_that("the shipped cassettes are in serialization version 2, which R CMD build does not warn about (#37, #65)", {
+  # R-devel's R CMD build announces "Added dependency on R >= 3.5.0" for any
+  # file in version 3, whatever Depends says (tools/R/build.R computes
+  # hasDep350 and no longer consults it); version 2 files raise nothing.
+  shipped <- list.files(cassette_dir(), pattern = "[.]rds$", full.names = TRUE)
+  expect_gte(length(shipped), length(cassette_tables))
+  for (f in shipped) expect_identical(rds_version(f), 2L, label = basename(f))
+  # The helpers themselves: a version 3 file is seen as one, and the
+  # conversion keeps the interactions.
+  dir <- withr::local_tempdir()
+  f <- file.path(dir, "x.rds")
+  x <- list(a = 1:10, b = "café")
+  saveRDS(x, f, compress = FALSE)
+  expect_identical(rds_version(f), 3L)
+  cassettes_to_version2(dir)
+  expect_identical(rds_version(f), 2L)
+  expect_identical(readRDS(f), x)
+  saveRDS(x, f, version = 3L)
+  expect_identical(rds_version(f), 3L)
 })

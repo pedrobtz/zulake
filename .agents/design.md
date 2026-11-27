@@ -167,10 +167,13 @@ Settled in Stage 6 (2026-11-26):
   empty, so `list()` sees only the directory's own files; a blob whose
   metadata says `hdi_isfolder=true` (a directory of a hierarchical
   namespace) is not a file, and neither is a `BlobPrefix`. A marker that
-  repeats is an error, not a loop. `after` is applied to the listing, as
+  repeats, any marker seen before in the listing and not only the last
+  one, is an error, not a loop (2026-11-27, #45). `after` is applied to the listing, as
   Q6 says Blob listing cannot start after a name. `ContainerNotFound`
-  lists nothing, as a missing local directory does, so `lake_is_table()`
-  is `FALSE` and `lake_open()` a `zulake_error_not_table`. `Get Blob` is
+  on the first page lists nothing, as a missing local directory does, so
+  `lake_is_table()` is `FALSE` and `lake_open()` a
+  `zulake_error_not_table`; on a later page it is a `zulake_error_storage`,
+  since the listing would hold part of the log (2026-11-27, #46). `Get Blob` is
   sent with `decode = FALSE` (the stored bytes, whatever their
   `Content-Encoding`), no body limit and a 600-second timeout. A range
   needs `206` with exactly `to - from + 1` bytes; a short body or `416` is
@@ -182,15 +185,21 @@ Settled in Stage 6 (2026-11-26):
   unexpected is a `zulake_error_storage` with the same fields; a transport
   failure is a `zulake_error_storage` with zuhttp's message and class name
   (`reason`), not its condition, which holds the request. `credentials()`
-  must return one non-empty string without control characters (a leading
-  `Bearer ` is dropped); otherwise, or if it fails, `zulake_error_auth`.
+  must return one string; a leading `Bearer ` in any case is dropped, and
+  what is left must be non-empty, without spaces or control characters
+  (checked after the drop, so `"Bearer "` is no token: 2026-11-27, #47);
+  otherwise, or if it fails, `zulake_error_auth`.
   `credentials = NULL` sends anonymous requests (a public container) and
   never retries. The token and the function live in a package-level
-  registry keyed by an id; the snapshot holds only a handle with that id,
-  whose finalizer removes the entry. So `serialize()` of a snapshot
-  carries neither, even when the function's environment holds the token
-  as a literal, and a snapshot restored in another session gets
-  `zulake_error_auth` on its next request. Why: a `function() token`
+  registry keyed by an id; the snapshot holds only a handle with that id
+  and its table's URI, whose finalizer removes the entry. So `serialize()`
+  of a snapshot carries neither, even when the function's environment
+  holds the token as a literal, and a snapshot restored in another session
+  gets `zulake_error_auth` on its next request. An id is a random 128-bit
+  nonce made once per session and a counter, and an entry answers only a
+  handle with its own table's URI (2026-11-27, #43: ids counted from 1 in
+  every session, so a restored snapshot found another session's entry and
+  sent its token to the saved account). Why: a `function() token`
   closure in the snapshot would put the token in every `saveRDS()`. The
   registry is made in `.onLoad()`, and the backend's functions carry no
   srcref and its frame no argument promises: with the package's source
@@ -202,7 +211,10 @@ Settled in Stage 6 (2026-11-26):
   that is one of the three Azure URI forms is read through the Blob
   endpoint of its own account and container with the table's credentials,
   when the table is on Azure; on a local table it stays a
-  `zulake_error_uri`.
+  `zulake_error_uri`. A table's files stay on its own backend: a local
+  path or a `file:` URI in the log of a table on Azure is a
+  `zulake_error_uri` too, never read from the reader's disk (2026-11-27,
+  #44).
 
 ### 4.2 Log replay
 
@@ -251,7 +263,14 @@ a choice:
   must therefore pass the feature gate too, and the file's modification
   time otherwise. Why: the protocol's split at the enablement version
   gives the same answer under this rule, since in-commit timestamps only
-  grow from there.
+  grow from there. File times are first made increasing, as Delta's
+  history manager and `deltalake` 1.7.0 make them: a commit whose file
+  time is not after the previous commit's counts as 1 ms after it, in
+  `lake_open(timestamp =)`, `lake_versions()`, `lake_history()` and a
+  snapshot's `timestamp` alike (2026-11-27, #52: a copy that drops file
+  times opened another version than `deltalake`; fixture `zl-file-times`).
+  A log with no commit file (checkpoints alone) keeps no commit time:
+  timestamp travel on it is a `zulake_error_version` (2026-11-27, #51).
 - *File times* (settled 2026-11-26, Stage 5). File modification times
   are read through R, which on Windows is exact only to about 1 µs;
   zulake rounds to 10 µs and then truncates to milliseconds, so a file
@@ -316,7 +335,11 @@ a choice:
 - *Partition values* of live files are checked against their column's
   type (the protocol's "Partition Value Serialization"; by physical name
   under column mapping) when the snapshot is built; a value that does
-  not parse is a corrupt log. An empty string or a missing key is null.
+  not parse is a corrupt log. Dates and times are checked by the parser
+  that converts them (calendar dates, hours 0-23, minutes and seconds
+  0-59, offsets to 18:00), which statistics and filter literals use too,
+  and a time is the double qio reads for the same microseconds: the count
+  rounded once, then divided by 1e6 (2026-11-27, #53, #54). An empty string or a missing key is null.
 
 ### 4.3 Reading
 
@@ -693,7 +716,11 @@ Delta's types map to what `qio` returns for the Parquet column, so
 `timestamp` is `POSIXct` in UTC. `timestamp_ntz` is `POSIXct` with
 `tzone = "UTC"`, and `lake_schema()` marks the column as zone-less.
 `decimal` statistics stay as their JSON text, since a double would round
-them (D10). Data columns zulake does not return (nested ones, D14) are handled so that none is lost
+them (D10). Integers past 2^53 - 1 cross `zujson` as marked strings; a
+string of the log that itself starts with the mark is given a second one,
+and right after parsing a marked number becomes a classed object, so no
+string is ever read as a number, and a failure of the scan that marks
+them is a corrupt log, never digits left to round (2026-11-27, #56, #57). Data columns zulake does not return (nested ones, D14) are handled so that none is lost
 silently (D7): with `columns = NULL` the readable columns are returned and
 each unreadable one is named in a classed warning,
 `zulake_warning_column_skipped` (fields `column`, `reason`); a column named
@@ -853,6 +880,12 @@ The order of work, and what 0.1.0 waits for, are in
   names stay refused, because each obliges the reader to convert or
   decode data. `writerFeatures` is never a reason to refuse (replay reads
   it for in-commit timestamps; reworded 2026-11-26, Stage 4).
+- **D7 amendment (2026-11-27, #58).** A `delta.columnMapping.mode` other
+  than `none` on a table whose protocol does not declare column mapping
+  for readers (reader version 1, or 3 without the reader feature) is
+  refused as `columnMapping`, as `deltalake` 1.7.0 refuses it: the table
+  breaks the protocol, and reading it by logical names returns `NA` for
+  every value of the mapped columns.
 - **D8 (reworded 2026-11-26).** Filters are R expressions, not
   `deltalake`'s DNF tuples. The pruning subset and the row-wise function
   list are fixed and documented; a call outside both is refused, never

@@ -165,6 +165,21 @@ cassette_session <- function(table) {
   )
 }
 
+# The credential registry (azure.R) as a new R session finds it: no entry,
+# no nonce, no counter, until `env` ends, when the session's own come back.
+local_fresh_credential_registry <- function(env = parent.frame()) {
+  ns <- asNamespace("zulake")
+  envs <- Filter(Negate(is.null), list(ns$credential_env, ns$credential_state))
+  saved <- lapply(envs, function(e) mget(ls(e, all.names = TRUE), envir = e))
+  for (e in envs) rm(list = ls(e, all.names = TRUE), envir = e)
+  withr::defer({
+    for (i in seq_along(envs)) {
+      rm(list = ls(envs[[i]], all.names = TRUE), envir = envs[[i]])
+      list2env(saved[[i]], envir = envs[[i]])
+    }
+  }, envir = env)
+}
+
 # zulake's per-session download cache (read.R) empty until `env` ends.
 local_empty_download_cache <- function(env = parent.frame()) {
   cache <- get("cache_env", envir = asNamespace("zulake"))
@@ -289,14 +304,25 @@ url_decode <- function(x) {
 # decoded), headers (named, lower-case names) and timeout (the seconds
 # zuhttp was given)).
 #
-#   page_size  blobs per List Blobs page; NextMarker is opaque ("page-<n>")
-#   auth       function(authorization header or NULL) returning NULL to
-#              serve, or a status to answer with (401, 403)
-#   override   function(request record) returning a zu_response to send
-#              instead, or NULL
-azure_fake <- function(root, log, container = "lake", page_size = 1000L, auth = NULL, override = NULL) {
+#   page_size     blobs per List Blobs page; NextMarker is opaque ("page-<n>")
+#   auth          function(authorization header or NULL), or function(header,
+#                 host), returning NULL to serve, or a status to answer
+#                 with (401, 403)
+#   override      function(request record) returning a zu_response to send
+#                 instead, or NULL
+#   max_requests  requests the fake serves; one more is an R error, so a
+#                 loop that never ends fails its test instead of hanging it
+#                 (#45)
+#
+# A path segment that is empty, "." or ".." is an R error too: Azure would
+# not serve it as the file under `root` it names (#62).
+azure_fake <- function(root, log, container = "lake", page_size = 1000L, auth = NULL, override = NULL,
+                       max_requests = 10000L) {
   log$requests <- list()
   zuhttp::zu_mock_transport(function(req) {
+    if (length(log$requests) >= max_requests) {
+      stop(sprintf("the Azure fake was sent more than %d requests", max_requests), call. = FALSE)
+    }
     url <- req$url
     m <- regmatches(url, regexec("^https://([^/]+)(/[^?]*)?(?:[?](.*))?$", url, perl = TRUE))[[1L]]
     host <- m[2L]
@@ -323,12 +349,16 @@ azure_fake <- function(root, log, container = "lake", page_size = 1000L, auth = 
       query = query, headers = as.list(headers), timeout = req$policy$timeout
     )
     log$requests[[length(log$requests) + 1L]] <- rec
+    decoded <- url_decode(segments)
+    if (length(segments) && any(decoded[-1L] %in% c("", ".", "..") | endsWith(raw_path, "/"))) {
+      stop("the Azure fake was sent a blob path with an empty, \".\" or \"..\" segment: ", url, call. = FALSE)
+    }
     if (is.function(override)) {
       out <- override(rec)
       if (!is.null(out)) return(out)
     }
     if (is.function(auth)) {
-      status <- auth(rec$headers$authorization)
+      status <- if (length(formals(auth)) >= 2L) auth(rec$headers$authorization, rec$host) else auth(rec$headers$authorization)
       if (!is.null(status)) {
         code <- if (status == 401L) "InvalidAuthenticationInfo" else "AuthorizationPermissionMismatch"
         return(zuhttp::zu_response(status, c(`x-ms-error-code` = code)))
@@ -490,6 +520,29 @@ catch_error <- function(expr, class) {
 }
 
 cassette_dir <- function() testthat::test_path("fixtures", "cassettes")
+
+# The serialization version of an .rds file (2 or 3), read from its header
+# ("X\n", then the version as a big-endian integer), compressed or not.
+rds_version <- function(file) {
+  con <- gzfile(file, "rb")
+  on.exit(close(con))
+  stopifnot(identical(readBin(con, "raw", 2L), charToRaw("X\n")))
+  readBin(con, "integer", 1L, size = 4L, endian = "big")
+}
+
+# The cassettes in `dir` saved again in serialization version 2, with the
+# same interactions. zuhttp records them in version 3, which makes R CMD
+# build add (and R-devel announce, even with Depends: R (>= 3.5.0)) a
+# dependency on R >= 3.5.0 (#37, #65). Called after recording
+# (test-azure-emulator.R; tools/azurite/README.md).
+cassettes_to_version2 <- function(dir) {
+  for (f in list.files(dir, pattern = "[.]rds$", full.names = TRUE)) {
+    x <- readRDS(f)
+    saveRDS(x, f, version = 2L, compress = FALSE)
+    stopifnot(identical(readRDS(f), x))
+  }
+  invisible(dir)
+}
 
 # The tables whose open, read and deletion vectors test-azure-emulator.R
 # records as cassettes and test-azure.R replays.

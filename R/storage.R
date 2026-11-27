@@ -30,7 +30,8 @@ storage_for <- function(uri, credentials = NULL) {
   }
   if (grepl("^[A-Za-z][A-Za-z0-9+.-]*://", uri)) {
     if (is_azure_uri(uri)) {
-      return(storage_azure(parse_azure_uri(uri), credential_handle(credentials)))
+      parts <- parse_azure_uri(uri)
+      return(storage_azure(parts, credential_handle(credentials, parts$uri)))
     }
     scheme <- sub("://.*$", "", uri)
     zulake_abort(

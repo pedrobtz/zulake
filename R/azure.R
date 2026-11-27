@@ -59,6 +59,11 @@ parse_azure_uri <- function(uri) {
   }
   if (grepl("^abfss://", uri, ignore.case = TRUE)) {
     m <- regmatches(uri, regexec("^abfss://([^/@]*)@([^/]*)[.]dfs[.]core[.]windows[.]net(/.*)?$", uri, ignore.case = TRUE))[[1L]]
+    # Where abfss has its container, a ":" makes user information with a
+    # password, which is neither quoted nor kept with the condition (#48).
+    if (length(m) && grepl(":", m[2L], fixed = TRUE)) {
+      m <- character()
+    }
     container <- m[2L]
     account <- tolower(m[3L])
     path <- m[4L]
@@ -88,8 +93,13 @@ parse_azure_uri <- function(uri) {
       uri = uri
     )
   }
-  path <- percent_decode(gsub("^/+|/+$", "", path))
-  if (grepl("//", path, fixed = TRUE) || any(strsplit(path, "/", fixed = TRUE)[[1L]] %in% c(".", ".."))) {
+  # The separator after the container, and one trailing "/", are not
+  # segments; any other empty segment is refused, as "." and ".." are (#61).
+  path <- sub("^/", "", path)
+  trailing <- endsWith(path, "/")
+  path <- percent_decode(sub("/$", "", path), "uri")
+  if ((trailing && !nzchar(path)) || endsWith(path, "/") ||
+      (nzchar(path) && any(strsplit(path, "/", fixed = TRUE)[[1L]] %in% c("", ".", "..")))) {
     zulake_abort("uri", sprintf("%s has an empty, \".\" or \"..\" path segment.", format_string(uri)), uri = uri)
   }
   list(account = account, container = container, path = unname(path), uri = sub("/+$", "", uri))
@@ -132,23 +142,62 @@ unreserved_bytes <- charToRaw("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvw
 # built is stored in its lazy-load database, and the loader's own
 # environments keep a reference to it, which a srcref or a byte-code
 # constant in a snapshot can reach (seen with the source kept, Stage 6).
+# `credential_env` holds the entries and nothing else; `credential_state`
+# the session's nonce and counter.
 credential_env <- NULL
+credential_state <- NULL
 
 .onLoad <- function(libname, pkgname) {
-  assign("credential_env", new.env(parent = emptyenv()), envir = topenv())
+  ns <- topenv()
+  assign("credential_env", new.env(parent = emptyenv()), envir = ns)
+  assign("credential_state", new.env(parent = emptyenv()), envir = ns)
 }
 
-# A handle on `credentials` (a function, or NULL for anonymous requests):
-# an environment holding only an id; the function and its token live in
-# credential_env until the handle is garbage-collected.
-credential_handle <- function(credentials) {
-  credential_env$n <- (credential_env$n %||% 0) + 1
-  id <- paste0("h", format_number(credential_env$n))
+# A handle on `credentials` (a function, or NULL for anonymous requests)
+# for the table at `root` (its URI): an environment holding only an id and
+# that root; the function and its token live in credential_env until the
+# handle is garbage-collected. The id is a random 128-bit nonce made once
+# per session followed by a counter, so that no two sessions make the same
+# id: a snapshot restored in another session finds no entry (#43). The
+# entry keeps the root too, and a handle whose root is not its entry's
+# gets no token.
+credential_handle <- function(credentials, root) {
+  if (is.null(credential_state$nonce)) {
+    credential_state$nonce <- random_hex(16L)
+  }
+  credential_state$n <- (credential_state$n %||% 0) + 1
+  id <- paste0(credential_state$nonce, "-", format_number(credential_state$n))
   handle <- new.env(parent = emptyenv())
   handle$id <- id
-  assign(id, list(fn = credentials, token = NULL), envir = credential_env)
+  handle$root <- root
+  assign(id, list(fn = credentials, token = NULL, root = root), envir = credential_env)
   reg.finalizer(handle, credential_release)
   handle
+}
+
+# `n` random bytes as hexadecimal: from the system's generator where there
+# is one, else from R's, seeded afresh from the clock and the process id and
+# leaving the session's own random stream (`.Random.seed`) as it was.
+random_hex <- function(n) {
+  bytes <- tryCatch(system_random_bytes(n), error = function(e) raw(), warning = function(w) raw())
+  if (length(bytes) != n) {
+    genv <- globalenv()
+    had <- exists(".Random.seed", envir = genv, inherits = FALSE)
+    old <- if (had) get(".Random.seed", envir = genv, inherits = FALSE)
+    on.exit(if (had) assign(".Random.seed", old, envir = genv) else rm(".Random.seed", envir = genv))
+    if (had) rm(".Random.seed", envir = genv)
+    bytes <- as.raw(sample.int(256L, n, replace = TRUE) - 1L)
+  }
+  paste(sprintf("%02x", as.integer(bytes)), collapse = "")
+}
+
+system_random_bytes <- function(n) {
+  if (!file.exists("/dev/urandom")) {
+    return(raw())
+  }
+  con <- file("/dev/urandom", "rb", raw = TRUE)
+  on.exit(close(con))
+  readBin(con, "raw", n)
 }
 
 credential_release <- function(handle) {
@@ -160,8 +209,12 @@ credential_release <- function(handle) {
 }
 
 credential_entry <- function(handle) {
-  id <- handle$id
-  if (!is_string(id) || !exists(id, envir = credential_env, inherits = FALSE)) {
+  id <- if (is.environment(handle)) handle$id
+  root <- if (is.environment(handle)) handle$root
+  entry <- if (is_string(id) && exists(id, envir = credential_env, inherits = FALSE)) {
+    get(id, envir = credential_env, inherits = FALSE)
+  }
+  if (is.null(entry) || !is_string(root) || !identical(entry$root, root)) {
     zulake_abort(
       "auth",
       paste(
@@ -170,7 +223,7 @@ credential_entry <- function(handle) {
       )
     )
   }
-  get(id, envir = credential_env, inherits = FALSE)
+  entry
 }
 
 # The bearer token to send, or NULL for anonymous requests. `refresh`
@@ -186,10 +239,17 @@ credential_token <- function(handle, refresh = FALSE) {
   token <- tryCatch(entry$fn(), error = function(e) {
     zulake_abort("auth", sprintf("`credentials()` failed: %s", conditionMessage(e)))
   })
-  if (!is_string(token) || !nzchar(token) || grepl("[[:cntrl:]]", token)) {
-    zulake_abort("auth", "`credentials()` must return a bearer token: a single non-empty string.")
+  # A leading "Bearer " (any case) is the header's, not the token's: dropped
+  # before the token is checked, so that "Bearer " alone is no token (#47).
+  if (is_string(token)) {
+    token <- sub("^[Bb][Ee][Aa][Rr][Ee][Rr] +", "", token)
   }
-  token <- sub("^Bearer +", "", token)
+  if (!is_string(token) || !nzchar(token) || grepl("[[:cntrl:][:space:]]", token)) {
+    zulake_abort(
+      "auth",
+      "`credentials()` must return a bearer token: a single non-empty string without spaces or control characters."
+    )
+  }
   entry$token <- token
   assign(handle$id, entry, envir = credential_env)
   token
@@ -301,6 +361,7 @@ storage_azure <- function(parts, handle) {
     full <- blob(prefix)
     pages <- list()
     marker <- NULL
+    seen <- character()
     repeat {
       query <- list(restype = "container", comp = "list", prefix = full, delimiter = "/", include = "metadata")
       if (!is.null(marker)) {
@@ -308,7 +369,10 @@ storage_azure <- function(parts, handle) {
       }
       resp <- azure_request(loc, "GET", "", query = query, path = prefix)
       status <- zuhttp::zu_resp_status(resp)
-      if (status == 404L && identical(zuhttp::zu_resp_header(resp, "x-ms-error-code"), "ContainerNotFound")) {
+      # No container lists nothing, as a missing directory does; but a
+      # container gone after the first page would list part of the log (#46).
+      if (status == 404L && is.null(marker) &&
+          identical(zuhttp::zu_resp_header(resp, "x-ms-error-code"), "ContainerNotFound")) {
         break
       }
       if (status != 200L) {
@@ -319,10 +383,12 @@ storage_azure <- function(parts, handle) {
       if (is.na(page$next_marker)) {
         break
       }
-      if (identical(page$next_marker, marker)) {
+      # Any marker seen before, not only the last one, would loop (#45).
+      if (page$next_marker %in% seen) {
         zulake_abort("storage", sprintf("Azure returned the same listing marker twice for %s.", format_string(prefix)), path = prefix)
       }
       marker <- page$next_marker
+      seen <- c(seen, marker)
     }
     names <- unlist(lapply(pages, function(p) p$name), use.names = FALSE) %||% character()
     size <- unlist(lapply(pages, function(p) p$size), use.names = FALSE) %||% numeric()
@@ -421,10 +487,18 @@ storage_azure <- function(parts, handle) {
 
 # The backend and blob name that read an absolute Azure URI found in the
 # log (an `add` path, a deletion vector's path), with the table's
-# credentials; NULL when `path` is not an Azure URI or the table is not on
-# Azure.
+# credentials; NULL for a local path in the log of a local table. A table's
+# files stay on its own backend: an Azure URI in a local table's log, and a
+# local path or file: URI in a remote table's, are a zulake_error_uri (#44).
 storage_for_absolute <- function(storage, path) {
   if (!identical(storage$kind, "azure") || !is_azure_uri(path)) {
+    if (!identical(storage$kind, "local")) {
+      zulake_abort(
+        "uri",
+        sprintf("%s is not a location of this table's storage: a remote table's files are not read from local disk.", format_string(path)),
+        path = path
+      )
+    }
     return(NULL)
   }
   parts <- parse_azure_uri(path)
@@ -443,6 +517,9 @@ storage_for_absolute <- function(storage, path) {
 parse_blob_list <- function(bytes, prefix) {
   bad <- function(why) {
     zulake_abort("storage", sprintf("Azure's listing of %s is not a blob list: %s.", format_string(prefix), why), path = prefix)
+  }
+  if (any(bytes == as.raw(0L))) {
+    bad("it holds a NUL byte")
   }
   text <- rawToChar(bytes)
   Encoding(text) <- "UTF-8"
@@ -470,7 +547,7 @@ parse_blob_list <- function(bytes, prefix) {
     if (is.na(nm) || !nzchar(nm) || is.na(props)) {
       bad("a Blob element lacks its Name or Properties")
     }
-    name[i] <- if (encoded) percent_decode(nm) else nm
+    name[i] <- if (encoded) percent_decode(nm, "storage") else nm
     size[i] <- suppressWarnings(as.numeric(xml_element(props, "Content-Length")))
     mtime[i] <- parse_http_date(xml_element(props, "Last-Modified"))
     if (is.na(size[i]) || size[i] < 0 || is.na(mtime[i])) {

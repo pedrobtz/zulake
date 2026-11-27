@@ -56,8 +56,10 @@
 #' @param timestamp Open the latest version committed at or before this
 #'   time, a `POSIXct`. The commit time is the commit's in-commit timestamp
 #'   when the table records them, and the commit file's modification time
-#'   otherwise. A time before the first commit opens the first version. Give
-#'   `version` or `timestamp`, not both.
+#'   otherwise, made increasing as [lake_versions()] describes. A time
+#'   before the first commit opens the first version; a log with no commit
+#'   file (checkpoints alone) has no commit times, and is a
+#'   `zulake_error_version`. Give `version` or `timestamp`, not both.
 #' @param credentials A function of no arguments returning a bearer token
 #'   for Azure Storage, as a string (see the Azure section), or `NULL` for
 #'   anonymous requests. Not used for local paths.
@@ -270,7 +272,9 @@ snapshot_build <- function(storage, uri, version = NULL, timestamp = NULL) {
         break
       }
     }
-    time <- commit_time_ms(entry, ict_info(state$protocol, state$metadata), read)
+    commits <- listing_commits(entries)
+    commits <- commits[commits$version <= version, , drop = FALSE]
+    time <- commit_times_ms(commits, ict_info(state$protocol, state$metadata), read, nrow(commits))
   }
 
   structure(
