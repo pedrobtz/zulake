@@ -222,3 +222,6 @@
   commit missing while older commits remain is now a
   `zulake_error_corrupt_log` (a hole in the log), not a
   `zulake_error_version` (#70).
+* Fixed: a checkpoint that qio reads with a warning other than 64-bit
+  loss (an INT32 of -2^31) is reported as unreadable for that reason,
+  instead of as needing the bit64 package (#71).

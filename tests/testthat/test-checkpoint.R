@@ -242,3 +242,36 @@ test_that("only read failures pass a checkpoint over, never another error (#89)"
   expect_error(zulake:::nested_value(list(list(1))), class = "zulake_checkpoint_refusal")
   expect_error(zulake:::atomic_values(as.Date("2024-01-01")), class = "zulake_checkpoint_refusal")
 })
+
+test_that("a qio warning other than 64-bit loss is reported as itself (#71)", {
+  int32 <- "Some INT32 values in column 'protocol.minReaderVersion' were coerced to NA because R's integer type reserves -2147483648 as its missing value."
+  other <- "something else qio says"
+  for (msg in c(int32, other)) {
+    calls <- character()
+    local_mocked_bindings(read_parquet = function(file, columns, int64 = "double") {
+      calls <<- c(calls, int64)
+      warning(msg)
+      data.frame(x = NA_real_)
+    }, .package = "qio")
+    for (bit64 in c(TRUE, FALSE)) {
+      local_mocked_bindings(has_bit64 = function() bit64)
+      calls <- character()
+      err <- tryCatch(zulake:::read_log_parquet("f.parquet", "protocol.minReaderVersion"), error = identity)
+      expect_s3_class(err, "zulake_checkpoint_refusal")
+      expect_identical(conditionMessage(err), msg)
+      expect_identical(calls, "double")
+    }
+  }
+  # The INT64 loss, in both of qio's wordings, is a re-read with integer64.
+  for (msg in c(
+    "Some INT64 or UINT64 values in column 'add.size' were coerced to NA because they cannot be represented exactly as R doubles; use int64 = \"integer64\" to preserve the supported 64-bit range.",
+    "Some INT64 or UINT64 values in column 'add.size' were coerced to NA"
+  )) {
+    local_mocked_bindings(read_parquet = function(file, columns, int64 = "double") {
+      if (int64 == "double") warning(msg)
+      data.frame(x = 1)
+    }, .package = "qio")
+    local_mocked_bindings(has_bit64 = function() FALSE)
+    expect_error(zulake:::read_log_parquet("f.parquet", "add.size"), "bit64", class = "zulake_checkpoint_refusal")
+  }
+})

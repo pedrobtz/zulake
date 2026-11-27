@@ -314,7 +314,11 @@ a choice:
     `qio`'s, or a refusal of the checkpoint reader's own (internal class
     `zulake_checkpoint_refusal`); any other error propagates unchanged
     (2026-11-27, #89: a bug in zulake's checkpoint code was hidden as an
-    unreadable checkpoint).
+    unreadable checkpoint). Only `qio`'s INT64 coercion warning ("Some
+    INT64 or UINT64 values in column ... were coerced to NA") leads to the
+    `integer64` re-read; any other warning makes the checkpoint unreadable
+    with that warning's text as the reason (2026-11-27, #71: an INT32 of
+    -2^31 was reported as needing `bit64`).
   - A version older than the earliest checkpoint whose commits were
     cleaned up is a `zulake_error_version`: it is no longer in the log
     (a fact about the table, not a reading failure). A missing commit with

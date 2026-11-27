@@ -161,6 +161,12 @@ read_log_parquet <- function(file, selectors) {
   data <- withCallingHandlers(
     qio_read(qio::read_parquet(file, columns = selectors)),
     warning = function(w) {
+      # Only qio's 64-bit coercion warning means a re-read with integer64
+      # can help; any other (an INT32 of -2^31 read as NA) is the reason
+      # the checkpoint is unreadable, as it says (#71).
+      if (!grepl("^Some INT64 or UINT64 values in column .* were coerced to NA", conditionMessage(w))) {
+        checkpoint_refusal(conditionMessage(w))
+      }
       lossy <<- TRUE
       invokeRestart("muffleWarning")
     }
