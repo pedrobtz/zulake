@@ -30,10 +30,10 @@ test_that("lake_files() equals deltalake's add actions at every version", {
 })
 
 test_that("lake_files() statistics equal deltalake's, by logical name", {
-  # zl-types holds -2^63, which neither a double nor an integer64 holds:
-  # test-types.R covers it.
+  # zl-types and zl-int64-edges hold -2^63, which neither a double nor an
+  # integer64 holds, and values past 2^53 - 1: test-types.R covers them.
   for (case in inspect_cases()) {
-    if (case$table == "zl-types") next
+    if (case$table %in% c("zl-types", "zl-int64-edges")) next
     tbl <- case_snapshot(case)
     files <- lake_files(tbl)
     aa <- oracle_field(case$table, case$version, "add_actions")

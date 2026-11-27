@@ -9,6 +9,11 @@ deterministic: sorted keys, rows in a fixed order, table paths replaced by
 "<table>", and nothing about the run itself, so .github/workflows/oracle.yaml
 regenerates them and fails on any diff. README.md in this directory gives the
 fields and the value encoding.
+
+Run with no table named, it also writes
+tests/testthat/fixtures/hostile-answers.json: for each hostile log under
+tests/testthat/fixtures/hostile/ (so after tools/fixtures/hostile.R and
+hostile_parquet.py), whether deltalake refuses it, and why.
 """
 
 import datetime as dt
@@ -32,6 +37,8 @@ ENGINE = "datafusion"
 ROOT = Path(__file__).resolve().parents[2]
 TABLES = ROOT / "tests" / "testthat" / "fixtures" / "tables"
 ANSWERS = ROOT / "tests" / "testthat" / "fixtures" / "answers"
+HOSTILE = ROOT / "tests" / "testthat" / "fixtures" / "hostile"
+HOSTILE_ANSWERS = ROOT / "tests" / "testthat" / "fixtures" / "hostile-answers.json"
 MAX_EXACT = 2**53 - 1
 EPOCH_ORDINAL = dt.date(1970, 1, 1).toordinal()
 UNIT_DIGITS = {"s": 0, "ms": 3, "us": 6, "ns": 9}
@@ -366,6 +373,41 @@ def answer_table(table_dir):
     return len(answers)
 
 
+def answer_hostile(log_dir):
+    """Whether deltalake refuses a hostile log: opening its last version,
+    listing its files or reading it whole, the first refusal, or None."""
+    with tempfile.TemporaryDirectory() as scratch:
+        path = os.path.join(scratch, log_dir.name)
+        shutil.copytree(log_dir, path)
+        set_commit_mtimes(path)
+        scrub = Scrub(path)
+        try:
+            t = open_table(path)
+            t.get_add_actions(flatten=False)
+            t.to_pyarrow_table(engine=ENGINE)
+        except Exception as e:
+            refusal = error(e, scrub)["error"]
+            # A path may reach the message in a form Scrub does not know
+            # (a file URL without its leading slash): cut it at "<table>".
+            here = re.escape(os.path.basename(scratch)) + "(?:/" + re.escape(log_dir.name) + ")?"
+            message = re.sub(r"\S*" + here, "<table>", refusal["message"])
+            message = re.sub(r"\S*<table>", "<table>", message)
+            if os.path.basename(scratch) in message or scratch in message:
+                sys.exit(f"hostile answers: {log_dir.name}: an absolute path survived scrubbing: {message}")
+            refusal["message"] = message
+            return {"refusal": refusal}
+    return {"refusal": None}
+
+
+def write_hostile_answers():
+    """deltalake's answer for every hostile log, in one file (#112)."""
+    logs = sorted(p for p in HOSTILE.iterdir() if p.is_dir())
+    answers = {p.name: answer_hostile(p) for p in logs}
+    text = json.dumps(answers, sort_keys=True, indent=1, ensure_ascii=False, allow_nan=False) + "\n"
+    HOSTILE_ANSWERS.write_text(text, encoding="utf-8")
+    return len(answers)
+
+
 def main():
     if deltalake.__version__ != DELTALAKE_VERSION:
         sys.exit(f"deltalake {deltalake.__version__} found, {DELTALAKE_VERSION} required")
@@ -377,6 +419,8 @@ def main():
                 shutil.rmtree(stale)
     for p in tables:
         print(f"{p.name}: {answer_table(p)} versions")
+    if not wanted:
+        print(f"hostile logs: {write_hostile_answers()} answered")
 
 
 if __name__ == "__main__":

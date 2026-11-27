@@ -132,6 +132,41 @@ def int32_min():
     write_deltalake(p, t, name="int32-min")
 
 
+def int64_edges():
+    """A long column at the edges of a double and of bit64, no null (#111).
+
+    One file per append. qio reads a value past 2^53 as NA with
+    int64 = "double", and -2^63 as NA (bit64's NA) with "integer64", where
+    the null count is 0, so is.na() must not be pruned on the null count.
+    """
+    p = fresh("zl-int64-edges")
+    sch = pa.schema([("id", pa.int64()), ("i64", pa.int64())])
+    files = [
+        ([0, 1, 2], [1, 2**53 - 1, -(2**53 - 1)]),
+        ([3, 4], [2**53, 5]),
+        ([5, 6], [-(2**53), 6]),
+        ([7, 8], [-(2**63), 7]),
+        ([9, 10], [2**63 - 1, 8]),
+        ([11], [2**53 + 1]),
+    ]
+    for k, (ids, values) in enumerate(files):
+        write_deltalake(p, pa.table({"id": ids, "i64": values}, schema=sch), name="int64-edges",
+                        mode="error" if k == 0 else "append")
+
+
+def decimal_partitions():
+    """Decimal partition columns of precision 10 and 4, the source of the
+    decimal partition hostile logs (#112)."""
+    p = fresh("zl-decimal-partitions")
+    D = decimal.Decimal
+    t = pa.table({
+        "id": pa.array([0, 1, 2, 3], pa.int64()),
+        "pdec": pa.array([D("12.30"), D("-0.01"), D("99999999.99"), None], pa.decimal128(10, 2)),
+        "pd4": pa.array([D("12.34"), D("-99.99"), D("0.00"), D("1.00")], pa.decimal128(4, 2)),
+    })
+    write_deltalake(p, t, name="decimal-partitions", partition_by=["pdec", "pd4"])
+
+
 def inf_partitions():
     """Double and float partition columns holding infinities and NaN (#67)."""
     p = fresh("zl-inf-partitions")
@@ -485,7 +520,7 @@ def main():
         wanted = set(sys.argv[1:])
     else:
         wanted = None
-    for fn in (basic, types, int32_min, inf_partitions, partitioned, checkpointed, checkpoint_no_last, multipart_checkpoint, compacted, file_times, domains,
+    for fn in (basic, types, int32_min, int64_edges, decimal_partitions, inf_partitions, partitioned, checkpointed, checkpoint_no_last, multipart_checkpoint, compacted, file_times, domains,
                unknown_feature, catalog_managed, vacuum_protocol_check, inline_dv, column_mapping_id, orders):
         if wanted is None or fn.__name__ in wanted:
             fn()

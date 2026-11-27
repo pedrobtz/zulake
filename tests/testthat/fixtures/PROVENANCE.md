@@ -5,7 +5,8 @@ and what it is there to exercise. The tables and the hostile logs ship packed
 in `delta-fixtures.tar`, because their paths are longer than a package
 tarball allows; the unpacked trees `tables/` and `hostile/` are in the git
 repository only. `answers/` holds `deltalake` 1.7.0's answers for every table
-at every version (`tools/oracle/README.md`).
+at every version (`tools/oracle/README.md`), and `hostile-answers.json`
+whether it refuses each hostile log, and why.
 
 ## Licences
 
@@ -54,9 +55,11 @@ DAT (`delta-incubator/dat`) is not used: it has no licence (design §12, Q3).
 | `zl-checkpoint` | zulake | `deltalake` 1.7.0 | 0–12 | classic checkpoints at 5 and 10, removes before each, commits after the last |
 | `zl-checkpoint-no-last` | zulake | `deltalake` 1.7.0; edited | 0–3 | a checkpoint at 2 and no `_last_checkpoint` (deleted after writing) |
 | `zl-domains` | zulake | `deltalake` 1.7.0; edited | 0–4 | `domainMetadata` added, changed and removed, in commits 1–3 written by hand with the `domainMetadata` writer feature |
+| `zl-decimal-partitions` | zulake | `deltalake` 1.7.0 | 0 | `decimal(10,2)` and `decimal(4,2)` partition columns, a null among them: the source of the `decimal-partition-*` hostile logs (added 2026-11-27, #112) |
 | `zl-file-times` | zulake | `deltalake` 1.7.0; edited | 0–2 | commit times that go back: each `commitInfo.timestamp` set to 2025-01-01 00:01:40, 00:00:50 and 00:03:20 UTC, so the commit files dated by them (`answers.py`) have decreasing times from 0 to 1, as a copy that drops times can leave them; `deltalake` makes them increasing before a timestamp lookup (added 2026-11-27, #52) |
 | `zl-inf-partitions` | zulake | `deltalake` 1.7.0 | 0 | `double` and `float` partition columns holding infinities and NaN, which `deltalake` writes as `inf`, `-inf` and `NaN` (added 2026-11-27, #67) |
 | `zl-int32-min` | zulake | `deltalake` 1.7.0 | 0 | an `int32` column holding -2^31 and no null (`nullCount` 0), which qio reads as `NA`: `is.na()` must not be pruned on the null count (added 2026-11-27, #79) |
+| `zl-int64-edges` | zulake | `deltalake` 1.7.0 | 0–5 | a `long` column at ±(2^53 - 1), ±2^53, -2^63, 2^63 - 1 and 2^53 + 1, one append per file and no null (`nullCount` 0): qio reads the values past 2^53 as `NA` with `int64 = "double"` and -2^63 as bit64's `NA` with `"integer64"`, so `is.na()` must not be pruned on the null count (added 2026-11-27, #111) |
 | `zl-log-compaction` | zulake | `deltalake` 1.7.0 | 0–5 | a log compaction file for commits 1 to 3 (`compact_logs()`) |
 | `zl-multipart-checkpoint` | zulake | `deltalake` 1.7.0; edited | 0–5 | a three-part checkpoint at 4: the single-part checkpoint `deltalake` wrote, split into three Parquet files by row, `_last_checkpoint` with `parts = 3` |
 | `zl-orders` | zulake | `deltalake` 1.7.0; edited | 0–4 | the example table the package ships, copied to `inst/extdata/orders/` by `pack.py`: orders partitioned by `region` (`long`, `string`, `double`, `date`), created, appended twice, a row delete that rewrites one file, and an append with an application transaction and custom commit metadata (added 2026-11-26, Stage 7). Edits, so that every build is the same bytes: data files renamed `region=<r>/part-<n>.parquet` (by version, then region) and every `add` and `remove` path rewritten to match; `inCommitTimestamp` enabled from version 0 (protocol replaced by reader 1, writer 7, writer feature `inCommitTimestamp`; `delta.enableInCommitTimestamps` in `metaData`), each `commitInfo` given `inCommitTimestamp` and `timestamp` of 09:00 UTC on 2025-01-06 to 2025-01-10 and moved first; `modificationTime`, `deletionTimestamp`, `txn.lastUpdated` and `createdTime` set to those times, the table id and `txnId`s fixed, timing metrics zeroed, statistics and `commitInfo` keys sorted, actions in a fixed order |
@@ -73,6 +76,13 @@ DAT (`delta-incubator/dat`) is not used: it has no licence (design §12, Q3).
 | `checkpoint-map-repeated-key` | `zl-checkpoint-no-last` | the checkpoint at 2, rewritten by pyarrow 22.0.0 (`hostile_parquet.py`, uncompressed): its first `add` has the `partitionValues` MAP `[x: 1, x: 2]`, a key twice (#108). The one hostile log that opens: the checkpoint is passed over for the commits, and is unreadable once commit 0 is gone |
 | `column-mapping-no-physical-name` | `column_mapping` | the `delta.columnMapping.physicalName` of field `letter` removed from commit 0's schema; commit 2's schema has it (#77) |
 | `corrupt-commit` | `zl-basic` | line 2 of commit 2 is not JSON |
+| `decimal-partition-exponent` | `zl-decimal-partitions` | the `pdec` partition value `12.30` in commit 0 written `1e2` (#112) |
+| `decimal-partition-negative-no-integer-digit` | `zl-decimal-partitions` | the `pdec` partition value `12.30` in commit 0 written `-.5` (#112) |
+| `decimal-partition-no-fraction-digit` | `zl-decimal-partitions` | the `pdec` partition value `12.30` in commit 0 written `5.` (#112) |
+| `decimal-partition-no-integer-digit` | `zl-decimal-partitions` | the `pdec` partition value `12.30` in commit 0 written `.5` (#112) |
+| `decimal-partition-past-precision` | `zl-decimal-partitions` | the `pdec` partition value `12.30` in commit 0 written `123456789.00`, nine integer digits in a `decimal(10,2)` (#112) |
+| `decimal-partition-past-precision-small` | `zl-decimal-partitions` | the `pd4` partition value `12.34` in commit 0 written `123.45`, three integer digits in a `decimal(4,2)` (#112) |
+| `decimal-partition-past-scale` | `zl-decimal-partitions` | the `pdec` partition value `12.30` in commit 0 written `12.345`, three fraction digits in a `decimal(10,2)` (#112) |
 | `duplicate-action-key` | `zl-basic` | line 3 of commit 2 holds a second `remove` key, removing the file commit 1 added (#102) |
 | `duplicate-key-in-add` | `zl-basic` | the `add` on line 2 of commit 2 has a second `path` key, naming the file line 3 removes (#102) |
 | `dv-bad-checksum` | `table-with-dv-small` | the deletion vector file's last byte (its CRC-32) flipped |
@@ -101,7 +111,7 @@ sh tools/fixtures/fetch-delta-rs.sh                       # delta-rs tables
 Rscript tools/fixtures/hostile.R                          # hostile logs
 (cd tools/oracle && uv run --frozen python ../fixtures/hostile_parquet.py) # the Parquet one
 (cd tools/oracle && uv run --frozen python ../fixtures/pack.py)       # delta-fixtures.tar
-(cd tools/oracle && uv run --frozen python answers.py)    # answers/
+(cd tools/oracle && uv run --frozen python answers.py)    # answers/, hostile-answers.json
 ```
 
 `generate.py` names files by random UUID and stamps commits with the clock,

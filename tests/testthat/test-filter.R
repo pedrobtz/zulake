@@ -335,7 +335,9 @@ test_that("null counts decide is.na() and comparisons; a file without statistics
                                raw_add("no-null.parquet", stats = stats(2, 0)),
                                raw_add("empty.parquet", stats = stats(0, 0)),
                                raw_add("none.parquet"))))
-  expect_identical(lake_files(tbl, filter = is.na(id))$path, c("all-null.parquet", "none.parquet"))
+  # no-null.parquet has no bounds, so it may hold a long past 2^53, which
+  # reads as NA (#111): is.na() keeps it.
+  expect_identical(lake_files(tbl, filter = is.na(id))$path, c("all-null.parquet", "no-null.parquet", "none.parquet"))
   expect_identical(lake_files(tbl, filter = !is.na(id))$path, c("no-null.parquet", "none.parquet"))
   expect_identical(lake_files(tbl, filter = id > 0)$path, c("no-null.parquet", "none.parquet"))
   expect_identical(lake_files(tbl, filter = id %in% c(1, NA))$path, c("all-null.parquet", "no-null.parquet", "none.parquet"))
@@ -710,4 +712,166 @@ test_that("a quoted filter in a variable is refused with how to pass it (#92)", 
     expect_match(conditionMessage(err), "eval(bquote(", fixed = TRUE)
   }
   expect_identical(eval(bquote(lake_read(tbl, filter = .(q)))), lake_read(tbl, filter = amount > 100))
+})
+
+test_that("is.na() on a long column is not pruned where the read gives NA for a value (#111)", {
+  skip_if_not_installed("bit64")
+  # zl-int64-edges: six files, nullCount 0 in each, i64 holding
+  # ±(2^53 - 1), ±2^53, -2^63, 2^63 - 1 and 2^53 + 1. qio reads a value past
+  # 2^53 as NA with int64 = "double", and -2^63 as bit64's NA with
+  # "integer64", where the null count does not count them.
+  tbl <- lake_open(fixture_table("zl-int64-edges"))
+  exprs <- list(quote(is.na(i64)), quote(!is.na(i64)), quote(i64 %in% NA), quote(i64 %in% c(5, NA)),
+                quote(!(i64 %in% NA)), quote(i64 == 5 | is.na(i64)), quote(is.na(i64) & id > 0),
+                quote(is.na(i64 + 0)), quote(i64 > 0), quote(i64 < -2^52))
+  na_ids <- list(double = c(7, 9, 11), integer64 = 7)
+  for (int64 in c("double", "integer64")) {
+    rows <- suppressWarnings(lake_read(tbl, int64 = int64))
+    expect_setequal(rows$id[is.na(rows$i64)], na_ids[[int64]])
+    for (expr in exprs) {
+      got <- suppressWarnings(eval(bquote(lake_read(tbl, filter = .(expr), int64 = int64))))
+      expect_identical(got, r_subset(rows, expr), ignore_attr = TRUE, label = paste(int64, deparse(expr)))
+    }
+  }
+  # Only the files whose bounds are known and inside what the mode holds
+  # are pruned on the null count: one file with "double" (±(2^53 - 1)),
+  # five with "integer64" (all but the one whose minimum is -2^63).
+  expect_identical(nrow(lake_files(tbl, filter = is.na(i64), stats = FALSE)), 5L)
+  expect_identical(nrow(lake_files(tbl, filter = is.na(i64), int64 = "integer64", stats = FALSE)), 1L)
+  expect_identical(nrow(lake_files(tbl, filter = i64 %in% NA, int64 = "integer64", stats = FALSE)), 1L)
+  # A missing bound is unknown, so the file is kept; bounds inside the mode
+  # prune.
+  stats <- function(min, max) {
+    sprintf('{\\"numRecords\\":2,\\"minValues\\":{%s},\\"maxValues\\":{%s},\\"nullCount\\":{\\"i64\\":0}}', min, max)
+  }
+  kept <- function(min, max, int64) {
+    t <- lake_open(raw_table(c(raw_header(c(i64 = "long")), raw_add("a.parquet", stats = stats(min, max)))))
+    nrow(suppressWarnings(lake_files(t, filter = is.na(i64), int64 = int64))) == 1L
+  }
+  bound <- function(v) sprintf('\\"i64\\":%s', v)
+  expect_false(kept(bound("-9007199254740991"), bound("9007199254740991"), "double"))
+  expect_true(kept(bound("-9007199254740992"), bound("1"), "double"))
+  expect_true(kept(bound("1"), bound("9007199254740992"), "double"))
+  expect_true(kept("", bound("1"), "double"))
+  expect_true(kept(bound("1"), "", "double"))
+  expect_false(kept(bound("-9223372036854775807"), bound("9223372036854775807"), "integer64"))
+  expect_false(kept(bound("1"), "", "integer64"))
+  expect_true(kept(bound("-9223372036854775808"), bound("1"), "integer64"))
+  expect_true(kept("", bound("1"), "integer64"))
+})
+
+test_that("is.na() of a binary column means the Delta null in every form (#113)", {
+  tbl <- lake_open(fixture_table("zl-types"))
+  rows <- suppressWarnings(lake_read(tbl, columns = c("i8", "b", "s")))
+  # The oracle: R's subset() of the unfiltered read, with is.na(b) and
+  # b %in% NA read as vapply(b, is.null, NA) (design section 6).
+  rows$null_b <- vapply(rows$b, is.null, NA)
+  expect_identical(sum(rows$null_b), 1L)
+  as_null <- function(e) {
+    if (identical(e, quote(is.na(b)))) {
+      return(quote(null_b))
+    }
+    if (is.call(e) && identical(e[[1L]], as.name("%in%")) && identical(e[[2L]], quote(b))) {
+      # A null is in the values when one of them is NA.
+      return(bquote((null_b & .(anyNA(eval(e[[3L]])))) | (!null_b & .(e))))
+    }
+    if (is.call(e)) {
+      for (i in seq_along(e)[-1L]) e[[i]] <- as_null(e[[i]])
+    }
+    e
+  }
+  forms <- list(quote(is.na(b)), quote(!(!is.na(b))), quote(is.na(b) == TRUE), quote(is.na(b) & TRUE),
+                quote(xor(is.na(b), FALSE)), quote(is.na(b) | FALSE), quote(!is.na(b)), quote(is.na(b) == FALSE),
+                quote(is.na(b) != TRUE), quote(is.na(b) == is.na(s)), quote(b %in% NA), quote(!(b %in% NA)),
+                quote(b %in% c("x", NA)), quote(b %in% "x"), quote(is.na(b) | i8 > 100), quote(as.integer(is.na(b)) == 1L))
+  for (expr in forms) {
+    got <- suppressWarnings(eval(bquote(lake_read(tbl, columns = c("i8", "b", "s"), filter = .(expr)))))
+    want <- r_subset(rows, as_null(expr))
+    expect_identical(got$i8, want$i8, label = deparse(expr))
+  }
+  # The string column's null row, for comparison: %in% NA is the null there
+  # too.
+  expect_identical(suppressWarnings(lake_read(tbl, columns = "i8", filter = s %in% NA))$i8,
+                   suppressWarnings(lake_read(tbl, columns = "i8", filter = b %in% NA))$i8)
+})
+
+test_that("exact filters give R's rows whatever LC_NUMERIC's decimal point is (#114)", {
+  locale <- local_hostile_locale()
+  skip_if(is.na(locale$numeric), "no locale with a comma decimal point is installed")
+  expect_identical(sprintf("%.1f", 1.5), "1,5")
+  tbl <- lake_open(fixture_table("zl-types"))
+  rows <- suppressWarnings(lake_read(tbl))
+  rows <- rows[!vapply(rows, is.list, NA)]
+  exprs <- list(quote(dec == 12345678.9), quote(dec > 0), quote(dec %in% c(-0.01, 0)), quote(dec < -0.005),
+                quote(i32 > 0.5), quote(i16 == 32767), quote(i64 > 1.5), quote(i8 %in% c(1, -1.5)),
+                quote(f64 == 0.1), quote(f32 > 1.25), quote(dec >= "0.00"))
+  for (expr in exprs) {
+    got <- suppressWarnings(eval(bquote(lake_read(tbl, columns = names(rows), filter = .(expr)))))
+    expect_identical(got, r_subset(rows, expr), ignore_attr = TRUE, label = deparse(expr))
+  }
+  tbl <- lake_open(fixture_table("zl-decimal-partitions"))
+  rows <- lake_read(tbl)
+  for (expr in list(quote(pdec == 12.3), quote(pdec > 0.05), quote(pd4 == 12.34), quote(pd4 < -1.5),
+                    quote(pdec %in% c(-0.01, 12.3)))) {
+    got <- eval(bquote(lake_read(tbl, filter = .(expr))))
+    expect_identical(got, r_subset(rows, expr), ignore_attr = TRUE, label = deparse(expr))
+  }
+})
+
+test_that("a statistic whose JSON type is not the column's is unknown, and the file is kept (#115)", {
+  # For each Delta type: the JSON type its statistics have, a value of it,
+  # and a filter that value as both bounds prunes. Every other JSON type in
+  # those bounds must keep the file.
+  cases <- list(
+    byte = list(json = "number", filter = quote(x > 5)),
+    short = list(json = "number", filter = quote(x > 5)),
+    integer = list(json = "number", filter = quote(x > 5)),
+    long = list(json = "number", filter = quote(x > 5)),
+    "decimal(10,2)" = list(json = "number", filter = quote(x > 5)),
+    float = list(json = "number", filter = quote(x > 5)),
+    double = list(json = "number", filter = quote(x > 5)),
+    boolean = list(json = "boolean", filter = quote(x == FALSE)),
+    string = list(json = "string", filter = quote(x > "5")),
+    date = list(json = "string", filter = quote(x > as.Date("2024-01-05"))),
+    timestamp = list(json = "string", filter = quote(x > as.POSIXct("2024-01-05", tz = "UTC"))),
+    timestamp_ntz = list(json = "string", filter = quote(x > as.POSIXct("2024-01-05", tz = "UTC")))
+  )
+  right <- c(byte = "1", short = "1", integer = "1", long = "1", "decimal(10,2)" = "1.00", float = "1.0",
+             double = "1.0", boolean = "true", string = '\\"1\\"', date = '\\"2024-01-01\\"',
+             timestamp = '\\"2024-01-01T00:00:00.000Z\\"', timestamp_ntz = '\\"2024-01-01 00:00:00.000\\"')
+  json_values <- list(number = c("1", "0"), boolean = c("true", "false"), string = c('\\"1\\"', '\\"0\\"', '\\"2024-01-01\\"'),
+                      array = "[1]", object = '{\\"a\\":1}')
+  kept <- function(type, value, filter) {
+    stats <- sprintf(
+      '{\\"numRecords\\":2,\\"minValues\\":{\\"x\\":%s},\\"maxValues\\":{\\"x\\":%s},\\"nullCount\\":{\\"x\\":0}}',
+      value, value
+    )
+    t <- lake_open(raw_table(c(raw_header(c(x = type)), raw_add("a.parquet", stats = stats))))
+    nrow(eval(bquote(lake_files(t, filter = .(filter), stats = FALSE)))) == 1L
+  }
+  for (type in names(cases)) {
+    case <- cases[[type]]
+    # The test sees a bound: the right JSON type prunes.
+    expect_false(kept(type, right[[type]], case$filter), label = paste(type, right[[type]]))
+    for (json in setdiff(names(json_values), case$json)) {
+      for (value in json_values[[json]]) {
+        expect_true(kept(type, value, case$filter), label = paste(type, value))
+      }
+    }
+  }
+  # On a fixture: zl-basic's first file (id 1 to 3) with maxValues.id true
+  # reads as subset() of the unfiltered read.
+  path <- local_fixture_copy("zl-basic")
+  f <- file.path(path, "_delta_log", "00000000000000000000.json")
+  lines <- readLines(f, warn = FALSE)
+  stopifnot(sum(grepl('\\"maxValues\\":{\\"label\\":\\"c\\",\\"id\\":3,', lines, fixed = TRUE)) == 1L)
+  lines <- sub('\\"maxValues\\":{\\"label\\":\\"c\\",\\"id\\":3,', '\\"maxValues\\":{\\"label\\":\\"c\\",\\"id\\":true,',
+               lines, fixed = TRUE)
+  writeLines(lines, f)
+  tbl <- lake_open(path, version = 0)
+  rows <- lake_read(tbl)
+  for (expr in list(quote(id > 2), quote(id == 3), quote(!(id %in% 1)), quote(id >= 2 & label == "c"))) {
+    expect_identical(eval(bquote(lake_read(tbl, filter = .(expr)))), r_subset(rows, expr), ignore_attr = TRUE,
+                     label = deparse(expr))
+  }
 })

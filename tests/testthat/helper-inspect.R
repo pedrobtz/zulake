@@ -163,10 +163,11 @@ oracle_partition_frame <- function(table, version) {
       name <- substr(piece, 1L, at - 1L)
       arrow <- substr(piece, at + 2L, nchar(piece))
       # A double as "%.17g", not as.character(), which writes 1.5 as "1,5"
-      # under options(OutDec = ",").
+      # under options(OutDec = ","); and with "." for the C library's
+      # decimal point, which is "," under a comma LC_NUMERIC (#114).
       vals <- vapply(aa$columns$partition, function(p) {
         v <- p[[name]]
-        if (is.null(v)) NA_character_ else if (is.double(v)) sprintf("%.17g", v) else as.character(v)
+        if (is.null(v)) NA_character_ else if (is.double(v)) chartr(",", ".", sprintf("%.17g", v)) else as.character(v)
       }, "")
       out[[name]] <- switch(arrow,
         int8 = , int16 = , int32 = as.integer(vals),

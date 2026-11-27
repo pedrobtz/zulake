@@ -463,6 +463,20 @@ a choice:
   recommendation: `deltalake` writes `inf`, `-inf` and `NaN`, Spark
   `Infinity` and `NaN`, and the union cannot collide with a number;
   fixture `zl-inf-partitions`).
+  A `decimal(p, s)` value is digits with an optional sign and an optional
+  fraction, `[+-]digits[.digits]`, with at most `s` fraction digits and at
+  most `p - s` digits before the point once leading zeros are dropped; a
+  point without digits on both sides (`.5`, `5.`, `-.5`), an exponent
+  (`1e2`), more fraction digits than the scale (`12.345` in a
+  `decimal(10,2)`) or more integer digits than the type holds
+  (`123456789.00`) is a corrupt log naming the value (2026-11-27, #112:
+  the check's pattern was wider than the exact comparator's, which read
+  `.5` as no number, so no filter matched the file, and nothing checked
+  the scale or precision; hostile logs `decimal-partition-*` from fixture
+  `zl-decimal-partitions`). `deltalake` 1.7.0 refuses every one of these
+  (`hostile-answers.json`, written by `answers.py`); it also refuses fewer
+  fraction digits than the scale (`12.3`, `12`), which zulake reads, since
+  the value is not in doubt and the comparator reads it exactly.
 
 ### 4.3 Reading
 
@@ -827,7 +841,13 @@ pruning part is evaluated per file, in three-valued logic, against:
   exactly, so pruning on a partition column is exact;
 - **statistics** (`numRecords`, `minValues`, `maxValues`, `nullCount`),
   which give "cannot match", "may match" or "unknown". A file is dropped
-  only on "cannot match". A missing statistic is "unknown". Statistics
+  only on "cannot match". A missing statistic is "unknown", and so is one
+  whose JSON type is not the column's: a number for a numeric column, a
+  boolean for a `boolean` one, a string for a `string`, date or timestamp
+  one, a number for a count (2026-11-27, #115: `true` as the maximum of a
+  `long` column was read as 1 and pruned a file holding 3; an array is
+  one too, so `stats` strings are parsed without simplifying arrays).
+  Statistics
   marked `tightBounds = false` (after deletion vectors) are still valid
   bounds for "cannot match".
 
@@ -853,7 +873,13 @@ statistics and on rows, so pruning and the row filter cannot disagree:
   `sprintf("%.15g", x)` when `as.numeric()` of that equals `x`, otherwise
   `sprintf("%.0f", x)` when `x` is whole, otherwise a
   `zulake_error_filter` asking for the value as text (`0.1` and `12.3`
-  pass; `1/3` and `0.1 + 0.2` do not; R has already rounded a literal
+  pass; `1/3` and `0.1 + 0.2` do not; the text always has "." for the
+  decimal point, as has the text of a decimal row value, whatever the
+  session's `LC_NUMERIC`, whose decimal point the C library's `sprintf()`
+  writes and `exact_parse()` would not read (2026-11-27, #114: under a
+  comma `LC_NUMERIC`, `dec > 0` found no row and `dec == 12.3` failed
+  with a base R error; the hostile-session tests set a comma
+  `LC_NUMERIC` where one is installed); R has already rounded a literal
   such as `9007199254740993` to 9007199254740992 before zulake sees it,
   which `?lake_read` says, with "exact up to 2^53 - 1" for `int64`:
   wording settled 2026-11-27, #91); `Inf` and `-Inf` compare as
@@ -891,11 +917,24 @@ statistics and on rows, so pruning and the row filter cannot disagree:
   of -2^31 as `NA`, R's integer `NA` (with a warning), which the null
   count does not count, and that `NA` is kept rather than converted
   (2026-11-27, #79: `is.na(i32)` was pruned while `is.na(i32 + 0L)` was
-  not; a lossless read is asked of `qio`; fixture `zl-int32-min`). On a column read as a list (`binary`), `is.na()` is `TRUE`
+  not; a lossless read is asked of `qio`; fixture `zl-int32-min`). On a
+  `long` column the same holds for what the `int64` mode reads as `NA`: a
+  null count says no row is `NA` only when the file's bounds are known
+  and inside ±(2^53 - 1) with `int64 = "double"` (`qio` reads a value
+  past 2^53 as `NA`), or its minimum is known and above -2^63 with
+  `"integer64"` (bit64's `NA` is -2^63) (2026-11-27, #111: `is.na(i64)`,
+  `%in% NA` and `| is.na()` dropped those rows; fixture
+  `zl-int64-edges`). On a column read as a list (`binary`), `is.na()` is `TRUE`
   for a null value (`NULL`), as the null count means it, where base R's
   `is.na()` on a list is `FALSE` (settled 2026-11-26, Stage 8, on a
   design adviser's recommendation: R's answer would contradict the
   null-count pruning and leave no way to select a null binary value).
+  That holds in every node of a filter: a row-evaluated node sees an
+  `is.na()` that is `TRUE` for a `NULL` element of a list, and a `%in%`
+  under which a `NULL` element is in the values when one of them is `NA`,
+  as `s %in% NA` keeps a string column's null (2026-11-27, #113:
+  `is.na(b) == TRUE` and `xor(is.na(b), FALSE)` found nothing, and
+  `b %in% NA` found nothing where `is.na(b)` found the null row).
 
 Settled 2026-11-26 (a correction to Stage 4, on a design adviser's
 recommendation): a filter is row-wise by construction (D8), so evaluating

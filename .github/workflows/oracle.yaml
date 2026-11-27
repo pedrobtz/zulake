@@ -1,7 +1,8 @@
 # zulake's own workflow: the example table zl-orders is built again (its
-# build is deterministic), deltalake 1.7.0 answers again for every fixture
-# table, the hostile logs are made again from the tables, the shipped tar is
-# packed again and zl-orders copied to inst/extdata/orders, and any
+# build is deterministic), the hostile logs are made again from the tables,
+# the shipped tar is packed again and zl-orders copied to
+# inst/extdata/orders, deltalake 1.7.0 answers again for every fixture
+# table and hostile log, and any
 # difference from what is committed fails the run. So the answers the R
 # tests compare against are deltalake's, for exactly the tables the package
 # ships. test-fixtures.R then runs against the unpacked trees, which only
@@ -60,10 +61,6 @@ jobs:
         working-directory: tools/oracle
         run: uv run --frozen python ../fixtures/generate.py orders
 
-      - name: deltalake answers
-        working-directory: tools/oracle
-        run: uv run --frozen python answers.py
-
       - name: Hostile logs
         run: Rscript tools/fixtures/hostile.R
 
@@ -74,6 +71,12 @@ jobs:
       - name: Pack the fixtures
         working-directory: tools/oracle
         run: uv run --frozen python ../fixtures/pack.py
+
+      # Last, as CLAUDE.md orders it: answers.py also answers for the hostile
+      # logs (hostile-answers.json), so it runs after they are made again.
+      - name: deltalake answers
+        working-directory: tools/oracle
+        run: uv run --frozen python answers.py
 
       # The fixture tests from the source tree, where the unpacked tables/
       # and hostile/ trees are (.Rbuildignore keeps them out of every R CMD

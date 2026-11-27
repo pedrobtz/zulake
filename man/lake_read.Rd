@@ -60,7 +60,8 @@ only decide what is read: the rows returned are the rows \code{filter} is
 \code{TRUE} for whatever the statistics say, and a missing statistic only
 means a file is read. On a column returned as a list (a \code{binary}
 column), \code{is.na()} is \code{TRUE} where the value is null (\code{NULL}), as Delta
-means it, where base R's \code{is.na()} on a list is \code{FALSE}.
+means it, where base R's \code{is.na()} on a list is \code{FALSE}, in every part of
+a filter (\code{is.na(b) == TRUE} too), and \code{b \%in\% NA} keeps the null values.
 
 A filter may also apply these row-wise functions to columns: \code{+}, \code{-},
 \code{*}, \code{/}, \code{\%\%}, \code{\%/\%}, \code{^}, \code{abs()}, \code{round()}, \code{floor()}, \code{ceiling()},
@@ -104,7 +105,9 @@ of precision 15 or less, data or partition, is a double, which holds it
 exactly. An \code{integer} data value of -2^31 reads as \code{NA}, R's integer
 \code{NA}, with a warning from qio: \code{is.na()} is \code{TRUE} for it and a comparison
 such as \code{x < 1} is not, and a file whose minimum may be -2^31 is never
-pruned on its null count. Columns zulake does not return are not lost silently: nested
+pruned on its null count. So is a \code{long} data value past 2^53 - 1 in
+magnitude with \code{int64 = "double"}, or -2^63 with \code{"integer64"}, and a
+file whose bounds may hold one is never pruned on its null count. Columns zulake does not return are not lost silently: nested
 columns (\code{struct}, \code{array}, \code{map}), and decimals of precision above 15
 until qio reads them exactly. With \code{columns = NULL} they are left out, each named in a
 warning of class \code{zulake_warning_column_skipped} (fields \code{column} and

@@ -592,9 +592,11 @@ filter_rows <- function(plan, data, env) {
     isna = atom_values(plan, data[[plan$column]]),
     r = {
       # Values are already in the call, so the only names left are columns
-      # and functions, which are base R's, whatever the caller defines.
+      # and functions, which are base R's, whatever the caller defines,
+      # except is.na() and %in%, which see a list column's NULL as the Delta
+      # null (row_functions).
       r <- tryCatch(
-        eval(plan$call, as.list(data[plan$columns]), baseenv()),
+        eval(plan$call, as.list(data[plan$columns]), row_functions),
         error = function(e) {
           filter_error(
             plan$call,
@@ -614,6 +616,26 @@ filter_rows <- function(plan, data, env) {
     }
   )
 }
+
+# The functions a row-evaluated node sees, over base R's: is.na() and %in%
+# as atom_values() has them, so that a NULL element of a list (binary)
+# column is NA in every form of a filter, as the null count counts it
+# (design section 6, #113). Base R's is.na() is FALSE for every element of
+# a list, and its %in% matches a NULL with nothing.
+row_functions <- local({
+  env <- new.env(parent = baseenv())
+  env$is.na <- function(x) {
+    if (is.list(x) && is.null(dim(x))) vapply(x, is.null, NA) else base::is.na(x)
+  }
+  env$`%in%` <- function(x, table) {
+    out <- base::`%in%`(x, table)
+    if (is.list(x) && is.null(dim(x))) {
+      out[vapply(x, is.null, NA)] <- anyNA(table)
+    }
+    out
+  }
+  env
+})
 
 # ---- pruning -------------------------------------------------------------
 
@@ -641,7 +663,7 @@ prune_info <- function(tbl, plan, int64) {
   if (length(data_cols)) {
     parsed <- parse_stats(file_stats_text(actions), tbl$files$path)
     for (col in data_cols) {
-      info$stats[[col]] <- column_bounds(tbl, parsed, col, types[[col]])
+      info$stats[[col]] <- column_bounds(tbl, parsed, col, types[[col]], int64)
     }
   }
   info
@@ -694,8 +716,9 @@ filter_outcomes <- function(plan, info) {
 # `type`: `lo` and `hi` as keys of the column's kind (NA where unknown),
 # `hi_prefix` (a string maximum, which a writer may have truncated, so the
 # true maximum can be any string that starts with it), and whether a null,
-# a non-null and a NaN value can occur.
-column_bounds <- function(tbl, parsed, col, type) {
+# a non-null and a NaN value can occur. `int64` is how the read returns a
+# `long` column, which decides the values it reads as NA.
+column_bounds <- function(tbl, parsed, col, type, int64 = "double") {
   n <- length(parsed)
   kind <- type_kind(type)
   field <- field_by_name(schema_fields(tbl), col)
@@ -704,24 +727,35 @@ column_bounds <- function(tbl, parsed, col, type) {
     obj <- parsed[[i]][[what]]
     if (is.list(obj) && !is.null(names(obj))) obj[[key]] else NULL
   }
-  leaf_text <- function(v) {
+  # A statistic of the JSON type the column's statistics have, as text: a
+  # number for a numeric column, a boolean for a boolean one, a string for
+  # a string, date or timestamp one. Any other is unknown, as a missing one
+  # is (#115).
+  json_type <- if (type == "boolean") {
+    "boolean"
+  } else if (!is.na(kind) && kind == "exact" || type %in% c("float", "double")) {
+    "number"
+  } else {
+    "string"
+  }
+  leaf_text <- function(v, json = json_type) {
     if (is.null(v) || is.list(v) || length(v) != 1L) {
       return(NA_character_)
     }
-    if (is_marked(v)) {
-      return(marked_text(v))
-    }
-    if (is.character(v)) {
-      return(v)
-    }
-    if (is.logical(v) && !is.na(v)) {
-      return(if (v) "1" else "0")
-    }
-    NA_character_
+    switch(
+      json,
+      number = if (is_marked(v)) marked_text(v) else NA_character_,
+      boolean = if (is.logical(v) && !is.na(v)) {
+        if (v) "1" else "0"
+      } else {
+        NA_character_
+      },
+      string = if (is.character(v) && !is_marked(v)) v else NA_character_
+    )
   }
   count_text <- function(v) {
-    t <- leaf_text(v)
-    if (is_marked(v) && grepl("^[0-9]+$", t)) t else NA_character_
+    t <- leaf_text(v, "number")
+    if (grepl("^[0-9]+$", t)) t else NA_character_
   }
   nrec <- vapply(
     seq_len(n),
@@ -772,6 +806,19 @@ column_bounds <- function(tbl, parsed, col, type) {
       # minimum is known and above -2^31 (#79).
       above <- exact_cmp(out$lo, exact_parse("-2147483648")) %in% 1L
       out$null <- out$null | (out$nonnull & !above)
+    }
+    if (type == "long") {
+      # The same for a long (#111): qio reads a value past 2^53 as NA with
+      # int64 = "double", and -2^63 as bit64's NA with "integer64". A file
+      # may hold such an NA unless its bounds are known and inside
+      # ±(2^53 - 1), or its minimum above -2^63.
+      inside <- if (int64 == "integer64") {
+        exact_cmp(out$lo, exact_parse("-9223372036854775808")) %in% 1L
+      } else {
+        exact_cmp(out$lo, exact_parse("-9007199254740991")) %in% c(0L, 1L) &
+          exact_cmp(out$hi, exact_parse("9007199254740991")) %in% c(-1L, 0L)
+      }
+      out$null <- out$null | (out$nonnull & !inside)
     }
   } else if (kind == "number") {
     num <- function(t) {

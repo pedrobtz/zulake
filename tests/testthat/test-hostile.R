@@ -176,7 +176,8 @@ test_that("partition values are checked against the column's Delta type", {
     long = c("-9223372036854775808", "9223372036854775807", "0009223372036854775807"),
     float = c("1.5", "-0.0", "1e10", "1.0E-5", "NaN", "Infinity", "-Infinity", ".5", "3."),
     double = c("1", "-1.25e+300"),
-    "decimal(10,2)" = c("12345678.90", "-0.01", "1E+3"),
+    "decimal(10,2)" = c("12345678.90", "-0.01", "+1.5", "0012", "99999999.99"),
+    "decimal(4,0)" = c("9999", "-1"),
     date = c("2024-01-01", "0001-01-01", "9999-12-31", "2024-1-5"),
     timestamp = c("1970-01-01 00:00:00", "1970-01-01 00:00:00.123456", "1970-01-01T00:00:00.123456Z", "2024-02-29T12:30:45Z"),
     timestamp_ntz = c("1970-01-01 00:00:00", "2024-02-29 12:30:45.123456")
@@ -189,7 +190,10 @@ test_that("partition values are checked against the column's Delta type", {
     long = c("-9223372036854775809", "9223372036854775808", "18446744073709551616", "--1"),
     float = c("one", "1,5", "1.5.5", "In", "infin", "e5"),
     double = c("0x10", ""[0]),
-    "decimal(10,2)" = c("1,5", "abc"),
+    # Exponents, a point without digits on one side, and values the type
+    # cannot hold (#112).
+    "decimal(10,2)" = c("1,5", "abc", "1E+3", "1e2", ".5", "5.", "-.5", "12.345", "123456789.00", "1.2.3", "+-1"),
+    "decimal(4,0)" = c("10000", "1.0"),
     date = c("2024-13-01", "2024-00-10", "2024-01-32", "20240101", "2024-01-01 00:00:00", "24-01-01"),
     timestamp = c("2024-01-01", "2024-01-01 25", "2024-13-01 00:00:00", "noon"),
     timestamp_ntz = c("2024-01-01T00:00:00Z", "2024-01-01")
@@ -784,4 +788,48 @@ test_that("a Parquet checkpoint whose MAP repeats a key is passed over, and unre
   expect_false(inherits(cause, "zulake_error"))
   expect_match(conditionMessage(cause), "a map holds the key \"x\" twice", fixed = TRUE)
   expect_match(conditionMessage(err), "a map holds the key \"x\" twice", fixed = TRUE)
+})
+
+test_that("a decimal partition value the comparator cannot read or the type cannot hold is a corrupt log (#112)", {
+  # The oracle: deltalake 1.7.0 refuses each of these logs
+  # (fixtures/hostile-answers.json, written by tools/oracle/answers.py).
+  answers <- zujson::json_parse_file(testthat::test_path("fixtures", "hostile-answers.json"))
+  values <- c(
+    "decimal-partition-no-integer-digit" = ".5",
+    "decimal-partition-no-fraction-digit" = "5.",
+    "decimal-partition-negative-no-integer-digit" = "-.5",
+    "decimal-partition-exponent" = "1e2",
+    "decimal-partition-past-scale" = "12.345",
+    "decimal-partition-past-precision" = "123456789.00",
+    "decimal-partition-past-precision-small" = "123.45"
+  )
+  expect_setequal(names(values), grep("^decimal-partition-", fixture_names("hostile"), value = TRUE))
+  for (name in names(values)) {
+    refusal <- answers[[name]]$refusal
+    expect_false(is.null(refusal), label = name)
+    expect_match(refusal$message, sprintf("Failed to parse value '%s'", values[[name]]), fixed = TRUE, label = name)
+    path <- fixture_table(name, "hostile")
+    expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
+    err <- tryCatch(lake_open(path), error = identity)
+    expect_match(conditionMessage(err), sprintf("partition value \"%s\"", values[[name]]), fixed = TRUE, label = name)
+    expect_identical(err$column, if (endsWith(name, "-small")) "pd4" else "pdec", label = name)
+  }
+  # Spellings the comparator reads and the type holds open and compare
+  # exactly, fewer fraction digits than the scale too (deltalake refuses
+  # those; their value is not in doubt).
+  for (value in c("+12.30", "012.30", "12.3", "12", "-0.00", "99999999.99")) {
+    path <- local_fixture_copy("zl-decimal-partitions")
+    f <- file.path(path, "_delta_log", "00000000000000000000.json")
+    lines <- readLines(f, warn = FALSE)
+    lines <- sub('"pdec":"12.30"', sprintf('"pdec":"%s"', value), lines, fixed = TRUE)
+    writeLines(lines, f)
+    tbl <- lake_open(path)
+    rows <- lake_read(tbl)
+    v <- as.numeric(value)
+    expect_identical(rows$pdec[rows$id == 0], v, label = value)
+    for (expr in list(bquote(pdec == .(v)), bquote(pdec %in% .(v)), quote(pdec > -1000), bquote(pdec <= .(v)))) {
+      expect_identical(eval(bquote(lake_read(tbl, filter = .(expr)))), r_subset(rows, expr), ignore_attr = TRUE,
+                       label = paste(value, deparse(expr)))
+    }
+  }
 })

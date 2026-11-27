@@ -5,8 +5,10 @@
 # changes nothing, and setting LC_ALL as an environment variable does not
 # change the running session's locale. local_hostile_locale() changes the
 # session itself: a collation in which "a" sorts before "B" (not byte
-# order), the C character type (not UTF-8), and number formatting that
-# writes 1.5 as "1,5e+00" with 3 digits.
+# order), the C character type (not UTF-8), number formatting that writes
+# 1.5 as "1,5e+00" with 3 digits, and, where one is installed, an LC_NUMERIC
+# whose decimal point is a comma, so that the C library's sprintf("%.1f",
+# 1.5) is "1,5" (#114).
 
 # The character type the session started in, in which the oracles evaluate
 # R (oracle_locale()): R translates a string to the native encoding to
@@ -42,8 +44,25 @@ hostile_collation <- function() {
   NA_character_
 }
 
+# The first installed LC_NUMERIC whose decimal point is a comma, or NA. R
+# warns that setting LC_NUMERIC "may cause R to function strangely": that
+# is the point of it here.
+comma_numeric <- function() {
+  old <- Sys.getlocale("LC_NUMERIC")
+  on.exit(suppressWarnings(Sys.setlocale("LC_NUMERIC", old)))
+  for (numeric in c("de_DE.UTF-8", "de_DE.utf8", "fr_FR.UTF-8", "fr_FR.utf8", "German_Germany.1252", "de-DE")) {
+    ok <- suppressWarnings(nzchar(Sys.setlocale("LC_NUMERIC", numeric))) &&
+      identical(sprintf("%.1f", 1.5), "1,5")
+    if (isTRUE(ok)) {
+      return(numeric)
+    }
+  }
+  NA_character_
+}
+
 # Puts the calling test in the hostile session until it ends; skips when no
-# such collation is installed.
+# such collation is installed. Returns the collation and the comma
+# LC_NUMERIC, NA where none is installed; a test about LC_NUMERIC skips then.
 local_hostile_locale <- function(env = parent.frame()) {
   collate <- hostile_collation()
   if (is.na(collate)) {
@@ -52,6 +71,13 @@ local_hostile_locale <- function(env = parent.frame()) {
   withr::local_collate(collate, .local_envir = env)
   withr::local_locale(c(LC_CTYPE = "C"), .local_envir = env)
   withr::local_options(OutDec = ",", scipen = -5, digits = 3, .local_envir = env)
+  numeric <- comma_numeric()
+  if (!is.na(numeric)) {
+    old <- Sys.getlocale("LC_NUMERIC")
+    suppressWarnings(Sys.setlocale("LC_NUMERIC", numeric))
+    withr::defer(suppressWarnings(Sys.setlocale("LC_NUMERIC", old)), envir = env)
+    stopifnot(identical(sprintf("%.1f", 1.5), "1,5"))
+  }
   stopifnot(byte_order_broken(), identical(format(1.5), "1,5e+00"))
-  invisible(collate)
+  invisible(list(collate = collate, numeric = numeric))
 }

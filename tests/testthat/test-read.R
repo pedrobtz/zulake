@@ -19,6 +19,12 @@ test_that("full reads of every fixture equal deltalake's", {
       expect_length(got$warnings, 1L)
       expect_match(conditionMessage(got$warnings[[1L]]), "INT32 values in column 'i32' were coerced to NA", fixed = TRUE)
       expect_read_oracle(got$value, case$table, case$version)
+    } else if (case$table == "zl-int64-edges") {
+      # qio warns that it read the int64 values past 2^53 as NA (#111),
+      # from version 3 on.
+      expect_identical(length(got$warnings) > 0L, case$version >= 3)
+      for (w in got$warnings) expect_match(conditionMessage(w), "'i64' were coerced to NA", fixed = TRUE)
+      expect_read_oracle(got$value, case$table, case$version)
     } else {
       expect_length(got$warnings, 0L)
       expect_read_oracle(got$value, case$table, case$version)
@@ -289,8 +295,9 @@ test_that("a read with no file or no matching row has the columns and types of a
   for (case in read_cases()) {
     if (case$table %in% c("zl-types", "zl-catalog-managed")) next
     tbl <- case_snapshot(case)
-    # qio warns that it read zl-int32-min's -2^31 as NA (#79).
-    full <- if (case$table == "zl-int32-min") suppressWarnings(lake_read(tbl)) else lake_read(tbl)
+    # qio warns that it read zl-int32-min's -2^31 and zl-int64-edges'
+    # values past 2^53 as NA (#79, #111).
+    full <- if (case$table %in% c("zl-int32-min", "zl-int64-edges")) suppressWarnings(lake_read(tbl)) else lake_read(tbl)
     none <- lake_read(tbl, filter = FALSE)
     expect_identical(nrow(none), 0L)
     expect_identical(lapply(none, class), lapply(full, class), label = paste(case$table, case$version))

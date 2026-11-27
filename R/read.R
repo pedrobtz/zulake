@@ -18,7 +18,8 @@
 #' `TRUE` for whatever the statistics say, and a missing statistic only
 #' means a file is read. On a column returned as a list (a `binary`
 #' column), `is.na()` is `TRUE` where the value is null (`NULL`), as Delta
-#' means it, where base R's `is.na()` on a list is `FALSE`.
+#' means it, where base R's `is.na()` on a list is `FALSE`, in every part of
+#' a filter (`is.na(b) == TRUE` too), and `b %in% NA` keeps the null values.
 #'
 #' A filter may also apply these row-wise functions to columns: `+`, `-`,
 #' `*`, `/`, `%%`, `%/%`, `^`, `abs()`, `round()`, `floor()`, `ceiling()`,
@@ -62,7 +63,9 @@
 #' exactly. An `integer` data value of -2^31 reads as `NA`, R's integer
 #' `NA`, with a warning from qio: `is.na()` is `TRUE` for it and a comparison
 #' such as `x < 1` is not, and a file whose minimum may be -2^31 is never
-#' pruned on its null count. Columns zulake does not return are not lost silently: nested
+#' pruned on its null count. So is a `long` data value past 2^53 - 1 in
+#' magnitude with `int64 = "double"`, or -2^63 with `"integer64"`, and a
+#' file whose bounds may hold one is never pruned on its null count. Columns zulake does not return are not lost silently: nested
 #' columns (`struct`, `array`, `map`), and decimals of precision above 15
 #' until qio reads them exactly. With `columns = NULL` they are left out, each named in a
 #' warning of class `zulake_warning_column_skipped` (fields `column` and

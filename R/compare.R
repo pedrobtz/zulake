@@ -155,6 +155,14 @@ bytes_starts_with <- function(x, prefix) {
   out
 }
 
+# sprintf() of finite doubles with "." as the decimal point. The C library
+# writes the one of the session's LC_NUMERIC, which a user may set to a
+# comma, and exact_parse() reads only "."; with no grouping flag a number's
+# text holds nothing else but a sign, digits and an exponent (#114).
+number_text <- function(fmt, ...) {
+  gsub("[^-+0-9eE]+", ".", sprintf(fmt, ...))
+}
+
 # ---- filter values as comparison keys ------------------------------------
 
 # The values of a filter literal compared with a column of `kind` (and Delta
@@ -201,7 +209,7 @@ literal_exact <- function(value, expr) {
     text[x %in% -Inf] <- "-Inf"
     fin <- is.finite(x)
     if (any(fin)) {
-      short <- sprintf("%.15g", x[fin])
+      short <- number_text("%.15g", x[fin])
       exact <- as.numeric(short) == x[fin]
       whole <- x[fin] == trunc(x[fin])
       if (any(!exact & !whole)) {
@@ -213,12 +221,12 @@ literal_exact <- function(value, expr) {
               "the double %s has no exact decimal form of 15 digits; write it as",
               "text, such as \"%s\", to compare it exactly"
             ),
-            sprintf("%.17g", bad),
-            sprintf("%.15g", bad)
+            number_text("%.17g", bad),
+            number_text("%.15g", bad)
           )
         )
       }
-      out <- ifelse(exact, short, sprintf("%.0f", x[fin]))
+      out <- ifelse(exact, short, number_text("%.0f", x[fin]))
       text[fin] <- out
     }
   } else {
@@ -323,9 +331,13 @@ column_exact_text <- function(x, type) {
   have <- !is.na(x)
   ps <- decimal_ps(type)
   if (!is.null(ps)) {
-    out[have] <- sprintf("%.*f", as.integer(ps[["scale"]]), as.numeric(x[have]))
+    out[have] <- number_text(
+      "%.*f",
+      as.integer(ps[["scale"]]),
+      as.numeric(x[have])
+    )
   } else {
-    out[have] <- sprintf("%.0f", as.numeric(x[have]))
+    out[have] <- number_text("%.0f", as.numeric(x[have]))
   }
   out
 }
