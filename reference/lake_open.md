@@ -60,15 +60,18 @@ value, such as a `version` that is not a whole number),
 `zulake_error_not_table` (no Delta log at `uri`), `zulake_error_version`
 (no such version, or one no longer in the log), `zulake_error_uri` (a
 URI zulake cannot open), `zulake_error_storage` (a file that cannot be
-read; from Azure with the HTTP `status` and Azure's error `code`),
+read, or a log file whose size is not the one its listing gives; from
+Azure with the HTTP `status` and Azure's error `code`),
 `zulake_error_auth` (credentials refused), `zulake_error_corrupt_log` (a
-log that breaks the protocol, such as a commit that is not JSON or a
-partition value of the wrong type, or a `_last_checkpoint` naming a
-checkpoint the log does not hold whole),
+log that breaks the protocol, such as a commit that is not JSON, a line
+holding two actions, a partition value of the wrong type, a schema with
+a type the protocol does not define or two fields of one name, or a
+`_last_checkpoint` naming a checkpoint the log does not hold whole),
 `zulake_error_checkpoint_unreadable` (its `checkpoint` field gives the
 version, `parent` the read failure) and
 `zulake_error_unsupported_feature`, whose `feature` field names the
-feature.
+feature (also for a `timestamp_ntz` or `variant` column whose reader
+feature the protocol does not declare).
 
 ## Details
 
