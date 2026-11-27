@@ -1,0 +1,2 @@
+{"commitInfo":{"timestamp":1795812708074,"operation":"WRITE","operationParameters":{},"clientVersion":"zulake-fixtures"}}
+{"add":{"path":"part-int32.parquet","partitionValues":{},"size":743,"modificationTime":1795812708074,"dataChange":true,"stats":"{\"numRecords\":3,\"minValues\":{\"id\":2,\"x\":3},\"maxValues\":{\"id\":4,\"x\":2147483647},\"nullCount\":{\"id\":0,\"x\":1}}"}}

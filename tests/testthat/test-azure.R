@@ -1184,3 +1184,54 @@ test_that("a local log file whose size differs from the listing's is refused (#1
     expect_identical(c(cause$size, cause$listed_size), c(want, want + 1))
   }
 })
+
+test_that("a listing that names a blob twice is a storage error, on any page (#124, #123)", {
+  table <- "zl-basic"
+  files <- sort(list.files(file.path(fake_root(), table, "_delta_log")))
+  listing <- function(names) {
+    blobs <- vapply(names, function(f) {
+      sprintf(
+        paste0("<Blob><Name>%s/_delta_log/%s</Name><Properties><Last-Modified>Thu, 26 Nov 2026 16:04:00 GMT",
+               "</Last-Modified><Content-Length>%s</Content-Length></Properties></Blob>"),
+        table, f, format(file.size(file.path(fake_root(), table, "_delta_log", f)), scientific = FALSE)
+      )
+    }, "")
+    zuhttp::zu_response(200L, body = charToRaw(paste0(
+      "<EnumerationResults><Blobs>", paste(blobs, collapse = ""), "</Blobs><NextMarker /></EnumerationResults>"
+    )))
+  }
+  # The latest commit twice gave a base R error; an earlier one, a version
+  # listed twice by lake_log() and lake_history().
+  for (dup in c(files[length(files)], files[1L])) {
+    local_azure_fake(azure_fake(fake_root(), new.env(), override = function(r) {
+      if (identical(r$query$comp, "list")) listing(sort(c(files, dup)))
+    }))
+    err <- tryCatch(lake_open(fake_uri(table), credentials = function() "tok"), error = identity)
+    expect_s3_class(err, "zulake_error_storage")
+    expect_match(conditionMessage(err), "twice", fixed = TRUE)
+    expect_identical(err$path, paste0("_delta_log/", dup))
+  }
+  # Across pages too: the fake's second page repeats the first's last name.
+  pages <- function(r) {
+    if (!identical(r$query$comp, "list")) return(NULL)
+    first <- is.null(r$query$marker)
+    names <- if (first) files[1:2] else files[2:length(files)]
+    resp <- listing(names)
+    body <- rawToChar(resp$body)
+    if (first) body <- sub("<NextMarker />", "<NextMarker>m</NextMarker>", body, fixed = TRUE)
+    zuhttp::zu_response(200L, body = charToRaw(body))
+  }
+  local_azure_fake(azure_fake(fake_root(), new.env(), override = pages))
+  expect_error(lake_open(fake_uri(table), credentials = function() "tok"), class = "zulake_error_storage")
+})
+
+test_that("a deletion vector whose HEAD is 404 is no such file, not a corrupt log (#123)", {
+  skip_if_not_installed("zuroar")
+  local_azure_fake(azure_fake(fake_root(), new.env(), override = function(r) {
+    if (r$method == "HEAD" && grepl("deletion_vector_", r$path)) zuhttp::zu_response(404L, c(`x-ms-error-code` = "BlobNotFound"))
+  }))
+  tbl <- lake_open(fake_uri("table-with-dv-small"), credentials = function() "tok")
+  err <- tryCatch(lake_read(tbl), error = identity)
+  expect_s3_class(err, "zulake_error_storage")
+  expect_match(conditionMessage(err), "no such file", fixed = TRUE)
+})

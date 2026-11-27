@@ -181,7 +181,11 @@ Settled in Stage 6 (2026-11-26):
   on the first page lists nothing, as a missing local directory does, so
   `lake_is_table()` is `FALSE` and `lake_open()` a
   `zulake_error_not_table`; on a later page it is a `zulake_error_storage`,
-  since the listing would hold part of the log (2026-11-27, #46). `Get Blob` is
+  since the listing would hold part of the log (2026-11-27, #46). A name
+  listed twice, on one page or two, is a `zulake_error_storage` with
+  `path` (2026-11-27, #124, #123: the version was listed twice by
+  `lake_log()` and `lake_history()`, and the latest commit listed twice
+  failed `lake_open()` with a base R error). `Get Blob` is
   sent with `decode = FALSE` (the stored bytes, whatever their
   `Content-Encoding`), no body limit and a 600-second timeout. A range
   needs `206` with exactly `to - from + 1` bytes; a short body or `416` is
@@ -394,14 +398,45 @@ a choice:
   (`hostile-answers.json`; the hand-written cases by
   `tools/oracle`'s environment): it refuses every one of these but four.
   It reads a field named `""`, which zulake refuses (R cannot name a
-  column so). It reads `void` and `interval day to second`, which are not
-  in PROTOCOL.md; zulake refuses them, since nothing says what their
-  values are. It compares names case-insensitively, refusing `id` beside
-  `ID`, which zulake reads as two columns, as the Parquet files hold
-  them; and it opened a schema with a non-ASCII name twice (`"\u00e9"`),
-  which zulake refuses. Both refuse two fields of one struct with one
-  physical name, nested or not.
+  column so). It reads `interval day to second`, which is not in
+  PROTOCOL.md; zulake refuses it, since nothing says what its values are.
+  It reads `void`, which PROTOCOL.md does define, and so does zulake
+  since 2026-11-27 (#133, below). It compares names case-insensitively,
+  refusing `id` beside `ID`, and so does zulake since 2026-11-27, for
+  ASCII letters (#134, below); and it opened a schema with a non-ASCII
+  name twice (`"\u00e9"`), which zulake refuses. Both refuse two fields
+  of one struct with one physical name, nested or not.
   Hostile logs `schema-*` and `column-mapping-duplicate-physical-name`.
+- *`void` columns* (2026-11-27, #133, on a design adviser's
+  recommendation). `void` is a type of the schema at every level.
+  PROTOCOL.md defines it ("A column that contains only null values and is
+  never materialized in data files"), gates it by no feature, and says
+  readers "MUST reconstruct them as all-null columns". A top-level `void`
+  column reads as an all-`NA` logical column and is never read from a data
+  file, even one that holds a column of its name (which `deltalake` 1.7.0
+  refuses to cast); a nested one only passes the schema check, its parent
+  being a nested column zulake leaves out (D14). A `void` partition column
+  takes only a null or empty value; any other is a
+  `zulake_error_corrupt_log`. In a filter `is.na(v)` is `TRUE` on every
+  row, and the column's statistics are never used, so it prunes no file on
+  them. Why: the schema check of #120 refused `void` as undefined, so a
+  table `deltalake` reads did not open. Fixture `zl-void` (a `void` column
+  at the top level and inside a struct, added to commit 0's schema by
+  `generate.py`), against `deltalake`'s read.
+- *Names unique regardless of case* (2026-11-27, #134, on a design
+  adviser's recommendation). Two fields of one struct whose names differ
+  only in case (`id` and `ID`) are a `zulake_error_corrupt_log` whose
+  `column` is the second one's path, at every level. Names are folded in
+  ASCII only (`A`-`Z` to `a`-`z`), the same on every platform and in every
+  locale; two names that differ only in the case of a non-ASCII letter
+  (`"\u00e9"` and `"\u00c9"`) open, an under-refusal: `tolower()` folds
+  them through the platform's `towlower()` and the locale, so its answer
+  could not be tested against the oracle. `columns` and filters still
+  match names as written. Why: PROTOCOL.md ("Schema Serialization
+  Format") requires names unique regardless of case, `deltalake` 1.7.0
+  refuses them, and zulake read the two as two columns. Hostile logs
+  `schema-duplicate-name-case` and `schema-duplicate-name-case-nested`,
+  against `deltalake`'s refusals in `hostile-answers.json`.
 - *Log compaction files* replace the commits they cover whenever one
   starts where replay stands and ends at or before the target version
   (the one reaching furthest, of several). Why: the protocol makes them
@@ -520,7 +555,12 @@ a choice:
   that converts them (calendar dates, hours 0-23, minutes and seconds
   0-59, offsets to 18:00), which statistics and filter literals use too,
   and a time is the double qio reads for the same microseconds: the count
-  rounded once, then divided by 1e6 (2026-11-27, #53, #54). An empty string or a missing key is null.
+  rounded once, then divided by 1e6 (2026-11-27, #53, #54). Fraction
+  digits past the microsecond are dropped, not rounded, as `deltalake`
+  1.7.0 drops them (2026-11-27, #118: `.123456789` read as `.123457`,
+  and `.9999995` and up as the next second, which the parser then
+  refused); a filter literal with a non-zero digit past the microsecond is
+  a `zulake_error_filter`, since dropping it would change `<` and `>=`. An empty string or a missing key is null.
   A `float` or `double` value is a decimal number or an infinity or NaN in
   any spelling Rust's f64 parser takes: `inf`, `infinity` or `nan` in any
   case, with an optional sign (2026-11-27, #67, on a design adviser's
@@ -583,7 +623,9 @@ reading footers by range is a later change).
 Settled in Stage 4 (2026-11-26):
 
 - *Order.* Refusals, then the filter plan, pruning, each surviving file's
-  `qio::read_plan()`, and the columns returned, all before a row is read;
+  `qio::read_plan()` and schema, each column's type in each file checked
+  against the schema (§7, #119), and the columns returned, all before a
+  row is read;
   then per file: read, partition columns added, a column the file lacks
   filled with `NA` of its type, rows filtered. Stage 5 drops the rows a
   deletion vector marks between the read and the row filter.
@@ -1059,6 +1101,80 @@ error, `zulake_error_column_unreadable`, with the same fields. They are
 found from each file's `qio::read_plan()` and from the schema, never by
 letting `qio` drop them (settled 2026-11-26, Stage 4, maintainer's
 direction).
+
+*File types* (2026-11-27, #119, on a design adviser's recommendation).
+The R type of a column read follows its Delta type, from one file and one
+snapshot to the next. Each surviving file's Parquet type for each column
+the read returns or filters on is checked against the schema, from its
+read plan and schema, before any row is decoded. Read as written: INT32
+with INT(8) for `byte`; INT(8) or INT(16) for `short`; INT32, or INT(8),
+INT(16) or INT(32), for `integer`; INT64 or INT(64) for `long`; FLOAT for
+`float`; DOUBLE or FLOAT for `double`; BYTE_ARRAY with STRING for
+`string`; BYTE_ARRAY or FIXED_LEN_BYTE_ARRAY without a logical type for
+`binary`; BOOLEAN; INT32 DATE for `date`; INT64 TIMESTAMP of any unit,
+adjusted to UTC or not, for `timestamp` and `timestamp_ntz`, and INT96
+for `timestamp` only; DECIMAL of the column's scale and a precision up to
+its own for `decimal(p, s)`. Widened: an INT32 (or INT(8), INT(16),
+INT(32)) of a `long` column reads as the `long` mapping, a double or an
+`integer64`, as `deltalake` upcasts it. Anything else (strings in a `long`
+column, INT64 in an `integer` one, unsigned integers, a decimal of another
+scale, a binary column holding strings) is a `zulake_error_corrupt_log`
+with `file`, `column`, `type` (the Delta type), `physical_type` and
+`logical_type`. A deliberate difference: `deltalake` 1.7.0 reads most of
+these through Arrow casts whose success depends on the values (strings
+that parse as numbers, an INT64 whose values fit an `integer`, a decimal
+rounded to the column's scale); zulake refuses them, since a cast that
+works on one file and fails on the next would make the R type depend on
+the file. Why: a `long` over strings returned a character column, an
+`integer` over INT64 returned 2^40, and a `long` from INT32 and INT64
+files was refused as two types. Hostile logs `data-type-string-for-long`
+and `data-type-long-for-integer`; fixture `zl-int32-in-long` (an INT32
+file appended by hand to an INT64 one), against `deltalake`'s read.
+
+*Partition columns read as data columns* (2026-11-27, #118, on a design
+adviser's recommendation). `lake_read()` returns a partition column with
+the values and the R type a data column of its Delta type has: a `float`
+value rounded through single precision (1.1 reads as 1.100000023841858,
+16777217 as 16777216, 1e39 as `Inf`), in `lake_files()` and pruning too,
+so that all three see the number the read returns; an `integer` an R
+integer, -2^31 then `NA` with qio's warning text, as qio reads an INT32 of
+-2^31 (pruning sees the `NA` too); a `binary` value a raw vector of the
+UTF-8 bytes of the log's string, what `deltalake` and Spark read, `NULL`
+for null. `lake_files()` and `lake_partitions()` keep an `integer` as its
+exact double and a `binary` value as the log's text: they describe the
+log. The text is rounded to a double before the float, so a value within
+half a double step of a point halfway between two floats can round one
+float step away from `deltalake`'s direct parse, a documented difference
+in rare values. A `long` partition value past 2^53 - 1 stays a
+`zulake_error_int64` with `int64 = "double"`, where a data column reads
+`NA` with qio's warning (open point). Fixture `zl-partition-types` holds
+every partition type twice, as a partition and as a data column with the
+same values, and the two read `identical()`, as `deltalake` reads them;
+its version 1 adds partition texts with nine fraction digits and the
+float texts above.
+
+*A flat column whose path a nested one also renders* (2026-11-27, #116,
+on a design adviser's recommendation). qio selects columns by dotted path
+only, and refuses `a.b` as ambiguous when a flat column `a.b` sits beside
+a struct `a` with a field `b`. Until it can select it otherwise
+(pedrobtz/qio#78), such a column, found from the schema's structs or from
+a file's read plan, is one qio cannot return: left out with
+`zulake_warning_column_skipped`, or a `zulake_error_column_unreadable`
+when named in `columns` or used in `filter`, and the rest of the read
+works. A nested path that only starts with the name (`a.b.c`) counts too,
+which may leave out a column qio could tell apart. Reading the whole file
+without a selection was rejected: it decodes every column, nested ones
+included, for a rare schema. Fixture `zl-dotted-name`, against
+`deltalake`'s read of its other columns.
+
+*Errors of the read path* (2026-11-27, #123). An error qio raises on a
+data file (opening it, its read plan, a footer count, decoding a page) is
+a `zulake_error_storage` with the file's `path` in the log, qio's message
+kept in zulake's and its condition as `parent`. A download cache
+directory that cannot be created or written (a file in its place, a
+read-only directory) is a `zulake_error_storage` saying so, with no base
+warning. A deletion-vector file that is not there (a HEAD `404`, a local
+file gone) is a `zulake_error_storage` "no such file", not a corrupt log.
 
 A `decimal(p, s)` data or partition column is a double when p <= 15,
 where a double holds it exactly; a wider one is a column `qio` cannot

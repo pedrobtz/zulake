@@ -17,6 +17,15 @@
    "message": "Kernel error: Json error: Encountered unexpected '{' whilst parsing object"
   }
  },
+ "data-type-long-for-integer": {
+  "refusal": null
+ },
+ "data-type-string-for-long": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: Json error: whilst decoding field 'minValues': whilst decoding field 's': failed to parse \"\" as Int64"
+  }
+ },
  "decimal-partition-exponent": {
   "refusal": {
    "class": "DeltaError",
@@ -111,6 +120,18 @@
   "refusal": {
    "class": "DeltaError",
    "message": "Kernel error: Schema error: Duplicate field name (case-insensitive): 'label'"
+  }
+ },
+ "schema-duplicate-name-case": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: Schema error: Duplicate field name (case-insensitive): 'LABEL'"
+  }
+ },
+ "schema-duplicate-name-case-nested": {
+  "refusal": {
+   "class": "DeltaError",
+   "message": "Kernel error: Schema error: Duplicate field name (case-insensitive): 'A' at line 1 column 309"
   }
  },
  "schema-empty-name": {

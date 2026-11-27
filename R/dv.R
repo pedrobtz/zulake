@@ -348,27 +348,32 @@ dv_file <- function(tbl, dv, bad) {
     }
     storage <- tbl$storage
     info <- storage$head(rel)
+    if (is.null(info)) {
+      abort_no_file(rel)
+    }
     return(list(
       name = rel,
-      size = if (is.null(info)) NA_real_ else info$size,
+      size = info$size,
       range = function(from, to) storage$get_range(rel, from, to)
     ))
   }
   remote <- storage_for_absolute(tbl$storage, text)
   if (!is.null(remote)) {
     info <- remote$storage$head(remote$rel)
+    if (is.null(info)) {
+      abort_no_file(text)
+    }
     return(list(
       name = text,
-      size = if (is.null(info)) NA_real_ else info$size,
+      size = info$size,
       range = function(from, to) remote$storage$get_range(remote$rel, from, to)
     ))
   }
   local <- absolute_local_path(text)
-  size <- if (file.exists(local) && !dir.exists(local)) {
-    file.size(local)
-  } else {
-    NA_real_
+  if (!file.exists(local) || dir.exists(local)) {
+    abort_no_file(text)
   }
+  size <- file.size(local)
   list(
     name = text,
     size = size,

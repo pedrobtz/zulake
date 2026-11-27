@@ -176,8 +176,12 @@ oracle_partition_frame <- function(table, version) {
         if (is.null(v)) NA_character_ else if (is.double(v)) chartr(",", ".", sprintf("%.17g", v)) else as.character(v)
       }, "")
       out[[name]] <- switch(arrow,
-        int8 = , int16 = , int32 = as.integer(vals),
-        int64 = as.numeric(vals),
+        # An int32 of -2^31 is NA, as the read gives it (#118).
+        int8 = , int16 = , int32 = suppressWarnings(as.integer(vals)),
+        # Past 15 digits as text, which a filter compares exactly where a
+        # double with no exact 15-digit form is refused.
+        int64 = if (any(nchar(sub("^-", "", vals)) > 15L, na.rm = TRUE)) vals else as.numeric(vals),
+        bool = as.logical(vals),
         float = , double = as.numeric(sub("^([+-]?)inf$", "\\1Inf", vals, ignore.case = TRUE)),
         `date32[day]` = as.Date(vals),
         vals
@@ -191,13 +195,24 @@ oracle_partition_frame <- function(table, version) {
 # deltalake's partitions() rows, with each float or double value (the
 # text the log holds: "inf", "-inf", "NaN", "1.5") in the canonical
 # spelling of the double it means ("Infinity", "-Infinity", "NaN"), as
-# lake_partitions() returns it typed (#67). `types` are the table's Delta
-# types by column name.
+# lake_partitions() returns it typed (#67); a float rounded through single
+# precision, as deltalake reads it (#118); a time without its digits past
+# the microsecond (#118), and with the "T" of the canonical form where the
+# log's text has a space.
+# `types` are the table's Delta types by column name.
 oracle_partition_rows <- function(rows, types) {
   lapply(rows, function(r) {
     for (col in names(r)) {
       if (types[[col]] %in% c("float", "double") && is.character(r[[col]])) {
         r[[col]] <- as.numeric(sub("^([+-]?)inf$", "\\1Inf", r[[col]], ignore.case = TRUE))
+        if (types[[col]] == "float" && is.finite(r[[col]])) {
+          r[[col]] <- readBin(writeBin(r[[col]], raw(), size = 4L), "double", size = 4L)
+        }
+      }
+      if (types[[col]] %in% c("timestamp", "timestamp_ntz") && is.character(r[[col]])) {
+        # The log's text, which deltalake reads to the microsecond.
+        r[[col]] <- sub("([.][0-9]{6})[0-9]+", "\\1", r[[col]])
+        r[[col]] <- sub(" ", "T", r[[col]], fixed = TRUE)
       }
     }
     r

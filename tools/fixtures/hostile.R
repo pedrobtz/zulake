@@ -295,8 +295,8 @@ write_lines(f, lines[1:2])
 # Schemas zulake cannot read as written, each made from zl-basic's commit 0
 # (fields id long, label string, x double) by one edit of its schemaString
 # (#120).
-schema_edit <- function(name, from, to) {
-  d <- copy_table("zl-basic", name)
+schema_edit <- function(name, from, to, table = "zl-basic") {
+  d <- copy_table(table, name)
   f <- commit_path(d, 0L)
   lines <- read_lines(f)
   stopifnot(sum(grepl(from, lines, fixed = TRUE)) == 1L)
@@ -313,6 +313,33 @@ schema_edit("schema-timestamp-ntz-without-feature", label, "{\\\"name\\\":\\\"la
 schema_edit("schema-duplicate-name", x_name, "{\\\"name\\\":\\\"label\\\",")
 schema_edit("schema-field-without-name", x_name, "{")
 schema_edit("schema-empty-name", x_name, "{\\\"name\\\":\\\"\\\",")
+
+# Names that differ only in case, which PROTOCOL.md does not allow: field
+# `x` renamed `LABEL` beside `label`, and `x` typed as a struct with fields
+# `a` and `A` (#134).
+schema_edit("schema-duplicate-name-case", x_name, "{\\\"name\\\":\\\"LABEL\\\",")
+x_double <- "{\\\"name\\\":\\\"x\\\",\\\"type\\\":\\\"double\\\","
+schema_edit(
+  "schema-duplicate-name-case-nested",
+  x_double,
+  paste0(
+    "{\\\"name\\\":\\\"x\\\",\\\"type\\\":{\\\"type\\\":\\\"struct\\\",\\\"fields\\\":[",
+    "{\\\"name\\\":\\\"a\\\",\\\"type\\\":\\\"long\\\",\\\"nullable\\\":true,\\\"metadata\\\":{}},",
+    "{\\\"name\\\":\\\"A\\\",\\\"type\\\":\\\"long\\\",\\\"nullable\\\":true,\\\"metadata\\\":{}}]},"
+  )
+)
+
+# A schema whose type for a column is not the one its data files hold
+# (#119): zl-types' `s` (strings, in its one data file, so that deltalake's
+# refusal names one value whatever order it reads files in) typed `long`,
+# and zl-basic's `id` (INT64 in every file) typed `integer`.
+schema_edit(
+  "data-type-string-for-long",
+  "{\\\"name\\\":\\\"s\\\",\\\"type\\\":\\\"string\\\",",
+  "{\\\"name\\\":\\\"s\\\",\\\"type\\\":\\\"long\\\",",
+  table = "zl-types"
+)
+schema_edit("data-type-long-for-integer", id_long, "{\\\"name\\\":\\\"id\\\",\\\"type\\\":\\\"integer\\\",")
 
 # A name-mode table whose fields `letter` and `int` have one physical name
 # in commit 0's schema; commit 2's schema has `int`'s own again (#120).

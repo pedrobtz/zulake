@@ -1,0 +1,1017 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "clientVersion": "zulake-fixtures",
+    "operation": "WRITE",
+    "operationParameters": {},
+    "timestamp": 1795812708059
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1795812708039,
+    "partitionValues": {
+     "p_binary": "abc",
+     "p_boolean": "true",
+     "p_byte": "-128",
+     "p_date": "1970-01-01",
+     "p_decimal": "12.30",
+     "p_double": "0.1",
+     "p_float": "16777217",
+     "p_integer": "-2147483648",
+     "p_long": "9007199254740991",
+     "p_short": "-32768",
+     "p_string": "a b",
+     "p_timestamp": "2024-01-05 10:00:00.123456789",
+     "p_timestamp_ntz": "2024-01-05 10:00:00.123456"
+    },
+    "path": "part-3.parquet",
+    "size": 4016,
+    "stats": "{\"numRecords\": 1}"
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1795812708039,
+    "partitionValues": {
+     "p_binary": "abc",
+     "p_boolean": "true",
+     "p_byte": "-128",
+     "p_date": "1970-01-01",
+     "p_decimal": "12.30",
+     "p_double": "0.1",
+     "p_float": "1e39",
+     "p_integer": "-2147483648",
+     "p_long": "9007199254740991",
+     "p_short": "-32768",
+     "p_string": "a b",
+     "p_timestamp": "2024-01-05T10:00:00.999999999Z",
+     "p_timestamp_ntz": "2024-01-05 10:00:00.123456"
+    },
+    "path": "part-4.parquet",
+    "size": 4016,
+    "stats": "{\"numRecords\": 1}"
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [
+    {
+     "d_boolean": true,
+     "d_byte": -128,
+     "d_date": "1970-01-01",
+     "d_decimal": "12.30",
+     "d_double": 0.1,
+     "d_float": 1.100000023841858,
+     "d_integer": -2147483648,
+     "d_long": "9007199254740991",
+     "d_short": -32768,
+     "d_string": "a b",
+     "d_timestamp": "2024-01-05T10:00:00.123000Z",
+     "d_timestamp_ntz": "2024-01-05T10:00:00.123000",
+     "id": "0"
+    },
+    {
+     "d_boolean": false,
+     "d_byte": 127,
+     "d_date": "2024-02-29",
+     "d_decimal": "-0.01",
+     "d_double": 0.0,
+     "d_float": 3.4028234663852886e+38,
+     "d_integer": 2147483647,
+     "d_long": "-5",
+     "d_short": 7,
+     "d_string": "é/=%",
+     "d_timestamp": "1969-12-31T23:59:59.999000Z",
+     "d_timestamp_ntz": "2000-01-01T00:00:00.000000",
+     "id": "1"
+    },
+    {
+     "d_boolean": null,
+     "d_byte": null,
+     "d_date": null,
+     "d_decimal": null,
+     "d_double": null,
+     "d_float": null,
+     "d_integer": null,
+     "d_long": null,
+     "d_short": null,
+     "d_string": null,
+     "d_timestamp": null,
+     "d_timestamp_ntz": null,
+     "id": "2"
+    },
+    null,
+    null
+   ],
+   "min": [
+    {
+     "d_boolean": true,
+     "d_byte": -128,
+     "d_date": "1970-01-01",
+     "d_decimal": "12.30",
+     "d_double": 0.1,
+     "d_float": 1.100000023841858,
+     "d_integer": -2147483648,
+     "d_long": "9007199254740991",
+     "d_short": -32768,
+     "d_string": "a b",
+     "d_timestamp": "2024-01-05T10:00:00.123000Z",
+     "d_timestamp_ntz": "2024-01-05T10:00:00.123000",
+     "id": "0"
+    },
+    {
+     "d_boolean": false,
+     "d_byte": 127,
+     "d_date": "2024-02-29",
+     "d_decimal": "-0.01",
+     "d_double": -0.0,
+     "d_float": 3.4028234663852886e+38,
+     "d_integer": 2147483647,
+     "d_long": "-5",
+     "d_short": 7,
+     "d_string": "é/=%",
+     "d_timestamp": "1969-12-31T23:59:59.999000Z",
+     "d_timestamp_ntz": "2000-01-01T00:00:00.000000",
+     "id": "1"
+    },
+    {
+     "d_boolean": null,
+     "d_byte": null,
+     "d_date": null,
+     "d_decimal": null,
+     "d_double": null,
+     "d_float": null,
+     "d_integer": null,
+     "d_long": null,
+     "d_short": null,
+     "d_string": null,
+     "d_timestamp": null,
+     "d_timestamp_ntz": null,
+     "id": "2"
+    },
+    null,
+    null
+   ],
+   "modification_time": [
+    "1795812708039",
+    "1795812708039",
+    "1795812708039",
+    "1795812708039",
+    "1795812708039"
+   ],
+   "null_count": [
+    {
+     "d_binary": null,
+     "d_boolean": "0",
+     "d_byte": "0",
+     "d_date": "0",
+     "d_decimal": "0",
+     "d_double": "0",
+     "d_float": "0",
+     "d_integer": "0",
+     "d_long": "0",
+     "d_short": "0",
+     "d_string": "0",
+     "d_timestamp": "0",
+     "d_timestamp_ntz": "0",
+     "id": "0"
+    },
+    {
+     "d_binary": null,
+     "d_boolean": "0",
+     "d_byte": "0",
+     "d_date": "0",
+     "d_decimal": "0",
+     "d_double": "0",
+     "d_float": "0",
+     "d_integer": "0",
+     "d_long": "0",
+     "d_short": "0",
+     "d_string": "0",
+     "d_timestamp": "0",
+     "d_timestamp_ntz": "0",
+     "id": "0"
+    },
+    {
+     "d_binary": null,
+     "d_boolean": "1",
+     "d_byte": "1",
+     "d_date": "1",
+     "d_decimal": "1",
+     "d_double": "1",
+     "d_float": "1",
+     "d_integer": "1",
+     "d_long": "1",
+     "d_short": "1",
+     "d_string": "1",
+     "d_timestamp": "1",
+     "d_timestamp_ntz": "1",
+     "id": "0"
+    },
+    null,
+    null
+   ],
+   "num_records": [
+    "1",
+    "1",
+    "1",
+    "1",
+    "1"
+   ],
+   "partition": [
+    {
+     "p_binary": "616263",
+     "p_boolean": true,
+     "p_byte": -128,
+     "p_date": "1970-01-01",
+     "p_decimal": "12.30",
+     "p_double": 0.1,
+     "p_float": 1.100000023841858,
+     "p_integer": -2147483648,
+     "p_long": "9007199254740991",
+     "p_short": -32768,
+     "p_string": "a b",
+     "p_timestamp": "2024-01-05T10:00:00.123456Z",
+     "p_timestamp_ntz": "2024-01-05T10:00:00.123456"
+    },
+    {
+     "p_binary": "0102",
+     "p_boolean": false,
+     "p_byte": 127,
+     "p_date": "2024-02-29",
+     "p_decimal": "-0.01",
+     "p_double": -0.0,
+     "p_float": 3.4028234663852886e+38,
+     "p_integer": 2147483647,
+     "p_long": "-5",
+     "p_short": 7,
+     "p_string": "é/=%",
+     "p_timestamp": "1969-12-31T23:59:59.999999Z",
+     "p_timestamp_ntz": "2000-01-01T00:00:00.000000"
+    },
+    {
+     "p_binary": null,
+     "p_boolean": null,
+     "p_byte": null,
+     "p_date": null,
+     "p_decimal": null,
+     "p_double": null,
+     "p_float": null,
+     "p_integer": null,
+     "p_long": null,
+     "p_short": null,
+     "p_string": null,
+     "p_timestamp": null,
+     "p_timestamp_ntz": null
+    },
+    {
+     "p_binary": "616263",
+     "p_boolean": true,
+     "p_byte": -128,
+     "p_date": "1970-01-01",
+     "p_decimal": "12.30",
+     "p_double": 0.1,
+     "p_float": 16777216.0,
+     "p_integer": -2147483648,
+     "p_long": "9007199254740991",
+     "p_short": -32768,
+     "p_string": "a b",
+     "p_timestamp": "2024-01-05T10:00:00.123456Z",
+     "p_timestamp_ntz": "2024-01-05T10:00:00.123456"
+    },
+    {
+     "p_binary": "616263",
+     "p_boolean": true,
+     "p_byte": -128,
+     "p_date": "1970-01-01",
+     "p_decimal": "12.30",
+     "p_double": 0.1,
+     "p_float": "Infinity",
+     "p_integer": -2147483648,
+     "p_long": "9007199254740991",
+     "p_short": -32768,
+     "p_string": "a b",
+     "p_timestamp": "2024-01-05T10:00:00.999999Z",
+     "p_timestamp_ntz": "2024-01-05T10:00:00.123456"
+    }
+   ],
+   "path": [
+    "part-0.parquet",
+    "part-1.parquet",
+    "part-2.parquet",
+    "part-3.parquet",
+    "part-4.parquet"
+   ],
+   "size_bytes": [
+    "4235",
+    "4240",
+    "3656",
+    "4016",
+    "4016"
+   ]
+  },
+  "num_rows": 5,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<id: int64, d_byte: int64, d_short: int64, d_integer: int64, d_long: int64, d_float: int64, d_double: int64, d_decimal: int64, d_string: int64, d_boolean: int64, d_date: int64, d_timestamp: int64, d_timestamp_ntz: int64, d_binary: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<id: int64, d_byte: int8, d_short: int16, d_integer: int32, d_long: int64, d_float: float, d_double: double, d_decimal: decimal128(10, 2), d_string: string, d_boolean: bool, d_date: date32[day], d_timestamp: timestamp[us, tz=UTC], d_timestamp_ntz: timestamp[us]>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<id: int64, d_byte: int8, d_short: int16, d_integer: int32, d_long: int64, d_float: float, d_double: double, d_decimal: decimal128(10, 2), d_string: string, d_boolean: bool, d_date: date32[day], d_timestamp: timestamp[us, tz=UTC], d_timestamp_ntz: timestamp[us]>"
+   },
+   {
+    "name": "partition",
+    "nullable": true,
+    "type": "struct<p_byte: int8, p_short: int16, p_integer: int32, p_long: int64, p_float: float, p_double: double, p_decimal: decimal128(10, 2), p_string: string, p_boolean: bool, p_date: date32[day], p_timestamp: timestamp[us, tz=UTC], p_timestamp_ntz: timestamp[us], p_binary: binary>"
+   }
+  ]
+ },
+ "count": 5,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "clientVersion": "zulake-fixtures",
+   "operation": "WRITE",
+   "operationParameters": {},
+   "timestamp": 1795812708059,
+   "version": 1
+  },
+  {
+   "clientVersion": "delta-rs.py-1.7.0",
+   "engineInfo": "delta-rs:py-1.7.0",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "execution_time_ms": 7,
+    "num_added_files": 3,
+    "num_added_rows": 3,
+    "num_partitions": 0,
+    "num_removed_files": 0,
+    "num_retries": 0
+   },
+   "operationParameters": {
+    "mode": "ErrorIfExists",
+    "partitionBy": "[\"p_byte\",\"p_short\",\"p_integer\",\"p_long\",\"p_float\",\"p_double\",\"p_decimal\",\"p_string\",\"p_boolean\",\"p_date\",\"p_timestamp\",\"p_timestamp_ntz\",\"p_binary\"]"
+   },
+   "timestamp": 1795812708039,
+   "txnId": "0c213cdb-79c7-46ac-b6bf-863902f782c5",
+   "version": 0
+  }
+ ],
+ "loaded_version": 1,
+ "metadata": {
+  "configuration": {},
+  "created_time": 1795812708032,
+  "description": null,
+  "id": "f72bc50d-d0ca-4f18-9ae8-d834eeee1ae3",
+  "name": "partition-types",
+  "partition_columns": [
+   "p_byte",
+   "p_short",
+   "p_integer",
+   "p_long",
+   "p_float",
+   "p_double",
+   "p_decimal",
+   "p_string",
+   "p_boolean",
+   "p_date",
+   "p_timestamp",
+   "p_timestamp_ntz",
+   "p_binary"
+  ]
+ },
+ "partitions": [
+  {
+   "p_binary": "\u0001\u0002",
+   "p_boolean": "false",
+   "p_byte": "127",
+   "p_date": "2024-02-29",
+   "p_decimal": "-0.01",
+   "p_double": "-0",
+   "p_float": "340282350000000000000000000000000000000",
+   "p_integer": "2147483647",
+   "p_long": "-5",
+   "p_short": "7",
+   "p_string": "é/=%",
+   "p_timestamp": "1969-12-31T23:59:59.999999Z",
+   "p_timestamp_ntz": "2000-01-01 00:00:00.000000"
+  },
+  {
+   "p_binary": "abc",
+   "p_boolean": "true",
+   "p_byte": "-128",
+   "p_date": "1970-01-01",
+   "p_decimal": "12.30",
+   "p_double": "0.1",
+   "p_float": "1.1",
+   "p_integer": "-2147483648",
+   "p_long": "9007199254740991",
+   "p_short": "-32768",
+   "p_string": "a b",
+   "p_timestamp": "2024-01-05T10:00:00.123456Z",
+   "p_timestamp_ntz": "2024-01-05 10:00:00.123456"
+  },
+  {
+   "p_binary": "abc",
+   "p_boolean": "true",
+   "p_byte": "-128",
+   "p_date": "1970-01-01",
+   "p_decimal": "12.30",
+   "p_double": "0.1",
+   "p_float": "16777217",
+   "p_integer": "-2147483648",
+   "p_long": "9007199254740991",
+   "p_short": "-32768",
+   "p_string": "a b",
+   "p_timestamp": "2024-01-05 10:00:00.123456789",
+   "p_timestamp_ntz": "2024-01-05 10:00:00.123456"
+  },
+  {
+   "p_binary": "abc",
+   "p_boolean": "true",
+   "p_byte": "-128",
+   "p_date": "1970-01-01",
+   "p_decimal": "12.30",
+   "p_double": "0.1",
+   "p_float": "1e39",
+   "p_integer": "-2147483648",
+   "p_long": "9007199254740991",
+   "p_short": "-32768",
+   "p_string": "a b",
+   "p_timestamp": "2024-01-05T10:00:00.999999999Z",
+   "p_timestamp_ntz": "2024-01-05 10:00:00.123456"
+  },
+  {
+   "p_binary": null,
+   "p_boolean": null,
+   "p_byte": null,
+   "p_date": null,
+   "p_decimal": null,
+   "p_double": null,
+   "p_float": null,
+   "p_integer": null,
+   "p_long": null,
+   "p_short": null,
+   "p_string": null,
+   "p_timestamp": null,
+   "p_timestamp_ntz": null
+  }
+ ],
+ "protocol": {
+  "min_reader_version": 3,
+  "min_writer_version": 7,
+  "reader_features": [
+   "timestampNtz"
+  ],
+  "writer_features": [
+   "timestampNtz"
+  ]
+ },
+ "read": {
+  "columns": {
+   "d_binary": [
+    "616263",
+    "0102",
+    null,
+    "616263",
+    "616263"
+   ],
+   "d_boolean": [
+    true,
+    false,
+    null,
+    true,
+    true
+   ],
+   "d_byte": [
+    -128,
+    127,
+    null,
+    -128,
+    -128
+   ],
+   "d_date": [
+    "1970-01-01",
+    "2024-02-29",
+    null,
+    "1970-01-01",
+    "1970-01-01"
+   ],
+   "d_decimal": [
+    "12.30",
+    "-0.01",
+    null,
+    "12.30",
+    "12.30"
+   ],
+   "d_double": [
+    0.1,
+    -0.0,
+    null,
+    0.1,
+    0.1
+   ],
+   "d_float": [
+    1.100000023841858,
+    3.4028234663852886e+38,
+    null,
+    16777216.0,
+    "Infinity"
+   ],
+   "d_integer": [
+    -2147483648,
+    2147483647,
+    null,
+    -2147483648,
+    -2147483648
+   ],
+   "d_long": [
+    "9007199254740991",
+    "-5",
+    null,
+    "9007199254740991",
+    "9007199254740991"
+   ],
+   "d_short": [
+    -32768,
+    7,
+    null,
+    -32768,
+    -32768
+   ],
+   "d_string": [
+    "a b",
+    "é/=%",
+    null,
+    "a b",
+    "a b"
+   ],
+   "d_timestamp": [
+    "2024-01-05T10:00:00.123456Z",
+    "1969-12-31T23:59:59.999999Z",
+    null,
+    "2024-01-05T10:00:00.123456Z",
+    "2024-01-05T10:00:00.999999Z"
+   ],
+   "d_timestamp_ntz": [
+    "2024-01-05T10:00:00.123456",
+    "2000-01-01T00:00:00.000000",
+    null,
+    "2024-01-05T10:00:00.123456",
+    "2024-01-05T10:00:00.123456"
+   ],
+   "id": [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4"
+   ],
+   "p_binary": [
+    "616263",
+    "0102",
+    null,
+    "616263",
+    "616263"
+   ],
+   "p_boolean": [
+    true,
+    false,
+    null,
+    true,
+    true
+   ],
+   "p_byte": [
+    -128,
+    127,
+    null,
+    -128,
+    -128
+   ],
+   "p_date": [
+    "1970-01-01",
+    "2024-02-29",
+    null,
+    "1970-01-01",
+    "1970-01-01"
+   ],
+   "p_decimal": [
+    "12.30",
+    "-0.01",
+    null,
+    "12.30",
+    "12.30"
+   ],
+   "p_double": [
+    0.1,
+    -0.0,
+    null,
+    0.1,
+    0.1
+   ],
+   "p_float": [
+    1.100000023841858,
+    3.4028234663852886e+38,
+    null,
+    16777216.0,
+    "Infinity"
+   ],
+   "p_integer": [
+    -2147483648,
+    2147483647,
+    null,
+    -2147483648,
+    -2147483648
+   ],
+   "p_long": [
+    "9007199254740991",
+    "-5",
+    null,
+    "9007199254740991",
+    "9007199254740991"
+   ],
+   "p_short": [
+    -32768,
+    7,
+    null,
+    -32768,
+    -32768
+   ],
+   "p_string": [
+    "a b",
+    "é/=%",
+    null,
+    "a b",
+    "a b"
+   ],
+   "p_timestamp": [
+    "2024-01-05T10:00:00.123456Z",
+    "1969-12-31T23:59:59.999999Z",
+    null,
+    "2024-01-05T10:00:00.123456Z",
+    "2024-01-05T10:00:00.999999Z"
+   ],
+   "p_timestamp_ntz": [
+    "2024-01-05T10:00:00.123456",
+    "2000-01-01T00:00:00.000000",
+    null,
+    "2024-01-05T10:00:00.123456",
+    "2024-01-05T10:00:00.123456"
+   ]
+  },
+  "num_rows": 5,
+  "schema": [
+   {
+    "name": "id",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "p_byte",
+    "nullable": true,
+    "type": "int8"
+   },
+   {
+    "name": "p_short",
+    "nullable": true,
+    "type": "int16"
+   },
+   {
+    "name": "p_integer",
+    "nullable": true,
+    "type": "int32"
+   },
+   {
+    "name": "p_long",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "p_float",
+    "nullable": true,
+    "type": "float"
+   },
+   {
+    "name": "p_double",
+    "nullable": true,
+    "type": "double"
+   },
+   {
+    "name": "p_decimal",
+    "nullable": true,
+    "type": "decimal128(10, 2)"
+   },
+   {
+    "name": "p_string",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "name": "p_boolean",
+    "nullable": true,
+    "type": "bool"
+   },
+   {
+    "name": "p_date",
+    "nullable": true,
+    "type": "date32[day]"
+   },
+   {
+    "name": "p_timestamp",
+    "nullable": true,
+    "type": "timestamp[us, tz=UTC]"
+   },
+   {
+    "name": "p_timestamp_ntz",
+    "nullable": true,
+    "type": "timestamp[us]"
+   },
+   {
+    "name": "p_binary",
+    "nullable": true,
+    "type": "binary"
+   },
+   {
+    "name": "d_byte",
+    "nullable": true,
+    "type": "int8"
+   },
+   {
+    "name": "d_short",
+    "nullable": true,
+    "type": "int16"
+   },
+   {
+    "name": "d_integer",
+    "nullable": true,
+    "type": "int32"
+   },
+   {
+    "name": "d_long",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "d_float",
+    "nullable": true,
+    "type": "float"
+   },
+   {
+    "name": "d_double",
+    "nullable": true,
+    "type": "double"
+   },
+   {
+    "name": "d_decimal",
+    "nullable": true,
+    "type": "decimal128(10, 2)"
+   },
+   {
+    "name": "d_string",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "name": "d_boolean",
+    "nullable": true,
+    "type": "bool"
+   },
+   {
+    "name": "d_date",
+    "nullable": true,
+    "type": "date32[day]"
+   },
+   {
+    "name": "d_timestamp",
+    "nullable": true,
+    "type": "timestamp[us, tz=UTC]"
+   },
+   {
+    "name": "d_timestamp_ntz",
+    "nullable": true,
+    "type": "timestamp[us]"
+   },
+   {
+    "name": "d_binary",
+    "nullable": true,
+    "type": "binary"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {},
+    "name": "id",
+    "nullable": true,
+    "type": "long"
+   },
+   {
+    "metadata": {},
+    "name": "p_byte",
+    "nullable": true,
+    "type": "byte"
+   },
+   {
+    "metadata": {},
+    "name": "p_short",
+    "nullable": true,
+    "type": "short"
+   },
+   {
+    "metadata": {},
+    "name": "p_integer",
+    "nullable": true,
+    "type": "integer"
+   },
+   {
+    "metadata": {},
+    "name": "p_long",
+    "nullable": true,
+    "type": "long"
+   },
+   {
+    "metadata": {},
+    "name": "p_float",
+    "nullable": true,
+    "type": "float"
+   },
+   {
+    "metadata": {},
+    "name": "p_double",
+    "nullable": true,
+    "type": "double"
+   },
+   {
+    "metadata": {},
+    "name": "p_decimal",
+    "nullable": true,
+    "type": "decimal(10,2)"
+   },
+   {
+    "metadata": {},
+    "name": "p_string",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "metadata": {},
+    "name": "p_boolean",
+    "nullable": true,
+    "type": "boolean"
+   },
+   {
+    "metadata": {},
+    "name": "p_date",
+    "nullable": true,
+    "type": "date"
+   },
+   {
+    "metadata": {},
+    "name": "p_timestamp",
+    "nullable": true,
+    "type": "timestamp"
+   },
+   {
+    "metadata": {},
+    "name": "p_timestamp_ntz",
+    "nullable": true,
+    "type": "timestamp_ntz"
+   },
+   {
+    "metadata": {},
+    "name": "p_binary",
+    "nullable": true,
+    "type": "binary"
+   },
+   {
+    "metadata": {},
+    "name": "d_byte",
+    "nullable": true,
+    "type": "byte"
+   },
+   {
+    "metadata": {},
+    "name": "d_short",
+    "nullable": true,
+    "type": "short"
+   },
+   {
+    "metadata": {},
+    "name": "d_integer",
+    "nullable": true,
+    "type": "integer"
+   },
+   {
+    "metadata": {},
+    "name": "d_long",
+    "nullable": true,
+    "type": "long"
+   },
+   {
+    "metadata": {},
+    "name": "d_float",
+    "nullable": true,
+    "type": "float"
+   },
+   {
+    "metadata": {},
+    "name": "d_double",
+    "nullable": true,
+    "type": "double"
+   },
+   {
+    "metadata": {},
+    "name": "d_decimal",
+    "nullable": true,
+    "type": "decimal(10,2)"
+   },
+   {
+    "metadata": {},
+    "name": "d_string",
+    "nullable": true,
+    "type": "string"
+   },
+   {
+    "metadata": {},
+    "name": "d_boolean",
+    "nullable": true,
+    "type": "boolean"
+   },
+   {
+    "metadata": {},
+    "name": "d_date",
+    "nullable": true,
+    "type": "date"
+   },
+   {
+    "metadata": {},
+    "name": "d_timestamp",
+    "nullable": true,
+    "type": "timestamp"
+   },
+   {
+    "metadata": {},
+    "name": "d_timestamp_ntz",
+    "nullable": true,
+    "type": "timestamp_ntz"
+   },
+   {
+    "metadata": {},
+    "name": "d_binary",
+    "nullable": true,
+    "type": "binary"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "zl-partition-types",
+ "timestamp_lookup": [
+  {
+   "at": "2026-11-27T20:51:48.058Z",
+   "version": 0
+  },
+  {
+   "at": "2026-11-27T20:51:48.059Z",
+   "version": 1
+  }
+ ],
+ "transactions": {},
+ "version": 1
+}

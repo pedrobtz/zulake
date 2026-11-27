@@ -653,13 +653,20 @@ prune_info <- function(tbl, plan, int64) {
   for (col in intersect(used, pcols)) {
     raw <- partition_raw(actions, tbl, col)
     kind <- type_kind(types[[col]])
+    if (types[[col]] == "integer") {
+      # The read returns -2^31 as NA, R's integer NA (#118): pruning sees
+      # the value the row filter sees.
+      raw[whole_double(raw) %in% -2147483648] <- NA
+    }
     info$part[[col]] <- if (!is.na(kind) && kind == "exact") {
       raw
     } else {
       parse_partition_values(raw, types[[col]], int64, col)
     }
   }
-  data_cols <- setdiff(used, pcols)
+  # A void column holds no value in any file, whatever its statistics say
+  # (#133): its statistics are never used.
+  data_cols <- setdiff(used, c(pcols, names(types)[types %in% "void"]))
   if (length(data_cols)) {
     parsed <- parse_stats(file_stats_text(actions), tbl$files$path)
     for (col in data_cols) {

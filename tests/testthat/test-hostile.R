@@ -204,9 +204,9 @@ test_that("partition values are checked against the column's Delta type", {
   for (type in names(bad)) {
     for (x in bad[[type]]) expect_false(zulake:::partition_value_ok(x, type), label = paste(type, x))
   }
-  # A type the protocol may add later is not guessed at here; reading it
-  # is what refuses it.
-  expect_true(zulake:::partition_value_ok("anything", "void"))
+  # A void column holds only nulls, so no value is one (#133).
+  expect_false(zulake:::partition_value_ok("anything", "void"))
+  expect_false(zulake:::partition_value_ok("null", "void"))
 })
 
 test_that("partition values are checked on the physical name under column mapping, and empty means null", {
@@ -956,6 +956,8 @@ test_that("a schema zulake cannot read as written is refused at open, naming the
     "schema-upper-case-type" = list("corrupt_log", "label", "type \"STRING\""),
     "schema-field-without-type" = list("corrupt_log", "label", "has no type"),
     "schema-duplicate-name" = list("corrupt_log", "label", "two fields named \"label\""),
+    "schema-duplicate-name-case" = list("corrupt_log", "LABEL", "\"label\" and \"LABEL\", which differ only in case"),
+    "schema-duplicate-name-case-nested" = list("corrupt_log", "x.A", "\"a\" and \"A\", which differ only in case"),
     "schema-field-without-name" = list("corrupt_log", NULL, "field 3 of the schema has no name"),
     "schema-empty-name" = list("corrupt_log", NULL, "field 3 of the schema has no name"),
     "schema-variant-without-feature" = list("unsupported_feature", "label", "reader feature \"variantType\""),
@@ -976,6 +978,9 @@ test_that("a schema zulake cannot read as written is refused at open, naming the
     expect_match(conditionMessage(err), case[[3L]], fixed = TRUE, label = name)
   }
   expect_identical(tryCatch(lake_open(fixture_table("schema-variant-without-feature", "hostile")), error = identity)$feature, "variantType")
+  # deltalake 1.7.0 refuses both names that differ only in case.
+  expect_match(hostile_refusal("schema-duplicate-name-case")$message, "case-insensitive", fixed = TRUE)
+  expect_match(hostile_refusal("schema-duplicate-name-case-nested")$message, "case-insensitive", fixed = TRUE)
   expect_identical(tryCatch(lake_open(fixture_table("schema-timestamp-ntz-without-feature", "hostile")), error = identity)$feature, "timestampNtz")
 })
 
@@ -1019,7 +1024,9 @@ test_that("nested schemas are checked at every level, and every type of the prot
     field("ts", "timestamp"), field("d1", "decimal(1,0)"), field("d38", "decimal(38,38)"), field("dsp", "decimal(5, 2)"),
     field("a", list(type = "array", elementType = "long", containsNull = TRUE)),
     field("m", list(type = "map", keyType = "string", valueType = struct(field("v", "long")), valueContainsNull = TRUE)),
-    field("st", struct(field("x", "long"), field("X", "long")))
+    field("st", struct(field("x", "long"), field("y", "long"))),
+    # PROTOCOL.md defines void, a column of nulls only (#133), at any level.
+    field("v", "void"), field("sv", struct(field("x", "long"), field("nv", "void")))
   )
   expect_s3_class(open_schema(ok), "zulake_table")
   ntz <- protocol_line(3L, 7L, "timestampNtz", "timestampNtz")
@@ -1038,7 +1045,9 @@ test_that("nested schemas are checked at every level, and every type of the prot
     list(field("x", "decimal(39,0)"), "x", "type \"decimal(39,0)\""),
     list(field("x", "decimal(0,0)"), "x", "type \"decimal(0,0)\""),
     list(field("x", "decimal(5,6)"), "x", "type \"decimal(5,6)\""),
-    list(field("x", "void"), "x", "type \"void\""),
+    list(field("ID", "long"), "ID", "\"id\" and \"ID\", which differ only in case"),
+    list(field("s", struct(field("x", "long"), field("X", "long"))), "s.X", "\"x\" and \"X\", which differ only in case"),
+    list(field("interval", "interval year to month"), "interval", "type \"interval year to month\""),
     list(field("x", "interval day to second"), "x", "type \"interval day to second\""),
     list(list(name = 3L, type = "long"), NULL, "field 2 of the schema has no name")
   )
@@ -1069,4 +1078,20 @@ test_that("nested schemas are checked at every level, and every type of the prot
   # A physical name that is another field's logical name is legal.
   tbl <- open_schema(list(field("a", "long", pn("b")), field("b", "long", pn("a"))), protocol_line(2L, 5L), cm)
   expect_s3_class(tbl, "zulake_table")
+})
+
+test_that("names that differ only in case are folded in ASCII alone, whatever the locale (#134)", {
+  fold <- zulake:::fold_case
+  expect_identical(fold(c("ID", "Id", "a_B9", "\u00c9t\u00c9")), c("id", "id", "a_b9", "\u00c9t\u00c9"))
+  withr::with_locale(c(LC_CTYPE = "C", LC_COLLATE = "C"), {
+    expect_identical(fold("ABC"), "abc")
+    expect_identical(fold("\u00c9"), "\u00c9")
+  })
+  # Non-ASCII names that differ only in case are not refused: an
+  # under-refusal, documented (design section 4.2).
+  path <- hand_table(c(protocol_line(), metadata_line(c(id = "long", "\u00e9" = "long", "\u00c9" = "long")), add_line("a")))
+  expect_s3_class(lake_open(path), "zulake_table")
+  # Filters and `columns` still match names as written.
+  path <- hand_table(c(protocol_line(), metadata_line(c(id = "long")), add_line("a")))
+  expect_error(lake_read(lake_open(path), columns = "ID"), class = "zulake_error_argument")
 })

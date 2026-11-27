@@ -55,7 +55,8 @@ field_type <- function(field) {
 # ---- text to typed values ------------------------------------------------
 
 # "2024-01-05 10:00:00", "2024-01-05T10:00:00.123456Z" or with an offset
-# ("+01:00"), as POSIXct in UTC, to the microsecond. `NA` for a value that
+# ("+01:00"), as POSIXct in UTC, to the microsecond (digits past it are
+# dropped, #118). `NA` for a value that
 # is not a time: a calendar date that does not exist, an hour past 23, a
 # minute or second past 59, an offset past 18:00 or with minutes past 59.
 # The one parser for partition values (checked at open with it), statistics
@@ -86,8 +87,11 @@ parse_time_text <- function(x, zone = TRUE) {
     h <- as.numeric(part(4))
     m <- as.numeric(part(5))
     sec <- as.numeric(part(6))
-    frac <- part(7)
-    us <- ifelse(nzchar(frac), round(as.numeric(paste0("0", frac)) * 1e6), 0)
+    # Fraction digits past the microsecond are dropped, as deltalake drops
+    # them (#118): rounding moved a partition value to another
+    # microsecond, and .9999995 and up to the next second.
+    frac <- substr(paste0(sub("^[.]", "", part(7)), "000000"), 1L, 6L)
+    us <- as.numeric(frac)
     off <- part(8)
     off_h <- off_m <- rep(0, length(y))
     sign <- rep(1, length(y))
@@ -158,8 +162,10 @@ parse_date_text <- function(x) {
 # Partition values (character, NA for null) of one column as its Delta type
 # says (the protocol's "Partition Value Serialization"): integers (`byte`,
 # `short`) and doubles (`integer`, which an R integer cannot hold at -2^31,
-# `float`, `double`), logicals, Dates and POSIXct; `long` as 64-bit values
-# (int64.R); decimals, strings and binary as their text. snapshot_build()
+# `float`, rounded through single precision as a float data column is
+# (#118), `double`), logicals, Dates and POSIXct; `long` as 64-bit values
+# (int64.R); decimals, strings and binary as their text; `void` as NA
+# (#133). snapshot_build()
 # has checked every live value against its type (check_partition_values()),
 # so a value that does not parse here is a corrupt log.
 parse_partition_values <- function(x, type, int64, column) {
@@ -176,9 +182,10 @@ parse_partition_values <- function(x, type, int64, column) {
       int64,
       what
     ),
-    float = ,
+    float = float_double(partition_double(x)),
     double = partition_double(x),
     boolean = ifelse(is.na(x), NA, tolower(x) == "true"),
+    void = rep(NA, length(x)),
     date = parse_date_text(x),
     timestamp = parse_time_text(x, zone = TRUE),
     timestamp_ntz = parse_time_text(x, zone = FALSE),
@@ -216,6 +223,26 @@ partition_double <- function(x) {
     !is.na(special) | is.nan(special)
   ]
   out
+}
+
+# Doubles rounded to the nearest single-precision float, as the double qio
+# returns for a FLOAT column holds it: past the float range to an infinity,
+# below it to zero, NaN, infinities and the sign of zero kept (#118). The
+# text was rounded to a double first, so a value within half a double step
+# of a point halfway between two floats can round the other way from a
+# direct parse to a float, as deltalake makes; the difference is one float
+# step, in rare values, and documented in design section 4.2.
+float_double <- function(x) {
+  ok <- !is.na(x)
+  if (any(ok)) {
+    x[ok] <- readBin(
+      writeBin(x[ok], raw(), size = 4L),
+      "double",
+      n = sum(ok),
+      size = 4L
+    )
+  }
+  x
 }
 
 # Inf, -Inf or NaN for the spellings of an infinity or NaN that Rust's f64
@@ -264,24 +291,53 @@ partition_raw <- function(actions, tbl, col) {
   )
 }
 
-# Partition columns `columns` of `actions` typed as a read returns them:
-# as partition_table() does, except that a decimal of precision 15 or less
-# is a double (design section 7).
+# Partition columns `columns` of `actions` typed as a read returns them,
+# as a data column of the same type reads (#118): as partition_table() does,
+# except that a decimal of precision 15 or less is a double (design section
+# 7), an `integer` is an R integer, with -2^31 as NA and qio's warning for
+# it, and a `binary` value is a raw vector of the UTF-8 bytes of its text
+# (as deltalake and Spark read it), NULL for null.
 partition_read_table <- function(actions, tbl, int64, columns) {
   types <- column_types(tbl)
   out <- list()
   for (col in columns) {
     raw <- partition_raw(actions, tbl, col)
-    ps <- decimal_ps(types[[col]])
-    out[[col]] <- if (
-      !is.null(ps) && ps[["precision"]] <= max_double_precision
-    ) {
-      as.numeric(raw)
-    } else {
-      parse_partition_values(raw, types[[col]], int64, col)
-    }
+    type <- types[[col]]
+    ps <- decimal_ps(type)
+    out[col] <- list(
+      if (!is.null(ps) && ps[["precision"]] <= max_double_precision) {
+        as.numeric(raw)
+      } else if (type == "binary") {
+        lapply(raw, function(v) if (is.na(v)) NULL else charToRaw(enc2utf8(v)))
+      } else if (type == "integer") {
+        integer_values(parse_partition_values(raw, type, int64, col), col)
+      } else {
+        parse_partition_values(raw, type, int64, col)
+      }
+    )
   }
   new_data_frame(out, length(actions))
+}
+
+# 32-bit values held as doubles, as R integers: -2^31, which R keeps for
+# NA, becomes NA with the warning qio gives for the same value in a data
+# column.
+integer_values <- function(x, column) {
+  lost <- x %in% -2147483648
+  if (any(lost)) {
+    warning(
+      sprintf(
+        paste(
+          "Some INT32 values in column '%s' were coerced to NA because R's",
+          "integer type reserves -2147483648 as its missing value."
+        ),
+        column
+      ),
+      call. = FALSE
+    )
+    x[lost] <- NA
+  }
+  as.integer(x)
 }
 
 # Row `i` of a data frame of typed columns, as a named list of scalars.

@@ -303,7 +303,14 @@ test_that("a vector that disagrees with its descriptor or its data file is a cor
     if (case == "short") dv$pathOrInlineDv <- substring(test_z85_encode(uuid), 2L)
     if (case == "not_z85") dv$pathOrInlineDv <- paste0("ab", strrep("~", 20L))
     if (case == "size") dv$sizeInBytes <- length(vec) - 4L
-    tbl <- check(dv)
+    if (case %in% c("short", "not_z85")) {
+      tbl <- check(dv)
+    } else {
+      # A file that is not there is no such file, not a corrupt log (#123).
+      tbl <- lake_open(dv_table(dv))
+      expect_error(lake_read(tbl), "no such file", fixed = TRUE, class = "zulake_error_storage")
+      if (case == "missing") next
+    }
     if (case == "not_z85") {
       expect_error(lake_read(tbl), "a UUID that is not valid Z85", fixed = TRUE, class = "zulake_error_corrupt_log")
     }
