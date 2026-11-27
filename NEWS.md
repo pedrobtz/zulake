@@ -133,3 +133,8 @@
   or an encoded List Blobs name, and a NUL byte in a List Blobs answer,
   gave base R errors. They are a `zulake_error_corrupt_log`,
   `zulake_error_uri` or `zulake_error_storage` (#49).
+* Fixed: `abfss://user:password@<account>...` was taken as a container
+  named `user:password`, and the refusal quoted it and kept the URI in the
+  condition; it is now refused as user information without either (#48).
+  An Azure URI with an empty path segment (`.../lake//t`) is refused, as
+  the design says, instead of opening `t` (#61).

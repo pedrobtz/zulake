@@ -412,7 +412,16 @@ test_that("other schemes and malformed Azure URIs are refused, and a SAS is not 
     "https://acct.blob.core.windows.net/lake/t?sv=2023&sig=SECRETSIG",
     "https://acct.blob.core.windows.net/lake/t#frag",
     "https://user:SECRETPW@acct.blob.core.windows.net/lake/t",
-    "abfss://user:SECRETPW@lake@acct.dfs.core.windows.net/t"
+    "abfss://user:SECRETPW@lake@acct.dfs.core.windows.net/t",
+    # User information where abfss has its container (#48).
+    "abfss://admin:SECRETPW@acct.dfs.core.windows.net/t", "abfss://:SECRETPW@acct.dfs.core.windows.net/t",
+    # An empty leading or inner segment, however many (#61).
+    "https://acct.blob.core.windows.net/lake//zl-basic", "abfss://lake@acct.dfs.core.windows.net///zl-basic//",
+    "abfss://lake@acct.dfs.core.windows.net//zl-basic", "abfss://lake@acct.dfs.core.windows.net/zl-basic//",
+    "https://acct.blob.core.windows.net/lake//", "abfss://lake@acct.dfs.core.windows.net//",
+    # NUL or invalid UTF-8 once decoded (#49).
+    "abfss://lake@acct.dfs.core.windows.net/a%00b", "abfss://lake@acct.dfs.core.windows.net/a%FFb",
+    "https://acct.blob.core.windows.net/lake/a%C3%28b"
   )
   local_azure_fake(zuhttp::zu_mock_transport(function(req) stop("no request may be sent")))
   for (uri in refused) {
@@ -421,6 +430,12 @@ test_that("other schemes and malformed Azure URIs are refused, and a SAS is not 
     expect_no_token(e, "SECRETSIG")
     expect_no_token(e, "SECRETPW")
     expect_error(lake_is_table(uri), class = "zulake_error_uri")
+  }
+  # One trailing separator is not an empty segment.
+  log <- new.env()
+  local_azure_fake(azure_fake(fake_root(), log))
+  for (uri in c(paste0(fake_uri("zl-basic"), "/"), paste0(fake_uri("zl-basic", "blob"), "/"))) {
+    expect_true(lake_is_table(uri), label = uri)
   }
 })
 

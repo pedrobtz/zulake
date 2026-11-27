@@ -349,6 +349,10 @@ azure_fake <- function(root, log, container = "lake", page_size = 1000L, auth = 
       query = query, headers = as.list(headers), timeout = req$policy$timeout
     )
     log$requests[[length(log$requests) + 1L]] <- rec
+    decoded <- url_decode(segments)
+    if (length(segments) && any(decoded[-1L] %in% c("", ".", "..") | endsWith(raw_path, "/"))) {
+      stop("the Azure fake was sent a blob path with an empty, \".\" or \"..\" segment: ", url, call. = FALSE)
+    }
     if (is.function(override)) {
       out <- override(rec)
       if (!is.null(out)) return(out)

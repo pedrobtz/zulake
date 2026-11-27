@@ -59,6 +59,11 @@ parse_azure_uri <- function(uri) {
   }
   if (grepl("^abfss://", uri, ignore.case = TRUE)) {
     m <- regmatches(uri, regexec("^abfss://([^/@]*)@([^/]*)[.]dfs[.]core[.]windows[.]net(/.*)?$", uri, ignore.case = TRUE))[[1L]]
+    # Where abfss has its container, a ":" makes user information with a
+    # password, which is neither quoted nor kept with the condition (#48).
+    if (length(m) && grepl(":", m[2L], fixed = TRUE)) {
+      m <- character()
+    }
     container <- m[2L]
     account <- tolower(m[3L])
     path <- m[4L]
@@ -88,8 +93,13 @@ parse_azure_uri <- function(uri) {
       uri = uri
     )
   }
-  path <- percent_decode(gsub("^/+|/+$", "", path))
-  if (grepl("//", path, fixed = TRUE) || any(strsplit(path, "/", fixed = TRUE)[[1L]] %in% c(".", ".."))) {
+  # The separator after the container, and one trailing "/", are not
+  # segments; any other empty segment is refused, as "." and ".." are (#61).
+  path <- sub("^/", "", path)
+  trailing <- endsWith(path, "/")
+  path <- percent_decode(sub("/$", "", path), "uri")
+  if ((trailing && !nzchar(path)) || endsWith(path, "/") ||
+      (nzchar(path) && any(strsplit(path, "/", fixed = TRUE)[[1L]] %in% c("", ".", "..")))) {
     zulake_abort("uri", sprintf("%s has an empty, \".\" or \"..\" path segment.", format_string(uri)), uri = uri)
   }
   list(account = account, container = container, path = unname(path), uri = sub("/+$", "", uri))
