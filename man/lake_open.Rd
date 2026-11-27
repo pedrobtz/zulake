@@ -39,7 +39,9 @@ class \code{zulake_table}. \code{lake_version()} returns the version a snapshot
 holds, a whole number as a double.
 
 Every error is a condition of class \code{zulake_error}, with a subclass
-that says why: \code{zulake_error_not_table} (no Delta log at \code{uri}),
+that says why: \code{zulake_error_argument} (an argument of the wrong type
+or value, such as a \code{version} that is not a whole number),
+\code{zulake_error_not_table} (no Delta log at \code{uri}),
 \code{zulake_error_version} (no such version, or one no longer in the log),
 \code{zulake_error_uri} (a URI zulake cannot open), \code{zulake_error_storage} (a file that cannot be
 read; from Azure with the HTTP \code{status} and Azure's error \code{code}),
@@ -99,6 +101,10 @@ and once more when Azure answers \code{401} (an expired token); a second
 in the \code{Authorization} header: it is not kept in the snapshot, printed,
 or put in any error. Without \code{credentials}, requests are anonymous, which
 only a public container answers.
+
+A file the log names by an absolute Azure URI is read only when it is
+in the table's own account and container; one elsewhere is a
+\code{zulake_error_uri} error, and no request is sent there.
 
 The snapshot does not keep \code{credentials} either; later calls on it, such
 as \code{\link[=lake_read]{lake_read()}}, use it through the R session. A snapshot saved with

@@ -72,7 +72,9 @@
 #'   holds, a whole number as a double.
 #'
 #'   Every error is a condition of class `zulake_error`, with a subclass
-#'   that says why: `zulake_error_not_table` (no Delta log at `uri`),
+#'   that says why: `zulake_error_argument` (an argument of the wrong type
+#'   or value, such as a `version` that is not a whole number),
+#'   `zulake_error_not_table` (no Delta log at `uri`),
 #'   `zulake_error_version` (no such version, or one no longer in the log),
 #'   `zulake_error_uri` (a URI zulake cannot open), `zulake_error_storage` (a file that cannot be
 #'   read; from Azure with the HTTP `status` and Azure's error `code`),

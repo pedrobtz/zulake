@@ -130,9 +130,9 @@ mark_big_integers <- function(bytes) {
   if (identical(marked, text)) bytes else charToRaw(marked)
 }
 
-# `_delta_log/_last_checkpoint`, parsed, or NULL when the log has none. Its
-# `version` is checked here; the rest of it is used when checkpoints are
-# read (Stage 2b).
+# `_delta_log/_last_checkpoint`, parsed, or NULL when the log has none. Only
+# its `version` is read, and checked here; replay finds checkpoints in the
+# listing (design section 4.2), and the other fields are kept as parsed.
 read_last_checkpoint <- function(storage, entries) {
   if (!any(entries$kind == "last_checkpoint")) {
     return(NULL)

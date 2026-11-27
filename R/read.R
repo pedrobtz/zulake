@@ -46,8 +46,11 @@
 #' numbers, digit by digit, and a `string` column in UTF-8 byte order
 #' whatever the session's collation, as the table's statistics are. A value
 #' given as text, such as `"12.30"`, is read as that decimal number; a double
-#' that has no exact decimal form of 15 digits (`1/3`, `0.1 + 0.2`) is an
-#' error asking for the value as text. A `float` or `double` column takes
+#' that is not the number its 15-digit form reads back as (`1/3`,
+#' `0.1 + 0.2`) is an error asking for the value as text. R has already
+#' rounded a literal such as `9007199254740993` to a double
+#' (9007199254740992) before zulake sees it, so give such a value as text
+#' too. A `float` or `double` column takes
 #' only numbers: text there, such as `amount > "100"`, is an error, since R
 #' would compare it with the column as strings. A date or timestamp column takes a
 #' `Date` or `POSIXct`, or text such as `"2024-01-31"` or
@@ -90,7 +93,7 @@
 #' @param filter An expression over column names; see Details. `NULL`, the
 #'   default, keeps every row.
 #' @param int64 How 64-bit integers reach R, in data and partition columns:
-#'   `"double"` (the default), exact up to 2^53 (qio returns `NA` with a
+#'   `"double"` (the default), exact up to 2^53 - 1 (qio returns `NA` with a
 #'   warning past it, and a `long` partition value past 2^53 - 1 is an error
 #'   of class `zulake_error_int64`), or `"integer64"` from the bit64
 #'   package.

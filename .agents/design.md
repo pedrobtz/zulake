@@ -605,7 +605,7 @@ snapshot, never prints it, and redacts it from errors (D4).
 `POSIXct` (settled 2026-11-26, Stage 2: a character time would need a
 parser and a zone rule of its own). Every error is a condition of class
 `zulake_error` with one subclass per kind: `zulake_error_argument`,
-`zulake_error_uri` (a scheme with no backend yet), `zulake_error_storage`,
+`zulake_error_uri` (a URI or a path in the log that zulake will not open: a scheme with no backend, user information, a bad account, container or path segment, an absolute path off the table's storage; wording settled 2026-11-27, #91), `zulake_error_storage`,
 `zulake_error_not_table`, `zulake_error_version`,
 `zulake_error_corrupt_log`, `zulake_error_checkpoint_unreadable`,
 `zulake_error_unsupported_feature`, whose `feature` field names the
@@ -700,7 +700,10 @@ statistics and on rows, so pruning and the row filter cannot disagree:
   `sprintf("%.15g", x)` when `as.numeric()` of that equals `x`, otherwise
   `sprintf("%.0f", x)` when `x` is whole, otherwise a
   `zulake_error_filter` asking for the value as text (`0.1` and `12.3`
-  pass; `1/3` and `0.1 + 0.2` do not); `Inf` and `-Inf` compare as
+  pass; `1/3` and `0.1 + 0.2` do not; R has already rounded a literal
+  such as `9007199254740993` to 9007199254740992 before zulake sees it,
+  which `?lake_read` says, with "exact up to 2^53 - 1" for `int64`:
+  wording settled 2026-11-27, #91); `Inf` and `-Inf` compare as
   infinities; `NA` and `NaN` give `NA`. Partition values compare exactly at
   any precision. With `int64 = "integer64"` no non-whole double reaches
   `bit64` (`bit64::as.integer64(3) < 3.5` is FALSE). Why: one rule for
