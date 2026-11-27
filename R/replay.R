@@ -122,6 +122,7 @@ replay <- function(plan, read, checkpoint = NULL) {
   st$metadata <- NULL
   st$adds <- new.env(parent = emptyenv())
   st$removes <- new.env(parent = emptyenv())
+  st$odd_keys <- character()
   st$txns <- list()
   st$domains <- list()
   if (!is.null(checkpoint)) {
@@ -184,14 +185,14 @@ apply_file <- function(st, name, actions) {
     }
   }
   for (r in removes) {
-    key <- file_key(r)
+    key <- file_symbol(st, file_key(r))
     if (exists(key, envir = st$adds, inherits = FALSE)) {
       rm(list = key, envir = st$adds)
     }
     assign(key, r, envir = st$removes)
   }
   for (a in adds) {
-    key <- file_key(a)
+    key <- file_symbol(st, file_key(a))
     if (exists(key, envir = st$removes, inherits = FALSE)) {
       rm(list = key, envir = st$removes)
     }
@@ -203,6 +204,24 @@ apply_file <- function(st, name, actions) {
 # The protocol's key for a logical file: `(path, deletionVector.uniqueId)`.
 file_key <- function(action) {
   paste0(action[["path"]], "\x1f", dv_unique_id(action[["deletionVector"]]))
+}
+
+# The name a file key is kept under in the replay environments. A key of
+# ASCII bytes short of R's 10000-byte limit on names is its own name; any
+# other (a long inline deletion vector, a non-ASCII path, which R would
+# translate to the session's encoding and could merge with another under
+# LC_ALL=C) is found by match() among the replay's `odd_keys`, and named
+# by its position there (#50).
+file_symbol <- function(st, key) {
+  if (nchar(key, type = "bytes") < 9000L && all(charToRaw(key) < as.raw(0x80))) {
+    return(paste0("a", key))
+  }
+  i <- match(key, st$odd_keys)
+  if (is.na(i)) {
+    st$odd_keys <- c(st$odd_keys, key)
+    i <- length(st$odd_keys)
+  }
+  paste0("o", i)
 }
 
 # `deletionVector.uniqueId`: storage type and path or inline vector, then

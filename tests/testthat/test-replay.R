@@ -575,7 +575,8 @@ test_that("the snapshot is the same in a hostile session and under a non-ASCII p
   withr::local_envvar(LC_ALL = "C")
   withr::local_options(OutDec = ",", scipen = -5, digits = 3)
   withr::local_collate("C")
-  hostile <- lake_open(fixture_table("zl-partitioned"), version = 1)
+  # The variable alone does not change the running session's locale (#50).
+  hostile <- withr::with_locale(c(LC_CTYPE = "C"), lake_open(fixture_table("zl-partitioned"), version = 1))
   expect_identical(hostile$files, base$files)
   expect_identical(hostile$version, base$version)
 
@@ -598,4 +599,41 @@ test_that("a whole-millisecond file time read up to 1 us low (Windows' file.info
     expect_identical(mtime_ms(as.POSIXct((ts + 0.4015) / 1000, origin = "1970-01-01", tz = "UTC")), ts)
     expect_identical(mtime_ms(as.POSIXct((ts + 0.98) / 1000, origin = "1970-01-01", tz = "UTC")), ts)
   }
+})
+
+test_that("a file key past R's 10000-byte limit on names replays like any other (#50)", {
+  # The key is the path, a 0x1f and the deletion vector's id ("" here):
+  # paths of 9998, 9999 and 10000 bytes make keys of 9999, 10000 and 10001.
+  for (n in c(9998L, 9999L, 10000L)) {
+    long <- paste0(strrep("d/", (n - 9L) %/% 2L), if ((n - 9L) %% 2L) "e", "f.parquet")
+    expect_identical(nchar(long, "bytes"), n)
+    path <- hand_table(c(protocol_line(), metadata_line(), add_line(long), add_line("short.parquet")))
+    write_commit(path, 1, remove_line(long))
+    expect_identical(lake_files(lake_open(path, version = 0))$path, sort(c(long, "short.parquet"), method = "radix"),
+                     label = n)
+    expect_identical(lake_files(lake_open(path))$path, "short.parquet", label = n)
+    expect_identical(lake_removed(lake_open(path))$path, long, label = n)
+  }
+})
+
+test_that("an inline deletion vector longer than 10000 characters opens and reads, as deltalake opens it (#50)", {
+  skip_if_not_installed("zuroar")
+  rows <- seq(0, 8198, by = 2)
+  dv <- inline_dv(dv_bytes(rows), length(rows))
+  expect_gt(nchar(dv$pathOrInlineDv), 10000L)
+  tbl <- lake_open(dv_table(dv, n = 8200L))
+  expect_identical(lake_count(tbl), 8200 - length(rows))
+  expect_identical(lake_read(tbl)$id, setdiff(0:8199, rows) + 0)
+})
+
+test_that("non-ASCII paths stay distinct in a session whose encoding is not UTF-8 (#50)", {
+  withr::local_locale(c(LC_CTYPE = "C"))
+  e <- "g=é/a.parquet"
+  escaped <- "g=<U+00E9>/a.parquet"
+  path <- hand_table(c(protocol_line(), metadata_line(), add_line(e), add_line(escaped)))
+  write_commit(path, 1, remove_line(escaped))
+  expect_no_warning(v0 <- lake_files(lake_open(path, version = 0))$path)
+  expect_identical(sort(enc2utf8(v0), method = "radix"), sort(c(enc2utf8(e), escaped), method = "radix"))
+  expect_no_warning(v1 <- lake_files(lake_open(path))$path)
+  expect_identical(enc2utf8(v1), enc2utf8(e))
 })

@@ -142,3 +142,8 @@
   (a data file or a deletion vector) was read from the reader's own disk.
   A table's files now stay on its own storage: such a path is a
   `zulake_error_uri` (#44).
+* Fixed: replay kept live files under R variable names, so a key past
+  10000 bytes (an inline deletion vector of a few thousand rows) stopped
+  `lake_open()` with a base R error, and in a session whose encoding is not
+  UTF-8 two distinct non-ASCII paths could be taken for one file. Keys are
+  now kept so that neither can happen (#50).
