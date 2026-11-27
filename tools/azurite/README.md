@@ -58,6 +58,15 @@ because a cassette key ignores `Range` (pedrobtz/zuhttp#353). The
 `azure-emulator` workflow records the same files on every run and uploads
 them as its `cassettes` artifact.
 
+zuhttp saves a cassette in serialization version 3; the recording test
+saves each again in version 2 (`cassettes_to_version2()` in
+`helper-azure.R`), with the same interactions, because a version 3 file
+in the package makes `R CMD build` add a dependency on R >= 3.5.0, and
+R-devel prints that warning even when `Depends` already says so (#37,
+#65). `test-azure.R` fails on a shipped cassette in version 3. The
+committed cassettes were converted the same way, with
+`Rscript -e 'source("tests/testthat/helper-azure.R"); cassettes_to_version2("tests/testthat/fixtures/cassettes")'`.
+
 ## Live
 
 With a token for `https://storage.azure.com` and a table:

@@ -112,8 +112,9 @@
   five versions, at `system.file("extdata", "orders", package = "zulake")`.
   The README, the Get started vignette (`vignette("zulake")`), now
   evaluated, and every help page's examples run on it.
-* zulake needs R 3.5.0 or later, as `qio` and `zuhttp` do; the test
-  cassettes are saved in R's serialization format 3 (#37).
+* zulake needs R 3.5.0 or later, as `qio` and `zuhttp` do (#37). The test
+  cassettes are saved in R's serialization format 2, so that `R CMD build`
+  adds and announces no dependency of its own (#65).
 * Fixed: a snapshot saved in one R session and restored in another could
   send the other session's bearer token to the saved table's account,
   because credential handles were numbered from 1 in every session. Handle

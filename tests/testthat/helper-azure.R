@@ -521,6 +521,29 @@ catch_error <- function(expr, class) {
 
 cassette_dir <- function() testthat::test_path("fixtures", "cassettes")
 
+# The serialization version of an .rds file (2 or 3), read from its header
+# ("X\n", then the version as a big-endian integer), compressed or not.
+rds_version <- function(file) {
+  con <- gzfile(file, "rb")
+  on.exit(close(con))
+  stopifnot(identical(readBin(con, "raw", 2L), charToRaw("X\n")))
+  readBin(con, "integer", 1L, size = 4L, endian = "big")
+}
+
+# The cassettes in `dir` saved again in serialization version 2, with the
+# same interactions. zuhttp records them in version 3, which makes R CMD
+# build add (and R-devel announce, even with Depends: R (>= 3.5.0)) a
+# dependency on R >= 3.5.0 (#37, #65). Called after recording
+# (test-azure-emulator.R; tools/azurite/README.md).
+cassettes_to_version2 <- function(dir) {
+  for (f in list.files(dir, pattern = "[.]rds$", full.names = TRUE)) {
+    x <- readRDS(f)
+    saveRDS(x, f, version = 2L, compress = FALSE)
+    stopifnot(identical(readRDS(f), x))
+  }
+  invisible(dir)
+}
+
 # The tables whose open, read and deletion vectors test-azure-emulator.R
 # records as cassettes and test-azure.R replays.
 cassette_tables <- c("zl-basic", "zl-partitioned", "table-with-dv-small")

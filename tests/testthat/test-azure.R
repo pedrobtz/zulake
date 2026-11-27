@@ -833,3 +833,24 @@ test_that("NUL and invalid UTF-8 in List Blobs answers are classed errors (#49)"
   expect_error(parse_blob_list(utf16, "p"), class = "zulake_error_storage")
   expect_identical(parse_blob_list(charToRaw(paste0(head, blob("t/a%C3%A9"), tail)), "p")$blobs$name, "t/aé")
 })
+
+test_that("the shipped cassettes are in serialization version 2, which R CMD build does not warn about (#37, #65)", {
+  # R-devel's R CMD build announces "Added dependency on R >= 3.5.0" for any
+  # file in version 3, whatever Depends says (tools/R/build.R computes
+  # hasDep350 and no longer consults it); version 2 files raise nothing.
+  shipped <- list.files(cassette_dir(), pattern = "[.]rds$", full.names = TRUE)
+  expect_gte(length(shipped), length(cassette_tables))
+  for (f in shipped) expect_identical(rds_version(f), 2L, label = basename(f))
+  # The helpers themselves: a version 3 file is seen as one, and the
+  # conversion keeps the interactions.
+  dir <- withr::local_tempdir()
+  f <- file.path(dir, "x.rds")
+  x <- list(a = 1:10, b = "café")
+  saveRDS(x, f, compress = FALSE)
+  expect_identical(rds_version(f), 3L)
+  cassettes_to_version2(dir)
+  expect_identical(rds_version(f), 2L)
+  expect_identical(readRDS(f), x)
+  saveRDS(x, f, version = 3L)
+  expect_identical(rds_version(f), 3L)
+})
