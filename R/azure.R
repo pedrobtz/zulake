@@ -464,7 +464,7 @@ storage_azure <- function(parts, handle) {
     if (length(folder) && tolower(folder[1L]) == "true") {
       return(NULL)
     }
-    size <- suppressWarnings(as.numeric(zuhttp::zu_resp_header(resp, "content-length")[1L]))
+    size <- byte_count(zuhttp::zu_resp_header(resp, "content-length")[1L])
     time <- parse_http_date(zuhttp::zu_resp_header(resp, "last-modified")[1L])
     if (is.na(size) || is.na(time)) {
       zulake_abort("storage", sprintf("Azure's properties of %s lack a size or a time.", format_string(path)), path = path)
@@ -561,9 +561,9 @@ parse_blob_list <- function(bytes, prefix) {
       bad("a Blob element lacks its Name or Properties")
     }
     name[i] <- if (encoded) percent_decode(nm, "storage") else nm
-    size[i] <- suppressWarnings(as.numeric(xml_element(props, "Content-Length")))
+    size[i] <- byte_count(xml_element(props, "Content-Length"))
     mtime[i] <- parse_http_date(xml_element(props, "Last-Modified"))
-    if (is.na(size[i]) || size[i] < 0 || is.na(mtime[i])) {
+    if (is.na(size[i]) || is.na(mtime[i])) {
       bad(sprintf("the Blob %s lacks a size or a time", format_string(name[i])))
     }
     meta <- xml_element(item, "Metadata", decode = FALSE)
@@ -652,5 +652,21 @@ content_range_total <- function(x) {
   if (!length(x) || !grepl("^bytes [0-9*-]+/[0-9]+$", x[1L])) {
     return(NA_real_)
   }
-  as.numeric(sub("^.*/", "", x[1L]))
+  byte_count(sub("^.*/", "", x[1L]))
+}
+
+# A number of bytes Azure sent as text (Content-Length, a range's total):
+# decimal digits only, up to 2^53 - 1, compared as text so that nothing
+# rounds; NA otherwise (#68). `as.numeric()` took "Inf", "0x10", "1e3",
+# " 12 " and rounded 9007199254740993.
+byte_count <- function(x) {
+  if (!is_string(x) || !grepl("^[0-9]+$", x)) {
+    return(NA_real_)
+  }
+  digits <- sub("^0+(?=.)", "", x, perl = TRUE)
+  limit <- format_number(max_exact)
+  if (nchar(digits) > nchar(limit) || (nchar(digits) == nchar(limit) && sorts_after(digits, limit))) {
+    return(NA_real_)
+  }
+  as.numeric(digits)
 }

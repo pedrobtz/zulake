@@ -923,3 +923,32 @@ test_that("the shipped cassettes are in serialization version 2, which R CMD bui
   saveRDS(x, f, version = 3L)
   expect_identical(rds_version(f), 3L)
 })
+
+test_that("a size from Azure is a whole number of bytes up to 2^53 - 1, or a storage error (#68)", {
+  listing <- function(size) charToRaw(paste0(
+    "<EnumerationResults><Blobs><Blob><Name>a</Name><Properties><Content-Length>", size,
+    "</Content-Length><Last-Modified>Mon, 01 Jan 2024 00:00:00 GMT</Last-Modified></Properties></Blob></Blobs>",
+    "</EnumerationResults>"
+  ))
+  good <- c("0" = 0, "12" = 12, "007" = 7, "9007199254740990" = 2^53 - 2, "9007199254740991" = 2^53 - 1)
+  bad <- c("Inf", "1e400", "12.5", "0x10", "1e3", " 12 ", "+1", "-1", "", "9007199254740992", "9007199254740993",
+           "99999999999999999999")
+  for (s in names(good)) expect_identical(parse_blob_list(listing(s), "p")$blobs$size, good[[s]], label = s)
+  for (s in bad) expect_error(parse_blob_list(listing(s), "p"), class = "zulake_error_storage", label = s)
+  # The same rule for head()'s Content-Length and a range's total.
+  storage <- storage_for(fake_uri("zl-basic"), function() "tok")
+  for (s in names(good)) {
+    local_azure_fake(azure_fake(fake_root(), new.env(), override = function(r) {
+      zuhttp::zu_response(200L, c(`Content-Length` = s, `Last-Modified` = "Thu, 26 Nov 2026 16:04:00 GMT"))
+    }))
+    expect_identical(storage$head("x")$size, good[[s]], label = s)
+    expect_identical(content_range_total(paste0("bytes 0-0/", s)), good[[s]], label = s)
+  }
+  for (s in setdiff(bad, "")) {
+    local_azure_fake(azure_fake(fake_root(), new.env(), override = function(r) {
+      zuhttp::zu_response(200L, c(`Content-Length` = s, `Last-Modified` = "Thu, 26 Nov 2026 16:04:00 GMT"))
+    }))
+    expect_error(storage$head("x"), class = "zulake_error_storage", label = s)
+    expect_identical(content_range_total(paste0("bytes 0-0/", s)), NA_real_, label = s)
+  }
+})

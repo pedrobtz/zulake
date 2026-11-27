@@ -177,7 +177,12 @@ Settled in Stage 6 (2026-11-26):
   sent with `decode = FALSE` (the stored bytes, whatever their
   `Content-Encoding`), no body limit and a 600-second timeout. A range
   needs `206` with exactly `to - from + 1` bytes; a short body or `416` is
-  a `zulake_error_storage`, as reading past a local file's end is.
+  a `zulake_error_storage`, as reading past a local file's end is. A size
+  Azure sends (List Blobs' `Content-Length`, a HEAD's `Content-Length`, a
+  `Content-Range` total) must be decimal digits up to 2^53 - 1, compared as
+  text; anything else is a `zulake_error_storage` (2026-11-27, #68:
+  `as.numeric()` took `Inf`, `0x10`, `1e3`, `" 12 "` and rounded past
+  2^53).
 - **Credentials (D4).** `credentials()` is called before the first request
   of a snapshot's backend and once more after a `401`; the new token is
   kept for later requests. A second `401`, or a `403`, is a

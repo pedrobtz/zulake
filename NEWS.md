@@ -225,3 +225,7 @@
 * Fixed: a checkpoint that qio reads with a warning other than 64-bit
   loss (an INT32 of -2^31) is reported as unreadable for that reason,
   instead of as needing the bit64 package (#71).
+* Fixed: a blob size from Azure (List Blobs, a HEAD, a range's total) that
+  is not decimal digits up to 2^53 - 1, such as `Inf`, `0x10`, `1e3` or
+  `9007199254740993`, is now a `zulake_error_storage` instead of a number
+  read loosely or rounded (#68).
