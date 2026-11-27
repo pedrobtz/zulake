@@ -193,7 +193,10 @@ Settled in Stage 6 (2026-11-26):
   must return one string; a leading `Bearer ` in any case is dropped, and
   what is left must be non-empty, without spaces or control characters
   (checked after the drop, so `"Bearer "` is no token: 2026-11-27, #47);
-  otherwise, or if it fails, `zulake_error_auth`.
+  otherwise, or if it fails, `zulake_error_auth`. That error includes the
+  message of the condition `credentials()` raised, so the user sees why
+  their function failed (maintainer, 2026-11-27, #92); the function is
+  the user's own code, and zulake adds no token to the message.
   `credentials = NULL` sends anonymous requests (a public container) and
   never retries. The token and the function live in a package-level
   registry keyed by an id; the snapshot holds only a handle with that id
@@ -1068,6 +1071,8 @@ The order of work, and what 0.1.0 waits for, are in
      with its log attached to pedrobtz/zulake#24. Dropping 4b is the
      maintainer's decision; it amends D3, and the README then says
      "tested against Azurite, not live Azure".
+     *Amended 2026-11-27 (maintainer):* 4b is deferred and the maintainer
+     runs it (#24); it no longer blocks the Review stage or 0.1.0.
 5. `R CMD check --as-cran` clean on all r-actions legs.
 
 ## 12. Open questions

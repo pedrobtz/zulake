@@ -773,6 +773,10 @@ so that its table describes the commit that is submitted.
 - The live Azure suite green once against ADLS Gen2 (acceptance 4b,
   [#24](https://github.com/pedrobtz/zulake/issues/24)), or the
   maintainer's recorded decision to drop it.
+
+  *Deviation (2026-11-27, maintainer):* the live run is deferred and the
+  maintainer runs it; [#24](https://github.com/pedrobtz/zulake/issues/24)
+  leaves the Review issue and does not block 0.1.0.
 - A full-profile run green on the default branch, whose head becomes the
   release commit.
 
@@ -791,9 +795,12 @@ so that its table describes the commit that is submitted.
   then: each needs values converted or decoded on read
   ([D7 amendment](design.md#10-decisions), 2026-11-26).
 - [§12](design.md#12-open-questions) Q4: caching downloads across sessions;
-  0.1.0 caches per session.
+  0.1.0 caches per `lake_open()`.
 - [§12](design.md#12-open-questions) Q6: probing commit names instead of
   listing; listing is correct, only possibly slow.
+- The live Azure suite against ADLS Gen2
+  ([#24](https://github.com/pedrobtz/zulake/issues/24), acceptance 4b),
+  run by the maintainer.
 - Turning checkpoint rows into actions vectorised
   ([#39](https://github.com/pedrobtz/zulake/issues/39)): 2.4 s of a 3.2 s
   open for a 20,000-file checkpoint, against 23 to 38 ms for the fixtures;
@@ -801,9 +808,6 @@ so that its table describes the commit that is submitted.
 
 ## Blocking open questions
 
-- [§11](design.md#11-acceptance-criteria-for-v010) criterion 4b blocks
-  Stage 11: a real ADLS Gen2 account
-  ([#24](https://github.com/pedrobtz/zulake/issues/24)).
 - [D5](design.md#10-decisions), [D9](design.md#10-decisions) and
   [D14](design.md#10-decisions) block Stage 10: `zuhttp`, `zuroar` and a
   `qio` that reads nested columns on CRAN.
