@@ -389,7 +389,12 @@ def answer_hostile(log_dir):
             refusal = error(e, scrub)["error"]
             # A path may reach the message in a form Scrub does not know
             # (a file URL without its leading slash): cut it at "<table>".
-            refusal["message"] = re.sub(r"\S*<table>", "<table>", refusal["message"])
+            here = re.escape(os.path.basename(scratch)) + "(?:/" + re.escape(log_dir.name) + ")?"
+            message = re.sub(r"\S*" + here, "<table>", refusal["message"])
+            message = re.sub(r"\S*<table>", "<table>", message)
+            if os.path.basename(scratch) in message or scratch in message:
+                sys.exit(f"hostile answers: {log_dir.name}: an absolute path survived scrubbing: {message}")
+            refusal["message"] = message
             return {"refusal": refusal}
     return {"refusal": None}
 
@@ -399,8 +404,6 @@ def write_hostile_answers():
     logs = sorted(p for p in HOSTILE.iterdir() if p.is_dir())
     answers = {p.name: answer_hostile(p) for p in logs}
     text = json.dumps(answers, sort_keys=True, indent=1, ensure_ascii=False, allow_nan=False) + "\n"
-    if tempfile.gettempdir() in text or os.path.realpath(tempfile.gettempdir()) in text:
-        sys.exit("hostile answers: an absolute path survived scrubbing")
     HOSTILE_ANSWERS.write_text(text, encoding="utf-8")
     return len(answers)
 
