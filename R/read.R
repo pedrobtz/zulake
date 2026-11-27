@@ -5,7 +5,8 @@
 #' could match are read, then reads each one with qio, adds the partition
 #' columns from the log, keeps the rows `filter` is `TRUE` for, and binds the
 #' pieces. `lake_walk()` does the same one file at a time and calls `FUN` on
-#' each piece instead of binding them, for tables larger than memory.
+#' each piece instead of binding them, for tables larger than memory (but on
+#' Azure not larger than disk; see below).
 #'
 #' `filter` is an unevaluated R expression over column names, with values
 #' from the calling environment (a column's name always means the column).
@@ -27,7 +28,11 @@
 #' `as.integer()`; and compare two columns, or use a logical column alone.
 #' R evaluates those on the rows after reading (they never prune), with base
 #' R's functions whatever the caller defines, and each must give one `TRUE`,
-#' `FALSE` or `NA` per row. Any other call with a column inside it, such as
+#' `FALSE` or `NA` per row. Before R 4.3.0, `as.character()`, `substr()`,
+#' `toupper()`, `tolower()` and `grepl()` of a `timestamp` or
+#' `timestamp_ntz` column are errors of class `zulake_error_filter`, since
+#' there a time's text depends on the other times formatted with it. Any
+#' other call with a column inside it, such as
 #' `max(x)`, `mean(x)`, `rank(x)`, `cumsum(x)`, `duplicated(x)`, `x[1]`,
 #' `%in%` with a column on its right, or a function of your own, is an error
 #' of class `zulake_error_filter`: a filter is decided row by row, so the
@@ -41,23 +46,36 @@
 #' numbers, digit by digit, and a `string` column in UTF-8 byte order
 #' whatever the session's collation, as the table's statistics are. A value
 #' given as text, such as `"12.30"`, is read as that decimal number; a double
-#' that has no exact decimal form of 15 digits (`1/3`, `0.1 + 0.2`) is an
-#' error asking for the value as text. A date or timestamp column takes a
+#' that is not the number its 15-digit form reads back as (`1/3`,
+#' `0.1 + 0.2`) is an error asking for the value as text. R has already
+#' rounded a literal such as `9007199254740993` to a double
+#' (9007199254740992) before zulake sees it, so give such a value as text
+#' too. A `float` or `double` column takes
+#' only numbers: text there, such as `amount > "100"`, is an error, since R
+#' would compare it with the column as strings. A date or timestamp column takes a
 #' `Date` or `POSIXct`, or text such as `"2024-01-31"` or
 #' `"2024-01-31 12:00:00"` (UTC unless it gives an offset).
 #'
 #' Columns are typed as qio returns them (see [qio::read_parquet()]), and
 #' partition columns as [lake_files()] types them, except that a `decimal`
 #' of precision 15 or less, data or partition, is a double, which holds it
-#' exactly. Columns zulake does not return are not lost silently: nested
+#' exactly. An `integer` data value of -2^31 reads as `NA`, R's integer
+#' `NA`, with a warning from qio: `is.na()` is `TRUE` for it and a comparison
+#' such as `x < 1` is not, and a file whose minimum may be -2^31 is never
+#' pruned on its null count. Columns zulake does not return are not lost silently: nested
 #' columns (`struct`, `array`, `map`), and decimals of precision above 15
 #' until qio reads them exactly. With `columns = NULL` they are left out, each named in a
 #' warning of class `zulake_warning_column_skipped` (fields `column` and
 #' `reason`); named in `columns` or used in `filter`, such a column is an
 #' error of class `zulake_error_column_unreadable` with the same fields.
 #'
-#' Data files are read in place on local disk; other stores download each
-#' file once per session, to the session's temporary directory.
+#' Data files are read in place on local disk. On Azure, every file left
+#' after pruning is downloaded to the session's temporary directory
+#' ([tempdir()]) before the first piece is read, by `lake_walk()` too, and
+#' kept there for the rest of the session, so that a later read of the same
+#' file downloads nothing. The disk used is the size of the files left after
+#' pruning: `lake_walk()` reads tables larger than memory, not larger than
+#' the temporary directory's disk.
 #'
 #' Rows a deletion vector marks as deleted are never returned (see
 #' [lake_deletion_vectors()]); reading their vectors needs the zuroar
@@ -75,7 +93,7 @@
 #' @param filter An expression over column names; see Details. `NULL`, the
 #'   default, keeps every row.
 #' @param int64 How 64-bit integers reach R, in data and partition columns:
-#'   `"double"` (the default), exact up to 2^53 (qio returns `NA` with a
+#'   `"double"` (the default), exact up to 2^53 - 1 (qio returns `NA` with a
 #'   warning past it, and a `long` partition value past 2^53 - 1 is an error
 #'   of class `zulake_error_int64`), or `"integer64"` from the bit64
 #'   package.
@@ -131,7 +149,10 @@ lake_walk <- function(tbl, FUN, columns = NULL, filter = NULL, int64 = c("double
 # ---- the read pipeline ------------------------------------------------------
 #
 # read_scan() decides everything before a row is read: refusals, the filter
-# plan, the files that survive pruning (fetched to local paths), each file's
+# plan, the files that survive pruning (fetched to local paths: on Azure
+# every one is downloaded into tempdir() here, before the first piece, and
+# kept for the session, so a read uses disk equal to the pruned files' size,
+# #75), each file's
 # qio read plan, and the columns returned. read_piece() reads one surviving
 # file into a filtered piece; bind_pieces() binds them. Deletion vectors,
 # read in read_scan(), drop rows in read_piece(), between the read and the
@@ -166,12 +187,14 @@ read_scan <- function(tbl, columns, expr, env, int64) {
     why <- type_unreadable(types[[col]])
     if (!is.na(why)) reasons[[col]] <- why
   }
+  # Every file's location is checked before anything is read (#66, #76).
+  where <- lapply(keep, function(i) resolve_file(tbl, i))
   # Deletion vectors are read and checked before any data file, so a bad
   # one returns no rows, from lake_walk() too.
   has_dv <- !vapply(tbl$files$action[keep], function(a) is.null(a[["deletionVector"]]), NA)
   deleted <- vector("list", length(keep))
   deleted[has_dv] <- dv_rows_of(tbl, keep[has_dv])
-  paths <- vapply(keep, function(i) fetch_file(tbl, i), "")
+  paths <- vapply(seq_along(keep), function(k) fetch_file(tbl, keep[k], where[[k]]), "")
   data_cols <- setdiff(need, c(pcols, names(reasons)))
   plans <- lapply(paths, function(p) qio::read_plan(p, int64 = int64))
   for (k in seq_along(paths)) {
@@ -364,38 +387,97 @@ bind_pieces <- function(pieces, scan) {
 
 cache_env <- new.env(parent = emptyenv())
 
-# The local path of live file `i`: the file itself on local disk, otherwise a
-# copy downloaded through the storage backend once per session (design
-# section 4.3), keyed by the table, path, size and modification time, which
-# never change for a Delta data file.
-fetch_file <- function(tbl, i) {
-  a <- tbl$files$action[[i]]
-  path <- a[["path"]]
+# The credentials function a backend's requests use (NULL for anonymous
+# ones and for other backends). A cached file is served only to the same
+# function that downloaded it, so a snapshot opened with other credentials
+# (another principal, a path-scoped token) downloads it itself, and is
+# refused if Azure refuses it (#72). A snapshot restored in another session
+# gets zulake_error_auth here, as on its next request.
+cache_credentials <- function(storage) {
+  handle <- storage$location$handle
+  if (identical(storage$kind, "azure") && !is.null(handle)) credential_entry(handle)$fn
+}
+
+# Where live file `i` is, before anything is read: list(local) for an
+# absolute local path, or list(storage, rel, key) for a file of a backend,
+# read in place when the backend has local paths and downloaded otherwise. Refusals come here, so
+# read_scan() and lake_count() make them for every file before reading any:
+# a relative path with an empty, "." or ".." segment (#66) and an absolute
+# path off the table's storage (#44, #76).
+resolve_file <- function(tbl, i) {
+  path <- tbl$files$action[[i]][["path"]]
   storage <- tbl$storage
   if (is_absolute_path(path)) {
     remote <- storage_for_absolute(storage, path)
     if (is.null(remote)) {
-      local <- absolute_local_path(path)
-      if (!file.exists(local) || dir.exists(local)) {
-        zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path)
-      }
-      return(local)
+      return(list(local = absolute_local_path(path), path = path))
     }
     storage <- remote$storage
     rel <- remote$rel
   } else {
     rel <- percent_decode(path)
+    if (bad_relative_path(rel)) {
+      zulake_abort(
+        "corrupt_log",
+        sprintf("file %s has an empty, \".\" or \"..\" path segment, which would leave the table's root.", format_string(path)),
+        file = path
+      )
+    }
   }
-  if (is.function(storage$local_path)) {
-    return(storage$local_path(rel))
+  list(storage = storage, rel = rel, path = path, key = cache_key(storage, rel))
+}
+
+# Whether a relative path (decoded) has an empty, "." or ".." segment.
+bad_relative_path <- function(rel) {
+  !nzchar(rel) || any(strsplit(rel, "/", fixed = TRUE)[[1L]] %in% c("", ".", "..")) || endsWith(rel, "/")
+}
+
+# What identifies a downloaded file in the session cache: on Azure the blob
+# itself (account, container, full decoded name), so that the three URI
+# forms of one table, a host in upper case and an encoded root share it
+# (#72); for another backend, its root and the path. The credentials that
+# fetched it are checked apart (cache_credentials()).
+cache_key <- function(storage, rel) {
+  loc <- storage$location
+  parts <- if (identical(storage$kind, "azure")) {
+    blob <- if (nzchar(loc$path)) paste0(loc$path, "/", rel) else rel
+    c("azure", loc$account, loc$container, blob)
+  } else {
+    c(storage$kind %||% "", storage$root, rel)
   }
+  paste(parts, collapse = "\x1f")
+}
+
+cache_env <- new.env(parent = emptyenv())
+
+# The local path of live file `i`, from resolve_file(): the file itself on
+# local disk, otherwise a copy downloaded through the storage backend once
+# per session (design section 4.3) into tempdir(), keyed by cache_key(), the
+# size and the modification time, which never change for a Delta data file.
+# A copy is written under a temporary name and renamed when whole, and one
+# whose size on disk is not the log's is downloaded again.
+fetch_file <- function(tbl, i, where = resolve_file(tbl, i)) {
+  path <- where$path
+  if (!is.null(where$local)) {
+    local <- where$local
+    if (!file.exists(local) || dir.exists(local)) {
+      zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path)
+    }
+    return(local)
+  }
+  if (is.function(where$storage$local_path)) {
+    return(where$storage$local_path(where$rel))
+  }
+  a <- tbl$files$action[[i]]
   size <- a[["size"]]
-  key <- paste(storage$root, rel, int_text(size %||% -1), int_text(a[["modificationTime"]] %||% -1), sep = "\x1f")
+  key <- paste(where$key, int_text(size %||% -1), int_text(a[["modificationTime"]] %||% -1), sep = "\x1f")
+  fn <- cache_credentials(where$storage)
   hit <- cache_env$files[[key]]
-  if (!is.null(hit) && file.exists(hit)) {
-    return(hit)
+  if (!is.null(hit) && identical(hit$fn, fn) && file.exists(hit$file) &&
+      (!is_whole(size) || identical(file.size(hit$file), as.numeric(size)))) {
+    return(hit$file)
   }
-  bytes <- storage$get(rel)
+  bytes <- where$storage$get(where$rel)
   if (is_whole(size) && length(bytes) != size) {
     zulake_abort(
       "storage",
@@ -409,11 +491,18 @@ fetch_file <- function(tbl, i) {
   dir <- file.path(tempdir(), "zulake-cache")
   dir.create(dir, showWarnings = FALSE)
   f <- tempfile("data-", tmpdir = dir, fileext = ".parquet")
-  writeBin(bytes, f)
+  part <- paste0(f, ".part")
+  ok <- FALSE
+  on.exit(if (!ok) unlink(part), add = TRUE)
+  writeBin(bytes, part)
+  if (!file.rename(part, f)) {
+    zulake_abort("storage", sprintf("cannot write a copy of %s to %s.", format_string(path), format_string(dir)), path = path)
+  }
+  ok <- TRUE
   if (is.null(cache_env$files)) {
     cache_env$files <- list()
   }
-  cache_env$files[[key]] <- f
+  cache_env$files[[key]] <- list(file = f, fn = fn)
   f
 }
 
@@ -441,8 +530,8 @@ absolute_local_path <- function(path) {
 }
 
 # The number of rows of live file `i`, from its Parquet footer.
-footer_rows <- function(tbl, i) {
-  pf <- qio::open_parquet(fetch_file(tbl, i))
+footer_rows <- function(tbl, i, where = resolve_file(tbl, i)) {
+  pf <- qio::open_parquet(fetch_file(tbl, i, where))
   on.exit(qio::close_parquet(pf))
   as.numeric(dim(pf)[1L])
 }

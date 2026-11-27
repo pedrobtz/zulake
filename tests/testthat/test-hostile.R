@@ -187,7 +187,7 @@ test_that("partition values are checked against the column's Delta type", {
     short = c("-32769", "32768"),
     integer = c("-2147483649", "2147483648", "99999999999"),
     long = c("-9223372036854775809", "9223372036854775808", "18446744073709551616", "--1"),
-    float = c("one", "1,5", "1.5.5", "Inf", "e5"),
+    float = c("one", "1,5", "1.5.5", "In", "infin", "e5"),
     double = c("0x10", ""[0]),
     "decimal(10,2)" = c("1,5", "abc"),
     date = c("2024-13-01", "2024-00-10", "2024-01-32", "20240101", "2024-01-01 00:00:00", "24-01-01"),
@@ -210,7 +210,7 @@ test_that("partition values are checked on the physical name under column mappin
     protocol_line(2L, 5L),
     metadata_line(
       columns = c(id = "long", p = "integer"), partition = "p",
-      configuration = list(delta.columnMapping.mode = "name"), physical = c(p = "col-p")
+      configuration = list(delta.columnMapping.mode = "name"), physical = c(id = "col-id", p = "col-p")
     ),
     add_line("a.parquet", list("col-p" = "1")),
     add_line("b.parquet", list("col-p" = "")),
@@ -219,13 +219,13 @@ test_that("partition values are checked on the physical name under column mappin
   expect_identical(lake_open(hand_table(lines))$files$path, c("a.parquet", "b.parquet", "c.parquet"))
   lines[5L] <- add_line("c.parquet", list("col-p" = "x"))
   expect_no_snapshot(lake_open(hand_table(lines)), "zulake_error_corrupt_log")
-  # Field metadata that is not an object has no physical name: the logical
-  # name is the key.
+  # Field metadata that is not an object has no physical name, which in
+  # name mode is a corrupt log, never the logical name as the key (#77).
   meta <- metadata_line(c(p = "integer"), partition = "p", configuration = list(delta.columnMapping.mode = "name"))
   odd <- sub("\\\"metadata\\\":{}", "\\\"metadata\\\":\\\"x\\\"", meta, fixed = TRUE)
   expect_false(identical(odd, meta))
   lines <- c(protocol_line(2L, 5L), odd, add_line("a.parquet", list(p = "1")))
-  expect_identical(lake_open(hand_table(lines))$files$path, "a.parquet")
+  expect_no_snapshot(lake_open(hand_table(lines)), "zulake_error_corrupt_log")
   # Without column mapping the logical name is the key, and "col-p" is not one.
   lines <- c(protocol_line(), metadata_line(c(id = "long", p = "integer"), partition = "p"), add_line("c.parquet", list(p = "x")))
   expect_no_snapshot(lake_open(hand_table(lines)), "zulake_error_corrupt_log")
@@ -239,11 +239,56 @@ test_that("a removed file's partition values are not checked", {
   expect_no_snapshot(lake_open(path, version = 0), "zulake_error_corrupt_log")
 })
 
-test_that("a compaction file that ends before it starts is a corrupt log", {
-  path <- hand_table()
-  write_commit(path, 1, add_line("b.parquet"))
-  writeLines(add_line("b.parquet"), file.path(path, "_delta_log", "00000000000000000001.00000000000000000001.compacted.json"))
-  expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
+test_that("a compaction file that does not end after it starts is not a log file (#69)", {
+  # The protocol names <x>.<y>.compacted.json only for y > x; any other is
+  # left out of the log, as deltalake 1.7.0 opens the table.
+  path <- local_fixture_copy("zl-log-compaction")
+  dir <- file.path(path, "_delta_log")
+  writeLines("not json", file.path(dir, "00000000000000000002.00000000000000000002.compacted.json"))
+  writeLines("not json", file.path(dir, "00000000000000000004.00000000000000000001.compacted.json"))
+  for (version in oracle_versions("zl-log-compaction")) {
+    expect_oracle(replay_files_frame(lake_open(path, version = version), "path"), "zl-log-compaction", version, "add_actions")
+  }
+  expect_false(any(grepl("00000000000000000002.00000000000000000002", lake_log(lake_open(path))$name, fixed = TRUE)))
+  expect_false(any(grepl("00000000000000000004.00000000000000000001", lake_log(lake_open(path))$name, fixed = TRUE)))
+})
+
+test_that("an unreadable compaction file is passed over for the commits it covers (#69)", {
+  path <- local_fixture_copy("zl-log-compaction")
+  compacted <- file.path(path, "_delta_log", "00000000000000000001.00000000000000000003.compacted.json")
+  writeLines("not json", compacted)
+  for (version in oracle_versions("zl-log-compaction")) {
+    expect_oracle(replay_files_frame(lake_open(path, version = version), "path"), "zl-log-compaction", version, "add_actions")
+  }
+  # Without one of the commits it covers, it is needed, and a corrupt log.
+  unlink(file.path(path, "_delta_log", "00000000000000000002.json"))
+  for (version in 3:5) expect_no_snapshot(lake_open(path, version = version), "zulake_error_corrupt_log")
+  expect_oracle(replay_files_frame(lake_open(path, version = 1), "path"), "zl-log-compaction", 1, "add_actions")
+  # An authentication failure is never passed over.
+  storage <- zulake:::storage_local(fixture_table("zl-log-compaction"))
+  local <- storage
+  storage$local_path <- NULL
+  storage$get <- function(p) {
+    if (grepl("compacted", p, fixed = TRUE)) zulake:::zulake_abort("auth", "refused", status = 403L)
+    local$get(p)
+  }
+  expect_no_snapshot(zulake:::snapshot_build(storage, "t"), "zulake_error_auth")
+})
+
+test_that("a hole in the commits is a corrupt log, not a cleaned-up version (#70)", {
+  path <- local_fixture_copy("zl-checkpoint")
+  unlink(file.path(path, "_delta_log", "00000000000000000003.json"))
+  for (version in 3:4) {
+    expect_no_snapshot(lake_open(path, version = version), "zulake_error_corrupt_log")
+  }
+  for (version in c(0:2, 5:12)) {
+    expect_oracle(replay_files_frame(lake_open(path, version = version), "path"), "zl-checkpoint", version, "add_actions")
+  }
+  # Cleaned from the start, a version before the checkpoint is gone.
+  unlink(file.path(path, "_delta_log", sprintf("%020d.json", 0:2)))
+  for (version in 0:4) {
+    expect_no_snapshot(lake_open(path, version = version), "zulake_error_version")
+  }
 })
 
 test_that("a partition column of a nested type is a corrupt log", {
@@ -382,4 +427,47 @@ test_that("a log path that decodes to a NUL or to bytes that are not UTF-8 is a 
   expect_identical(basename(lake_files(tbl)$uri), c("a%ZZb.parquet", "cé.parquet"))
   # A V2 sidecar path the same way.
   expect_error(percent_decode("s%00.parquet"), class = "zulake_error_corrupt_log")
+})
+
+test_that("a name-mode field without a physical name is a corrupt log naming it (#77)", {
+  # Commit 0's schema lost the physical name of `letter`; commit 2 writes
+  # the schema again with it. Versions 0 and 1 are refused, 2 and 3 read
+  # as column_mapping does.
+  path <- fixture_table("column-mapping-no-physical-name", "hostile")
+  for (version in list(0, 1)) {
+    expect_no_snapshot(lake_open(path, version = version), "zulake_error_corrupt_log")
+    err <- tryCatch(lake_open(path, version = version), error = identity)
+    expect_identical(err$column, "letter")
+    expect_match(conditionMessage(err), "\"letter\"", fixed = TRUE)
+  }
+  for (version in 2:3) {
+    tbl <- lake_open(path, version = version)
+    expect_oracle(replay_files_frame(tbl, "path"), "column_mapping", version, "add_actions")
+    expect_identical(lake_read(tbl), lake_read(lake_open(fixture_table("column_mapping"), version = version)))
+  }
+  # Every field is checked, a partition column, a field whose metadata is
+  # not an object and a physical name that is not a string too, and each
+  # is refused by its own name.
+  for (case in list(
+    list(physical = c(id = "col-id"), column = "p"),
+    list(physical = c(p = "col-p"), column = "id")
+  )) {
+    lines <- c(
+      protocol_line(2L, 5L),
+      metadata_line(c(id = "long", p = "integer"), partition = "p",
+                    configuration = list(delta.columnMapping.mode = "name"), physical = case$physical)
+    )
+    err <- tryCatch(lake_open(hand_table(lines)), error = identity)
+    expect_s3_class(err, "zulake_error_corrupt_log")
+    expect_identical(err$column, case$column)
+  }
+  meta <- metadata_line(c(id = "long"), configuration = list(delta.columnMapping.mode = "name"), physical = c(id = "col-id"))
+  expect_identical(lake_open(hand_table(c(protocol_line(2L, 5L), meta)))$column_mapping, "name")
+  for (bad in c('""', "1", "null", "{}")) {
+    odd <- sub('\\"col-id\\"', gsub('"', '\\\\"', bad), meta, fixed = TRUE)
+    expect_false(identical(odd, meta))
+    expect_no_snapshot(lake_open(hand_table(c(protocol_line(2L, 5L), odd))), "zulake_error_corrupt_log")
+  }
+  # Without column mapping no physical name is needed.
+  expect_identical(lake_version(lake_open(hand_table(c(protocol_line(2L, 5L), metadata_line())))), 0)
 })

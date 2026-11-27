@@ -25,7 +25,7 @@ that order. \code{NULL}, the default, returns every column qio can return.}
 default, keeps every row.}
 
 \item{int64}{How 64-bit integers reach R, in data and partition columns:
-\code{"double"} (the default), exact up to 2^53 (qio returns \code{NA} with a
+\code{"double"} (the default), exact up to 2^53 - 1 (qio returns \code{NA} with a
 warning past it, and a \code{long} partition value past 2^53 - 1 is an error
 of class \code{zulake_error_int64}), or \code{"integer64"} from the bit64
 package.}
@@ -46,7 +46,8 @@ the live files with \code{filter} first, so that only the files whose rows
 could match are read, then reads each one with qio, adds the partition
 columns from the log, keeps the rows \code{filter} is \code{TRUE} for, and binds the
 pieces. \code{lake_walk()} does the same one file at a time and calls \code{FUN} on
-each piece instead of binding them, for tables larger than memory.
+each piece instead of binding them, for tables larger than memory (but on
+Azure not larger than disk; see below).
 }
 \details{
 \code{filter} is an unevaluated R expression over column names, with values
@@ -69,7 +70,11 @@ A filter may also apply these row-wise functions to columns: \code{+}, \code{-},
 \code{as.integer()}; and compare two columns, or use a logical column alone.
 R evaluates those on the rows after reading (they never prune), with base
 R's functions whatever the caller defines, and each must give one \code{TRUE},
-\code{FALSE} or \code{NA} per row. Any other call with a column inside it, such as
+\code{FALSE} or \code{NA} per row. Before R 4.3.0, \code{as.character()}, \code{substr()},
+\code{toupper()}, \code{tolower()} and \code{grepl()} of a \code{timestamp} or
+\code{timestamp_ntz} column are errors of class \code{zulake_error_filter}, since
+there a time's text depends on the other times formatted with it. Any
+other call with a column inside it, such as
 \code{max(x)}, \code{mean(x)}, \code{rank(x)}, \code{cumsum(x)}, \code{duplicated(x)}, \code{x[1]},
 \code{\%in\%} with a column on its right, or a function of your own, is an error
 of class \code{zulake_error_filter}: a filter is decided row by row, so the
@@ -83,23 +88,36 @@ Inside the pruning subset, comparisons are exact: a \code{long}, \code{integer},
 numbers, digit by digit, and a \code{string} column in UTF-8 byte order
 whatever the session's collation, as the table's statistics are. A value
 given as text, such as \code{"12.30"}, is read as that decimal number; a double
-that has no exact decimal form of 15 digits (\code{1/3}, \code{0.1 + 0.2}) is an
-error asking for the value as text. A date or timestamp column takes a
+that is not the number its 15-digit form reads back as (\code{1/3},
+\code{0.1 + 0.2}) is an error asking for the value as text. R has already
+rounded a literal such as \code{9007199254740993} to a double
+(9007199254740992) before zulake sees it, so give such a value as text
+too. A \code{float} or \code{double} column takes
+only numbers: text there, such as \code{amount > "100"}, is an error, since R
+would compare it with the column as strings. A date or timestamp column takes a
 \code{Date} or \code{POSIXct}, or text such as \code{"2024-01-31"} or
 \code{"2024-01-31 12:00:00"} (UTC unless it gives an offset).
 
 Columns are typed as qio returns them (see \code{\link[qio:read_parquet]{qio::read_parquet()}}), and
 partition columns as \code{\link[=lake_files]{lake_files()}} types them, except that a \code{decimal}
 of precision 15 or less, data or partition, is a double, which holds it
-exactly. Columns zulake does not return are not lost silently: nested
+exactly. An \code{integer} data value of -2^31 reads as \code{NA}, R's integer
+\code{NA}, with a warning from qio: \code{is.na()} is \code{TRUE} for it and a comparison
+such as \code{x < 1} is not, and a file whose minimum may be -2^31 is never
+pruned on its null count. Columns zulake does not return are not lost silently: nested
 columns (\code{struct}, \code{array}, \code{map}), and decimals of precision above 15
 until qio reads them exactly. With \code{columns = NULL} they are left out, each named in a
 warning of class \code{zulake_warning_column_skipped} (fields \code{column} and
 \code{reason}); named in \code{columns} or used in \code{filter}, such a column is an
 error of class \code{zulake_error_column_unreadable} with the same fields.
 
-Data files are read in place on local disk; other stores download each
-file once per session, to the session's temporary directory.
+Data files are read in place on local disk. On Azure, every file left
+after pruning is downloaded to the session's temporary directory
+(\code{\link[=tempdir]{tempdir()}}) before the first piece is read, by \code{lake_walk()} too, and
+kept there for the rest of the session, so that a later read of the same
+file downloads nothing. The disk used is the size of the files left after
+pruning: \code{lake_walk()} reads tables larger than memory, not larger than
+the temporary directory's disk.
 
 Rows a deletion vector marks as deleted are never returned (see
 \code{\link[=lake_deletion_vectors]{lake_deletion_vectors()}}); reading their vectors needs the zuroar

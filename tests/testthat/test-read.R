@@ -14,6 +14,11 @@ test_that("full reads of every fixture equal deltalake's", {
                         function(w) w$column, "")
       expect_setequal(skipped, c("dec38", "st", "li", "mp"))
       expect_read_oracle(got$value, case$table, case$version, skipped = skipped)
+    } else if (case$table == "zl-int32-min") {
+      # qio warns that it read the int32 -2^31 as NA (#79).
+      expect_length(got$warnings, 1L)
+      expect_match(conditionMessage(got$warnings[[1L]]), "INT32 values in column 'i32' were coerced to NA", fixed = TRUE)
+      expect_read_oracle(got$value, case$table, case$version)
     } else {
       expect_length(got$warnings, 0L)
       expect_read_oracle(got$value, case$table, case$version)
@@ -280,7 +285,8 @@ test_that("a read with no file or no matching row has the columns and types of a
   for (case in read_cases()) {
     if (case$table %in% c("zl-types", "zl-catalog-managed")) next
     tbl <- case_snapshot(case)
-    full <- lake_read(tbl)
+    # qio warns that it read zl-int32-min's -2^31 as NA (#79).
+    full <- if (case$table == "zl-int32-min") suppressWarnings(lake_read(tbl)) else lake_read(tbl)
     none <- lake_read(tbl, filter = FALSE)
     expect_identical(nrow(none), 0L)
     expect_identical(lapply(none, class), lapply(full, class), label = paste(case$table, case$version))
@@ -388,16 +394,47 @@ test_that("a cached download deleted from disk is downloaded again, not read as 
   expect_identical(lake_read(tbl), direct)
   gets <- env$calls[startsWith(env$calls, "get ")]
   cache <- get("cache_env", envir = asNamespace("zulake"))
-  cached <- unlist(cache$files, use.names = FALSE)
+  cached <- vapply(cache$files, function(e) e$file, "", USE.NAMES = FALSE)
   expect_length(cached, length(gets))
   # The session's temporary files go (a tempdir cleaner, the user): the
   # next read downloads each file again and returns the same rows.
   unlink(cached)
   expect_identical(lake_read(tbl), direct)
   expect_identical(env$calls[startsWith(env$calls, "get ")], c(gets, gets))
-  expect_true(all(file.exists(unlist(cache$files, use.names = FALSE))))
+  expect_true(all(file.exists(vapply(cache$files, function(e) e$file, "", USE.NAMES = FALSE))))
   # Only one of them gone: only that one again.
-  unlink(unlist(cache$files, use.names = FALSE)[1L])
+  unlink(vapply(cache$files, function(e) e$file, "", USE.NAMES = FALSE)[1L])
   expect_identical(lake_read(tbl), direct)
   expect_length(env$calls[startsWith(env$calls, "get ")], 2L * length(gets) + 1L)
+})
+
+test_that("a relative log path with an empty, \".\" or \"..\" segment is a corrupt log, before any file is read (#66)", {
+  src <- fixture_table("zl-basic")
+  files <- lake_files(lake_open(src), stats = FALSE)
+  bad <- c("../x.parquet", "a/../../x.parquet", "./a.parquet", "a/./b.parquet", "a//b.parquet", "a/",
+           "%2E%2E/x.parquet", "a/%2e%2e/%2E%2E/x.parquet", "..", ".")
+  for (p in bad) {
+    path <- file.path(withr::local_tempdir(), "t")
+    for (f in files$path) {
+      dir.create(dirname(file.path(path, f)), recursive = TRUE, showWarnings = FALSE)
+      file.copy(file.path(src, f), file.path(path, f))
+    }
+    # The good files first, so a check made file by file would read them.
+    write_commit(path, 0, c(protocol_line(), metadata_line(c(id = "long", label = "string", x = "double")),
+                            vapply(files$path, add_line, "", USE.NAMES = FALSE), add_line(p)))
+    tbl <- lake_open(path)
+    rec <- new.env()
+    tbl$storage <- recording_storage(tbl$storage, rec)
+    for (call in list(quote(lake_read(tbl)), quote(lake_walk(tbl, identity)), quote(lake_count(tbl, footers = TRUE)))) {
+      err <- tryCatch(eval(call), error = identity)
+      expect_s3_class(err, "zulake_error_corrupt_log")
+      expect_identical(err$file, p, label = p)
+      expect_length(rec$calls, 0L)
+    }
+  }
+  # A name with dots that is not "." or "..", and an encoded "/" inside a
+  # segment, are names like any other.
+  for (p in c("..a.parquet", "a..b/c.parquet", "...")) {
+    expect_false(zulake:::bad_relative_path(p), label = p)
+  }
 })

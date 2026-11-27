@@ -375,3 +375,17 @@ test_that("counts refuse a deletion vector of more rows than numRecords, and a n
     expect_error(lake_summary(tbl, int64 = "integer64"), class = "zulake_error_corrupt_log", label = n)
   }
 })
+
+test_that("a deletion vector's relative prefix with a \"..\" segment is a corrupt log (#66)", {
+  uuid <- random_uuid()
+  for (prefix in c("..", "../x", "a/..")) {
+    dv <- list(storageType = "u", pathOrInlineDv = paste0(prefix, test_z85_encode(uuid)),
+               offset = 1L, sizeInBytes = 20L, cardinality = 3L)
+    tbl <- lake_open(dv_table(dv))
+    rec <- new.env()
+    tbl$storage <- recording_storage(tbl$storage, rec)
+    err <- tryCatch(lake_deletion_vectors(tbl), error = identity)
+    expect_s3_class(err, "zulake_error_corrupt_log")
+    expect_length(rec$calls, 0L)
+  }
+})

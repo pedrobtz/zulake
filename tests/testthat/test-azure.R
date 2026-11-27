@@ -512,6 +512,58 @@ test_that("an absolute Azure path in the log is read with the table's credential
   expect_error(lake_read(lake_open(file.path(dir, "local"))), class = "zulake_error_uri")
 })
 
+test_that("an absolute Azure path is read only on the table's own account and container (#76)", {
+  dir <- withr::local_tempdir()
+  src <- fixture_table("zl-basic")
+  files <- lake_files(lake_open(src), stats = FALSE)
+  dir.create(file.path(dir, "elsewhere"))
+  file.copy(file.path(src, files$path), file.path(dir, "elsewhere"))
+  table_at <- function(name, prefix) {
+    lines <- c(protocol_line(), metadata_line(c(id = "long", label = "string", x = "double")),
+               vapply(seq_len(nrow(files)), function(i) {
+                 add_line(paste0(prefix, "elsewhere/", files$path[i]), size = files$size_bytes[i])
+               }, ""))
+    write_commit(file.path(dir, name), 0, lines)
+  }
+  log <- new.env()
+  local_azure_fake(azure_fake(dir, log))
+  # The same account and container in each of the three forms, the host in
+  # upper case: read, from that container only.
+  same <- c(
+    "abfss://lake@ACCT.dfs.core.windows.net/", "https://acct.dfs.core.windows.net/lake/",
+    "https://Acct.Blob.Core.Windows.Net/lake/"
+  )
+  for (k in seq_along(same)) {
+    local_empty_download_cache()
+    table_at(paste0("same", k), same[k])
+    log$requests <- list()
+    expect_identical(nrow(lake_read(lake_open(fake_uri(paste0("same", k)), credentials = function() "tok"))), nrow(lake_read(lake_open(src))),
+                     label = same[k])
+    gets <- Filter(function(r) startsWith(r$path, "elsewhere/"), log$requests)
+    expect_length(gets, nrow(files))
+    expect_true(all(vapply(gets, function(r) identical(r$host, "acct.blob.core.windows.net"), NA)))
+  }
+  # Another account, another container, or both: refused before any request
+  # leaves for them, with or without credentials.
+  other <- c(
+    "abfss://lake@otheracct.dfs.core.windows.net/", "https://thirdacct.blob.core.windows.net/lake/",
+    "abfss://other@acct.dfs.core.windows.net/", "https://acct.blob.core.windows.net/lake2/",
+    "abfss://other@otheracct.dfs.core.windows.net/"
+  )
+  for (k in seq_along(other)) {
+    local_empty_download_cache()
+    table_at(paste0("other", k), other[k])
+    for (credentials in list(function() "tok", NULL)) {
+      tbl <- lake_open(fake_uri(paste0("other", k)), credentials = credentials)
+      log$requests <- list()
+      expect_error(lake_read(tbl), class = "zulake_error_uri", label = other[k])
+      expect_error(lake_count(tbl, footers = TRUE), class = "zulake_error_uri", label = other[k])
+      expect_length(Filter(function(r) startsWith(r$path, "elsewhere/") || r$host != "acct.blob.core.windows.net",
+                           log$requests), 0L)
+    }
+  }
+})
+
 test_that("the List Blobs parser reads Azure's documented answer and refuses others", {
   # The response body example of Azure's List Blobs reference (2023-11-03),
   # cut to the fields zulake reads, with a name that needs escaping.
@@ -649,6 +701,23 @@ test_that("a deletion vector at an absolute Azure path is read with the table's 
   for (r in got) expect_identical(r$headers$authorization, "Bearer tok")
   ranges <- unlist(lapply(got, function(r) r$headers$range))
   expect_true(sprintf("bytes=1-%.0f", 1 + 4 + length(vec) + 4 - 1) %in% ranges)
+})
+
+test_that("a deletion vector on another account or container is refused (#76)", {
+  skip_if_not_installed("zuroar")
+  for (uri in c("abfss://lake@otheracct.dfs.core.windows.net/elsewhere/dv.bin",
+                "https://acct.blob.core.windows.net/other/elsewhere/dv.bin")) {
+    dv <- list(storageType = "p", pathOrInlineDv = uri, offset = 1L, sizeInBytes = 20L, cardinality = 3L)
+    path <- dv_table(dv)
+    log <- new.env()
+    local_azure_fake(azure_fake(dirname(path), log))
+    tbl <- lake_open(fake_uri(basename(path)), credentials = function() "tok")
+    log$requests <- list()
+    expect_error(lake_deletion_vectors(tbl), class = "zulake_error_uri", label = uri)
+    expect_error(lake_read(tbl), class = "zulake_error_uri", label = uri)
+    expect_length(Filter(function(r) grepl("dv.bin", r$path, fixed = TRUE) || r$host != "acct.blob.core.windows.net",
+                         log$requests), 0L)
+  }
 })
 
 test_that("a snapshot restored in another session never sends that session's token (#43)", {
@@ -853,4 +922,114 @@ test_that("the shipped cassettes are in serialization version 2, which R CMD bui
   expect_identical(readRDS(f), x)
   saveRDS(x, f, version = 3L)
   expect_identical(rds_version(f), 3L)
+})
+
+test_that("a size from Azure is a whole number of bytes up to 2^53 - 1, or a storage error (#68)", {
+  listing <- function(size) charToRaw(paste0(
+    "<EnumerationResults><Blobs><Blob><Name>a</Name><Properties><Content-Length>", size,
+    "</Content-Length><Last-Modified>Mon, 01 Jan 2024 00:00:00 GMT</Last-Modified></Properties></Blob></Blobs>",
+    "</EnumerationResults>"
+  ))
+  good <- c("0" = 0, "12" = 12, "007" = 7, "9007199254740990" = 2^53 - 2, "9007199254740991" = 2^53 - 1)
+  bad <- c("Inf", "1e400", "12.5", "0x10", "1e3", " 12 ", "+1", "-1", "", "9007199254740992", "9007199254740993",
+           "99999999999999999999")
+  for (s in names(good)) expect_identical(parse_blob_list(listing(s), "p")$blobs$size, good[[s]], label = s)
+  for (s in bad) expect_error(parse_blob_list(listing(s), "p"), class = "zulake_error_storage", label = s)
+  # The same rule for head()'s Content-Length and a range's total.
+  storage <- storage_for(fake_uri("zl-basic"), function() "tok")
+  for (s in names(good)) {
+    local_azure_fake(azure_fake(fake_root(), new.env(), override = function(r) {
+      zuhttp::zu_response(200L, c(`Content-Length` = s, `Last-Modified` = "Thu, 26 Nov 2026 16:04:00 GMT"))
+    }))
+    expect_identical(storage$head("x")$size, good[[s]], label = s)
+    expect_identical(content_range_total(paste0("bytes 0-0/", s)), good[[s]], label = s)
+  }
+  for (s in setdiff(bad, "")) {
+    local_azure_fake(azure_fake(fake_root(), new.env(), override = function(r) {
+      zuhttp::zu_response(200L, c(`Content-Length` = s, `Last-Modified` = "Thu, 26 Nov 2026 16:04:00 GMT"))
+    }))
+    expect_error(storage$head("x"), class = "zulake_error_storage", label = s)
+    expect_identical(content_range_total(paste0("bytes 0-0/", s)), NA_real_, label = s)
+  }
+})
+
+test_that("on Azure, a relative log path with a \"..\" segment sends no request (#66)", {
+  dir <- withr::local_tempdir()
+  for (p in c("../zl-basic/x.parquet", "x/../../zl-basic/x.parquet")) {
+    write_commit(file.path(dir, "esc"), 0, c(protocol_line(), metadata_line(), add_line(p)))
+    log <- new.env()
+    local_azure_fake(azure_fake(dir, log))
+    tbl <- lake_open(fake_uri("esc"), credentials = function() "tok")
+    log$requests <- list()
+    expect_error(lake_read(tbl), class = "zulake_error_corrupt_log", label = p)
+    expect_error(lake_count(tbl, footers = TRUE), class = "zulake_error_corrupt_log", label = p)
+    expect_length(log$requests, 0L)
+  }
+})
+
+test_that("the download cache is keyed on the blob and served only to the credentials that fetched it (#72)", {
+  local_empty_download_cache()
+  log <- new.env()
+  deny <- FALSE
+  local_azure_fake(azure_fake(fake_root(), log, auth = function(h) if (deny) 401L))
+  parquet_gets <- function() sum(vapply(log$requests, function(r) r$method == "GET" && endsWith(r$path, ".parquet"), NA))
+  creds <- function() "tok"
+  first <- lake_read(lake_open(fake_uri("zl-basic"), credentials = creds))
+  n <- parquet_gets()
+  expect_gt(n, 0L)
+  # The same blobs by every form of the table's URI, the host in upper case
+  # and the root percent-encoded: no download again.
+  uris <- c(fake_uri("zl-basic", "dfs"), fake_uri("zl-basic", "blob"),
+            "abfss://lake@ACCT.dfs.core.windows.net/zl-basic", "https://acct.blob.core.windows.net/lake/zl%2Dbasic",
+            paste0(fake_uri("zl-basic"), "/"))
+  for (uri in uris) {
+    log$requests <- list()
+    expect_identical(lake_read(lake_open(uri, credentials = creds)), first, label = uri)
+    expect_identical(parquet_gets(), 0L, label = uri)
+  }
+  # Other credentials download for themselves, and a refusal is an error,
+  # never the files another snapshot fetched.
+  log$requests <- list()
+  tbl <- lake_open(fake_uri("zl-basic"), credentials = function() "tok-b")
+  expect_identical(lake_read(tbl), first)
+  expect_identical(parquet_gets(), n)
+  deny <- TRUE
+  for (other in list(function() "other", NULL)) {
+    expect_error(lake_open(fake_uri("zl-basic"), credentials = other), class = "zulake_error_auth")
+  }
+  denied <- local({
+    deny <<- FALSE
+    on.exit(deny <<- TRUE)
+    lake_open(fake_uri("zl-basic"), credentials = function() "third")
+  })
+  expect_error(lake_read(denied), class = "zulake_error_auth")
+  deny <- FALSE
+  # A copy that is not the log's size on disk is downloaded again.
+  cache <- get("cache_env", envir = asNamespace("zulake"))
+  files <- vapply(cache$files, function(e) e$file, "", USE.NAMES = FALSE)
+  writeBin(as.raw(1:3), files[1L])
+  log$requests <- list()
+  expect_identical(lake_read(tbl), first)
+  expect_identical(parquet_gets(), 1L)
+})
+
+test_that("a download that fails while it is written leaves no file in the cache (#72)", {
+  local_empty_download_cache()
+  log <- new.env()
+  local_azure_fake(azure_fake(fake_root(), log))
+  tbl <- lake_open(fake_uri("zl-basic"), credentials = function() "tok")
+  dir <- file.path(tempdir(), "zulake-cache")
+  before <- list.files(dir)
+  local({
+    write <- base::writeBin
+    local_mocked_bindings(writeBin = function(object, con, ...) {
+      write(object[seq_len(length(object) %/% 2L)], con)
+      stop("disk full")
+    }, .package = "base")
+    expect_error(lake_read(tbl), "disk full")
+  })
+  expect_identical(list.files(dir), before)
+  cache <- get("cache_env", envir = asNamespace("zulake"))
+  expect_length(cache$files, 0L)
+  expect_identical(nrow(lake_read(tbl)), 3L)
 })

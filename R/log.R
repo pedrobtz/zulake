@@ -36,13 +36,14 @@ log_entries <- function(listing) {
   end_version <- rep(NA_real_, length(name))
   compaction <- kind == "compaction"
   end_version[compaction] <- parse_version(substr(name[compaction], 22L, 41L), name[compaction])
-  bad <- compaction & !(end_version > version)
-  if (any(bad)) {
-    zulake_abort(
-      "corrupt_log",
-      sprintf("log compaction file %s ends before it starts.", format_string(name[bad][1L]))
-    )
-  }
+  # The protocol names a compaction file only for y > x: any other is not a
+  # log file, and is left out like other names it does not define (#69).
+  named <- !compaction | end_version > version
+  name <- name[named]
+  kind <- kind[named]
+  version <- version[named]
+  end_version <- end_version[named]
+  keep[keep] <- named
   multi <- kind == "checkpoint" & grepl("[.]checkpoint[.][0-9]{10}[.][0-9]{10}[.]parquet$", name)
   part <- rep(NA_real_, length(name))
   parts <- rep(NA_real_, length(name))
@@ -130,9 +131,9 @@ mark_big_integers <- function(bytes) {
   if (identical(marked, text)) bytes else charToRaw(marked)
 }
 
-# `_delta_log/_last_checkpoint`, parsed, or NULL when the log has none. Its
-# `version` is checked here; the rest of it is used when checkpoints are
-# read (Stage 2b).
+# `_delta_log/_last_checkpoint`, parsed, or NULL when the log has none. Only
+# its `version` is read, and checked here; replay finds checkpoints in the
+# listing (design section 4.2), and the other fields are kept as parsed.
 read_last_checkpoint <- function(storage, entries) {
   if (!any(entries$kind == "last_checkpoint")) {
     return(NULL)

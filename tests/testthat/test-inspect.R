@@ -139,7 +139,7 @@ test_that("lake_partitions() equals deltalake's partitions", {
   for (case in inspect_cases()) {
     tbl <- case_snapshot(case)
     p <- lake_partitions(tbl)
-    expected <- oracle_field(case$table, case$version, "partitions")
+    expected <- oracle_partition_rows(oracle_field(case$table, case$version, "partitions"), column_types(tbl))
     label <- paste(case$table, case$version)
     actual <- lapply(seq_len(nrow(p)), function(i) as.list(p[i, , drop = FALSE]))
     key <- function(x) vapply(x, function(r) paste(unlist(oracle_canon(r)), collapse = "\x1f"), "")
@@ -558,4 +558,15 @@ test_that("integer64 arguments count as their values, and past 2^53 - 1 are refu
     expect_error(lake_actions(tbl, bad), class = "zulake_error_argument")
     expect_error(lake_changes(tbl, from = bad), class = "zulake_error_argument")
   }
+})
+
+test_that("print shows unknown for sizes and counts it cannot sum exactly (#90)", {
+  # A size and a numRecords past 2^53 - 1 are zulake_error_int64 in
+  # lake_summary() and lake_count(); print says "unknown" instead.
+  big <- "9007199254740993"
+  tbl <- lake_open(raw_table(c(raw_header(), raw_add("a.parquet", size = big, stats = sprintf('{\\"numRecords\\":%s}', big)))))
+  expect_error(lake_count(tbl), class = "zulake_error_int64")
+  out <- capture.output(print(tbl))
+  expect_identical(out[4L], "files:     1 (unknown bytes)")
+  expect_identical(out[5L], "records:   unknown (the statistics cannot be read)")
 })

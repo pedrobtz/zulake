@@ -177,7 +177,12 @@ Settled in Stage 6 (2026-11-26):
   sent with `decode = FALSE` (the stored bytes, whatever their
   `Content-Encoding`), no body limit and a 600-second timeout. A range
   needs `206` with exactly `to - from + 1` bytes; a short body or `416` is
-  a `zulake_error_storage`, as reading past a local file's end is.
+  a `zulake_error_storage`, as reading past a local file's end is. A size
+  Azure sends (List Blobs' `Content-Length`, a HEAD's `Content-Length`, a
+  `Content-Range` total) must be decimal digits up to 2^53 - 1, compared as
+  text; anything else is a `zulake_error_storage` (2026-11-27, #68:
+  `as.numeric()` took `Inf`, `0x10`, `1e3`, `" 12 "` and rounded past
+  2^53).
 - **Credentials (D4).** `credentials()` is called before the first request
   of a snapshot's backend and once more after a `401`; the new token is
   kept for later requests. A second `401`, or a `403`, is a
@@ -214,7 +219,12 @@ Settled in Stage 6 (2026-11-26):
   `zulake_error_uri`. A table's files stay on its own backend: a local
   path or a `file:` URI in the log of a table on Azure is a
   `zulake_error_uri` too, never read from the reader's disk (2026-11-27,
-  #44).
+  #44). An absolute Azure path is read only when it names the table's own
+  account and container (in any of the three forms, the host in any case);
+  another account or container is a `zulake_error_uri` before any request,
+  with no opt-in in 0.1.0 (2026-11-27, #76: otherwise the log, which may
+  be untrusted, chooses which accounts receive the table's token; shallow
+  clones across accounts can get an opt-in later).
 
 ### 4.2 Log replay
 
@@ -249,7 +259,15 @@ a choice:
   starts where replay stands and ends at or before the target version
   (the one reaching furthest, of several). Why: the protocol makes them
   equivalent to those commits; a log whose old commits were cleaned up
-  but compacted still opens.
+  but compacted still opens. A compaction file that cannot be read (not
+  JSON, gone) is passed over for the commits it covers when they are all
+  in the log, as an unreadable checkpoint is, and is a corrupt log only
+  when replay needs it; an authentication failure is never passed over.
+  A name `<x>.<y>.compacted.json` with `y` not greater than `x`, which the
+  protocol does not define, is not a log file and is left out of the
+  listing (2026-11-27, #69, on a design adviser's recommendation: a
+  compaction file is an optimisation, never a reason to refuse a log whose
+  commits are intact; `deltalake` 1.7.0 opens both).
 - *`_last_checkpoint`* is parsed and kept. One that is not JSON, has no
   whole `version`, or names a version past the last commit is a corrupt
   log. Why: a hint that contradicts the log means the log is not what its
@@ -297,9 +315,21 @@ a choice:
     carries the `checkpoint` version and the read failure as `parent`. A
     checkpoint that reads but whose actions break the protocol is a corrupt
     log, like a commit. An authentication failure is never passed over.
+    Only read failures are passed over: a `zulake_error`, an error of
+    `qio`'s, or a refusal of the checkpoint reader's own (internal class
+    `zulake_checkpoint_refusal`); any other error propagates unchanged
+    (2026-11-27, #89: a bug in zulake's checkpoint code was hidden as an
+    unreadable checkpoint). Only `qio`'s INT64 coercion warning ("Some
+    INT64 or UINT64 values in column ... were coerced to NA") leads to the
+    `integer64` re-read; any other warning makes the checkpoint unreadable
+    with that warning's text as the reason (2026-11-27, #71: an INT32 of
+    -2^31 was reported as needing `bit64`).
   - A version older than the earliest checkpoint whose commits were
     cleaned up is a `zulake_error_version`: it is no longer in the log
-    (a fact about the table, not a reading failure).
+    (a fact about the table, not a reading failure). A missing commit with
+    an older commit still in the log is a hole, not a cleanup (which
+    removes the oldest commits first), and is a corrupt log (2026-11-27,
+    #70).
   - A log of checkpoints alone (or one whose commit at the snapshot's
     version is gone) opens, with `timestamp` `NA` and no `commit_info`:
     the checkpoint determines the state, and log cleanup can leave this.
@@ -340,6 +370,12 @@ a choice:
   0-59, offsets to 18:00), which statistics and filter literals use too,
   and a time is the double qio reads for the same microseconds: the count
   rounded once, then divided by 1e6 (2026-11-27, #53, #54). An empty string or a missing key is null.
+  A `float` or `double` value is a decimal number or an infinity or NaN in
+  any spelling Rust's f64 parser takes: `inf`, `infinity` or `nan` in any
+  case, with an optional sign (2026-11-27, #67, on a design adviser's
+  recommendation: `deltalake` writes `inf`, `-inf` and `NaN`, Spark
+  `Infinity` and `NaN`, and the union cannot collide with a number;
+  fixture `zl-inf-partitions`).
 
 ### 4.3 Reading
 
@@ -352,9 +388,26 @@ one file at a time and calls a function on each piece, for tables
 larger than memory. Data files on local disk are read in place; a backend
 without local paths (Azure) downloads each file once per session, keyed by
 path, size and modification time, into the session's temporary
-directory, which R removes when the session ends. Caching across sessions
+directory, which R removes when the session ends. The key is the blob
+itself (account, container, decoded name), so every URI form of a table
+shares it, and a cached file is served only to the credentials function
+that downloaded it; a copy is written under a temporary name and renamed
+when whole, and one whose size on disk is not the log's is downloaded
+again (2026-11-27, #72: the key was the root as typed, with no
+credentials, so a path-scoped caller was served another's files).
+Deletion vectors are not cached. A relative path in the log (an `add`
+path, a deletion vector's prefix) with an empty, `.` or `..` segment,
+after percent-decoding, is a `zulake_error_corrupt_log` on every backend,
+and every file's location is checked before any is read (2026-11-27,
+#66: the table URI already refuses them, and the log should not reach
+outside the table's root). Caching across sessions
 is Q4, after 0.1.0 (settled 2026-11-26, Stage 4: no `cache` argument in
-0.1.0, since a per-session cache needs none).
+0.1.0, since a per-session cache needs none). Every file left after
+pruning is downloaded before the first piece, by `lake_walk()` too, and the
+disk this uses, the pruned files' size, is documented in `?lake_walk`
+rather than bounded: larger than memory, not larger than disk (2026-11-27,
+#75: plans before rows is the design's order, and fetching per piece or
+reading footers by range is a later change).
 
 Settled in Stage 4 (2026-11-26):
 
@@ -370,6 +423,13 @@ Settled in Stage 4 (2026-11-26):
   `lake_walk()` too); a pruned file's vector is never read. `name`-mode
   column mapping reads each column by its physical name and returns it by
   its logical name; a column a file lacks is `NA`, as the protocol asks.
+  In `name` mode a top-level field without a non-empty
+  `delta.columnMapping.physicalName` is a `zulake_error_corrupt_log`
+  naming the field (field `column`), checked once when the snapshot is
+  built; the logical name is never used in its place (2026-11-27, #77:
+  the protocol requires the physical name in `name` mode, and after a
+  rename the logical name can be another column's in the files; hostile
+  log `column-mapping-no-physical-name`).
 - *`int64`.* `lake_read()` and `lake_walk()` take `int64` like the
   inspection functions, since a `long` partition column holds 64-bit
   values from the log (§5), and pass it to `qio` for data columns.
@@ -483,7 +543,13 @@ right, `[`, a user function) is a `zulake_error_filter` everywhere: a
 filter is decided row by row, so its result does not depend on how rows are
 split into files. A subexpression that names no column is a value,
 evaluated once in the caller's environment, and may be any R (settled
-2026-11-26, a correction to Stage 4, D8).
+2026-11-26, a correction to Stage 4, D8). Before R 4.3.0, `as.character`,
+`substr`, `toupper`, `tolower` and `grepl` with a `timestamp` or
+`timestamp_ntz` column inside are a `zulake_error_filter`, and `Depends`
+stays at R >= 3.5.0 (2026-11-27, #74: there `as.character()` of a POSIXct
+picks one format for the whole vector, date only when every value is at
+midnight and no fraction of a second, so a row's text depended on the
+other rows of its file, which is not row-wise).
 
 `lake_count(tbl)` is the sum of `numRecords` over the live files minus
 the cardinality of their deletion vectors, from the log alone. `stats` is
@@ -497,6 +563,13 @@ from their Parquet footers (Stage 4), with no warning. A file with a deletion ve
 no `numRecords` is a corrupt log. The cardinality is the descriptor's,
 which the log holds, so the subtraction needs no `zuroar` and is done from
 Stage 3 on (settled 2026-11-26); Stage 5 adds the rows themselves.
+A snapshot's print shows a size or record count it cannot compute as
+"unknown" rather than failing: it catches the `zulake_error` that
+`lake_summary()` and `lake_count()` raise, which is a
+`zulake_error_int64` (a size or count past 2^53 - 1) or a
+`zulake_error_corrupt_log` (statistics that are not JSON) (2026-11-27,
+#90: a print method that fails hides the snapshot itself, and the
+inspection functions still raise the error).
 
 Settled in Stage 3 (2026-11-26), the shapes the roxygen documents in full:
 
@@ -570,7 +643,7 @@ snapshot, never prints it, and redacts it from errors (D4).
 `POSIXct` (settled 2026-11-26, Stage 2: a character time would need a
 parser and a zone rule of its own). Every error is a condition of class
 `zulake_error` with one subclass per kind: `zulake_error_argument`,
-`zulake_error_uri` (a scheme with no backend yet), `zulake_error_storage`,
+`zulake_error_uri` (a URI or a path in the log that zulake will not open: a scheme with no backend, user information, a bad account, container or path segment, an absolute path off the table's storage; wording settled 2026-11-27, #91), `zulake_error_storage`,
 `zulake_error_not_table`, `zulake_error_version`,
 `zulake_error_corrupt_log`, `zulake_error_checkpoint_unreadable`,
 `zulake_error_unsupported_feature`, whose `feature` field names the
@@ -665,7 +738,10 @@ statistics and on rows, so pruning and the row filter cannot disagree:
   `sprintf("%.15g", x)` when `as.numeric()` of that equals `x`, otherwise
   `sprintf("%.0f", x)` when `x` is whole, otherwise a
   `zulake_error_filter` asking for the value as text (`0.1` and `12.3`
-  pass; `1/3` and `0.1 + 0.2` do not); `Inf` and `-Inf` compare as
+  pass; `1/3` and `0.1 + 0.2` do not; R has already rounded a literal
+  such as `9007199254740993` to 9007199254740992 before zulake sees it,
+  which `?lake_read` says, with "exact up to 2^53 - 1" for `int64`:
+  wording settled 2026-11-27, #91); `Inf` and `-Inf` compare as
   infinities; `NA` and `NaN` give `NA`. Partition values compare exactly at
   any precision. With `int64 = "integer64"` no non-whole double reaches
   `bit64` (`bit64::as.integer64(3) < 3.5` is FALSE). Why: one rule for
@@ -681,13 +757,26 @@ statistics and on rows, so pruning and the row filter cannot disagree:
   truncate it to milliseconds; and a `float` or `double` column may hold
   NaN, which no statistic counts, so `is.na()` and `!(x %in% v)` keep its
   files. A date or timestamp column takes text (`"2024-01-31"`, UTC unless
-  an offset is given) as well as a `Date` or `POSIXct`.
+  an offset is given) as well as a `Date` or `POSIXct`. Text against a
+  `float` or `double` column is a `zulake_error_filter`, as against a
+  `boolean` one (2026-11-27, #73: R compares a double with text as
+  strings, so reading the text as a number gave other rows than
+  `subset()`, against D8's claim).
 - *Strings* compare in UTF-8 byte order on rows too, whatever the
   session's collation; a string maximum is taken as a prefix the true
-  maximum may extend.
+  maximum may extend. A maximum ending in U+FFFD is taken as the prefix
+  before its trailing U+FFFD characters (2026-11-27, #78: Delta Spark
+  ends a truncated maximum with U+FFFD as a tie-breaker, which sorts below
+  every supplementary character in UTF-8 byte order, so `x == "<prefix>😀"`
+  would otherwise be pruned).
 - *Null counts.* A file whose `nullCount` equals `numRecords` holds only
   nulls, and one with `numRecords` 0 nothing; a missing count is
-  unknown. On a column read as a list (`binary`), `is.na()` is `TRUE`
+  unknown. On an `integer` column, a null count says no row is `NA` only
+  when the file's minimum is known and above -2^31: `qio` reads an int32
+  of -2^31 as `NA`, R's integer `NA` (with a warning), which the null
+  count does not count, and that `NA` is kept rather than converted
+  (2026-11-27, #79: `is.na(i32)` was pruned while `is.na(i32 + 0L)` was
+  not; a lossless read is asked of `qio`; fixture `zl-int32-min`). On a column read as a list (`binary`), `is.na()` is `TRUE`
   for a null value (`NULL`), as the null count means it, where base R's
   `is.na()` on a list is `FALSE` (settled 2026-11-26, Stage 8, on a
   design adviser's recommendation: R's answer would contradict the

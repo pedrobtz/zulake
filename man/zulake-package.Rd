@@ -4,9 +4,9 @@
 \name{zulake-package}
 \alias{zulake}
 \alias{zulake-package}
-\title{zulake: Inspect and Read 'Delta Lake' Tables}
+\title{zulake: Inspect and Read Delta Lake Tables}
 \description{
-Opens a 'Delta Lake' table where it is stored, on 'Azure Data Lake Storage Gen2', 'Azure Blob Storage' or local disk, and returns what the table's own log records as data frames: its versions and commits, the files of each version with their partition values, statistics and deletion vectors, its schema, protocol and properties, and the changes between two versions. Reads the table's data too, pruning files by partition values and statistics before downloading any of them. The log is replayed in R, following the 'Delta Lake' protocol \url{https://github.com/delta-io/delta/blob/master/PROTOCOL.md}.
+Opens a Delta Lake table where it is stored, on 'Azure Data Lake Storage Gen2', 'Azure Blob Storage' or local disk, and returns what the table's own log records as data frames: its versions and commits, the files of each version with their partition values, statistics and deletion vectors, its schema, protocol and properties, and the changes between two versions. Reads the table's data too, pruning files by partition values and statistics before downloading any of them. The log is replayed in 'R', following the Delta Lake protocol \url{https://github.com/delta-io/delta/blob/master/PROTOCOL.md}.
 }
 \seealso{
 Useful links:
@@ -27,7 +27,8 @@ Authors:
 
 Other contributors:
 \itemize{
-  \item The delta-rs authors (Delta test tables in tests/testthat/fixtures) [copyright holder]
+  \item QP Hou (Copyright holder of the 'delta-rs' test tables in tests/testthat/fixtures) [copyright holder]
+  \item The delta-rs authors (Other contributors to the 'delta-rs' test tables in tests/testthat/fixtures) [copyright holder]
 }
 
 }

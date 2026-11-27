@@ -4,7 +4,8 @@
 # per kind, so callers and tests catch by class and never by message:
 #
 #   zulake_error_argument              an argument of the wrong type or value
-#   zulake_error_uri                   a URI zulake cannot open (scheme)
+#   zulake_error_uri                   a URI or a path in the log that zulake
+#                                      will not open
 #   zulake_error_storage               a file the storage backend cannot read;
 #                                      from Azure also `status` and `code`
 #   zulake_error_auth                  Azure refused the credentials (HTTP

@@ -45,6 +45,10 @@
 #' or put in any error. Without `credentials`, requests are anonymous, which
 #' only a public container answers.
 #'
+#' A file the log names by an absolute Azure URI is read only when it is
+#' in the table's own account and container; one elsewhere is a
+#' `zulake_error_uri` error, and no request is sent there.
+#'
 #' The snapshot does not keep `credentials` either; later calls on it, such
 #' as [lake_read()], use it through the R session. A snapshot saved with
 #' [saveRDS()] and read in another session has none: open the table again.
@@ -68,7 +72,9 @@
 #'   holds, a whole number as a double.
 #'
 #'   Every error is a condition of class `zulake_error`, with a subclass
-#'   that says why: `zulake_error_not_table` (no Delta log at `uri`),
+#'   that says why: `zulake_error_argument` (an argument of the wrong type
+#'   or value, such as a `version` that is not a whole number),
+#'   `zulake_error_not_table` (no Delta log at `uri`),
 #'   `zulake_error_version` (no such version, or one no longer in the log),
 #'   `zulake_error_uri` (a URI zulake cannot open), `zulake_error_storage` (a file that cannot be
 #'   read; from Azure with the HTTP `status` and Azure's error `code`),
@@ -258,6 +264,7 @@ snapshot_build <- function(storage, uri, version = NULL, timestamp = NULL) {
 
   check_reader_features(state$protocol, state$metadata, version)
   mode <- column_mapping_mode(state$protocol, state$metadata)
+  check_physical_names(state$metadata, mode)
   files <- file_frame(state$adds)
   check_partition_values(files$action, state$metadata, mode)
 

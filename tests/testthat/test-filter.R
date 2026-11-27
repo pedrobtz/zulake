@@ -208,6 +208,40 @@ test_that("a string maximum is never taken as exact: it may be a truncated prefi
   expect_identical(lake_read(tbl, filter = label == top), full[full$label == top, , drop = FALSE], ignore_attr = TRUE)
 })
 
+test_that("a string maximum ending in U+FFFD is only a prefix, so no value above it is pruned (#78)", {
+  # The premise: Delta Spark's truncated maximum appends U+FFFD as a
+  # tie-breaker, and in UTF-8 byte order U+FFFD (EF BF BD) sorts below
+  # every supplementary character (F0 ...), so the maximum "abc<U+FFFD>" sorts
+  # below the value "abc<U+1F600>".
+  fffd <- "\uFFFD"
+  emoji <- "\U0001F600"
+  expect_identical(charToRaw(enc2utf8(fffd)), as.raw(c(0xEF, 0xBF, 0xBD)))
+  expect_identical(charToRaw(enc2utf8(emoji))[1L], as.raw(0xF0))
+  expect_identical(zulake:::bytes_cmp(paste0("abc", fffd), paste0("abc", emoji)), -1L)
+  path <- file.path(withr::local_tempdir(), "t")
+  dir.create(file.path(path, "_delta_log"), recursive = TRUE)
+  rows <- data.frame(s = c("abc", paste0("abc", emoji), paste0("abc", fffd, fffd, emoji)))
+  qio::write_parquet(rows, file.path(path, "a.parquet"))
+  for (max in c("abc\\\\uFFFD", "abc\\\\uFFFD\\\\uFFFD")) {
+    stats <- sprintf('{\\"numRecords\\":3,\\"minValues\\":{\\"s\\":\\"abc\\"},\\"maxValues\\":{\\"s\\":\\"%s\\"},\\"nullCount\\":{\\"s\\":0}}', max)
+    writeLines(c(raw_header(c(s = "string")), raw_add("a.parquet", stats = stats)),
+               file.path(path, "_delta_log", "00000000000000000000.json"), useBytes = TRUE)
+    tbl <- lake_open(path)
+    expect_true(endsWith(lake_files(tbl)$max[[1L]]$s, fffd))
+    keeps <- function(expr) nrow(eval(bquote(lake_files(tbl, filter = .(expr))))) == 1L
+    for (v in c(paste0("abc", emoji), paste0("abc", fffd, emoji), paste0("abc", fffd, fffd, emoji), "abc\U0010FFFF")) {
+      for (expr in list(bquote(s == .(v)), bquote(s >= .(v)), bquote(s %in% .(v)))) {
+        expect_true(keeps(expr), label = deparse(expr))
+        expect_identical(eval(bquote(lake_read(tbl, filter = .(expr)))), r_subset(rows, expr), ignore_attr = TRUE, label = deparse(expr))
+      }
+    }
+    # Below the minimum, and past every string the prefix starts, a file
+    # is still pruned.
+    expect_false(keeps(quote(s < "abc")))
+    expect_false(keeps(quote(s == "abd")))
+  }
+})
+
 test_that("decimal statistics are bounds only when exact: missing, past precision 15, or past the scale they are unknown", {
   stats <- function(lo, hi) sprintf('{\\"numRecords\\":1,\\"minValues\\":{\\"d\\":%s},\\"maxValues\\":{\\"d\\":%s},\\"nullCount\\":{\\"d\\":0}}', lo, hi)
   kept <- function(type, lo, hi, expr) {
@@ -370,7 +404,15 @@ test_that("filter values become exact text by the documented rules", {
                "write it as text", fixed = TRUE)
   # Number columns.
   num <- function(v, type = "double") literal_keys(v, "number", type, expr)$keys
-  expect_identical(num("1.5e3"), 1500)
+  # Text against a float or double column is refused, as against a boolean
+  # one: R would compare the two as strings (#73).
+  for (type in c("double", "float", "boolean")) {
+    for (v in list("1.5e3", "100", c("1", "2"), c(NA, "1"))) {
+      expect_error(num(v, type), class = "zulake_error_filter", label = paste(type, deparse(v)))
+    }
+    expect_identical(num(NA_character_, type), NA_real_)
+  }
+  expect_identical(num(1500), 1500)
   expect_identical(num(as.Date("1970-01-11"), "date"), 10)
   expect_identical(num("1970-01-11", "date"), 10)
   expect_identical(num("1970-01-01 00:00:01.5", "timestamp"), 1.5)
@@ -574,4 +616,94 @@ test_that("a binary column is filtered on rows; is.na() of it is TRUE for a null
   expect_identical(read(quote(!is.na(b))), r_subset(full, bquote(.(!null))))
   expect_identical(nrow(r_subset(full, quote(is.na(b)))), 0L)
   expect_identical(nrow(suppressWarnings(lake_files(tbl, filter = is.na(b)))), 1L)
+})
+
+test_that("a text literal against a float or double column is refused everywhere (#73)", {
+  tbl <- lake_open(system.file("extdata", "orders", package = "zulake"))
+  rows <- lake_read(tbl)
+  # R compares a double with text as strings, which is not what pruning on
+  # the number would keep: the two disagree on the shipped table.
+  expect_false(identical(nrow(subset(rows, amount > "100")), nrow(subset(rows, amount > 100))))
+  for (expr in list(quote(amount > "100"), quote(amount == "12.5"), quote(amount %in% c("1", "2")),
+                    quote(region == "EU" & amount >= "100"), quote(!(amount < "100")))) {
+    expect_error(eval(bquote(lake_read(tbl, filter = .(expr)))), class = "zulake_error_filter", label = deparse(expr))
+    expect_error(eval(bquote(lake_walk(tbl, identity, filter = .(expr)))), class = "zulake_error_filter", label = deparse(expr))
+    expect_error(eval(bquote(lake_files(tbl, filter = .(expr)))), class = "zulake_error_filter", label = deparse(expr))
+  }
+  expect_identical(lake_read(tbl, filter = amount > 100), rows[rows$amount > 100, , drop = FALSE], ignore_attr = TRUE)
+})
+
+test_that("text functions of a timestamp column are refused on R before 4.3 (#74)", {
+  # Before R 4.3.0, as.character() of a POSIXct (and substr(), toupper(),
+  # tolower() and grepl(), which call it) chose one format for the whole
+  # vector, so its value for a row depended on the other rows of the file.
+  tbl <- lake_open(fixture_table("zl-types"))
+  rows <- suppressWarnings(lake_read(tbl, columns = c("i16", "d", "ts", "ntz")))
+  refused <- list(
+    quote(as.character(ts) == "2024-01-01"), quote(substr(ntz, 1, 4) == "2024"),
+    quote(toupper(ts) == "X"), quote(tolower(ntz) == "x"), quote(grepl("2024", ts)),
+    quote(as.character(ts + 1) == "x"), quote(i16 > 0 | nchar(as.character(ntz)) > 0)
+  )
+  allowed <- list(
+    quote(as.character(d) == "2024-01-01"), quote(as.numeric(ts) > 0), quote(nchar(as.character(i16)) > 1),
+    quote(ts > as.POSIXct("2000-01-01", tz = "UTC"))
+  )
+  read <- function(expr) eval(bquote(lake_read(tbl, columns = c("i16", "d", "ts", "ntz"), filter = .(expr))))
+  for (old in c("4.2.3", "3.5.0")) {
+    local({
+      local_mocked_bindings(r_version = function() package_version(old))
+      for (expr in refused) {
+        err <- tryCatch(read(expr), error = identity)
+        expect_s3_class(err, "zulake_error_filter")
+        expect_match(conditionMessage(err), "R 4.3.0", fixed = TRUE)
+      }
+      for (expr in allowed) expect_identical(read(expr), r_subset(rows, expr), ignore_attr = TRUE, label = deparse(expr))
+    })
+  }
+  # From R 4.3.0 on they are row-wise, and read as subset() does.
+  local_mocked_bindings(r_version = function() package_version("4.3.0"))
+  for (expr in c(refused, allowed)) {
+    expect_identical(read(expr), r_subset(rows, expr), ignore_attr = TRUE, label = deparse(expr))
+  }
+})
+
+test_that("equivalent filters agree on an int32 of -2^31, which qio reads as NA (#79)", {
+  # zl-int32-min: one file, i32 = -2^31, 1, 5 and nullCount 0. qio reads
+  # -2^31 as NA (R's integer NA), so is.na() is TRUE on that row, and the
+  # null count of 0 must not prune it.
+  tbl <- lake_open(fixture_table("zl-int32-min"))
+  rows <- suppressWarnings(lake_read(tbl))
+  expect_identical(rows$i32, c(NA, 1L, 5L))
+  expect_identical(lake_files(tbl)$null_count[[1L]]$i32, 0)
+  for (expr in list(quote(i32 < 1), quote(i32 == -2147483648), quote(is.na(i32)), quote(i32 %in% NA),
+                    quote(i32 %in% c(1, 5, NA)), quote(is.na(i32 + 0L)), quote(!is.na(i32)), quote(!(i32 %in% NA)))) {
+    got <- suppressWarnings(eval(bquote(lake_read(tbl, filter = .(expr)))))
+    expect_identical(got, r_subset(rows, expr), ignore_attr = TRUE, label = deparse(expr))
+  }
+  expect_identical(nrow(lake_files(tbl, filter = is.na(i32))), 1L)
+  expect_identical(nrow(lake_files(tbl, filter = i32 %in% NA)), 1L)
+  # A file whose minimum is known and above -2^31 is still pruned on its
+  # null count; a missing minimum, or one of -2^31, is not.
+  stats <- function(min) sprintf('{\\"numRecords\\":2,\\"minValues\\":{%s},\\"maxValues\\":{\\"i32\\":5},\\"nullCount\\":{\\"i32\\":0}}', min)
+  kept <- function(min, type = "integer") {
+    t <- lake_open(raw_table(c(raw_header(c(i32 = type)), raw_add("a.parquet", stats = stats(min)))))
+    nrow(lake_files(t, filter = is.na(i32))) == 1L
+  }
+  expect_false(kept('\\"i32\\":-2147483647'))
+  expect_false(kept('\\"i32\\":0'))
+  expect_true(kept('\\"i32\\":-2147483648'))
+  expect_true(kept(""))
+  # Other integer types hold their minimum in R: their null count prunes.
+  for (type in c("byte", "short", "long")) expect_false(kept('\\"i32\\":-128', type), label = type)
+})
+
+test_that("a quoted filter in a variable is refused with how to pass it (#92)", {
+  tbl <- lake_open(system.file("extdata", "orders", package = "zulake"))
+  q <- quote(amount > 100)
+  for (call in list(quote(lake_read(tbl, filter = q)), quote(lake_files(tbl, filter = q)))) {
+    err <- tryCatch(eval(call), error = identity)
+    expect_s3_class(err, "zulake_error_filter")
+    expect_match(conditionMessage(err), "eval(bquote(", fixed = TRUE)
+  }
+  expect_identical(eval(bquote(lake_read(tbl, filter = .(q)))), lake_read(tbl, filter = amount > 100))
 })

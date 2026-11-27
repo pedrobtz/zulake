@@ -40,14 +40,16 @@ incomplete_checkpoints <- function(entries, sets) {
 }
 
 # The actions of one checkpoint (`set`, from checkpoint_sets()): every part,
-# and the sidecars a V2 checkpoint names, in that order. Anything that stops
-# it from being read (a file that is gone, bytes qio cannot read, a shape it
-# cannot return, an integer past 2^53 without bit64) is a
-# `zulake_error_checkpoint_unreadable`, which replay answers by trying an
-# earlier checkpoint or the commits; an authentication failure is not,
-# since no other file would fare better.
+# and the sidecars a V2 checkpoint names, in that order. A read failure (a
+# zulake_error, such as a file that is gone, an error of qio's, or one of
+# this file's refusals: a shape no action has, an integer past 2^53 without
+# bit64) is a `zulake_error_checkpoint_unreadable`, which replay answers by
+# trying an earlier checkpoint or the commits; an authentication failure is
+# not, since no other file would fare better. Any other error, such as a
+# bug in this code, propagates as it is (#89).
 read_checkpoint <- function(storage, set, read) {
   version <- set$version[1L]
+  unreadable <- function(e) checkpoint_unreadable(e, version, set$name[1L])
   tryCatch(
     {
       actions <- list()
@@ -66,22 +68,43 @@ read_checkpoint <- function(storage, set, read) {
       }
       actions
     },
-    error = function(e) {
-      if (inherits(e, "zulake_error_auth")) {
-        stop(e)
-      }
-      zulake_abort(
-        "checkpoint_unreadable",
-        sprintf(
-          "the checkpoint at version %s (%s) cannot be read: %s",
-          format_number(version), format_string(set$name[1L]), conditionMessage(e)
-        ),
-        checkpoint = version,
-        file = set$name[1L],
-        parent = e
-      )
-    }
+    # One handler for zulake_error: tryCatch() nests its handlers, so an
+    # auth error re-raised from a handler of its own would reach this one.
+    zulake_error = function(e) if (inherits(e, "zulake_error_auth")) stop(e) else unreadable(e),
+    zulake_checkpoint_refusal = function(e) unreadable(e)
   )
+}
+
+# A read failure as the zulake_error_checkpoint_unreadable read_checkpoint()
+# raises, inside it.
+checkpoint_unreadable <- function(e, version, name) {
+  zulake_abort(
+    "checkpoint_unreadable",
+    sprintf(
+      "the checkpoint at version %s (%s) cannot be read: %s",
+      format_number(version), format_string(name), conditionMessage(e)
+    ),
+    checkpoint = version,
+    file = name,
+    parent = e
+  )
+}
+
+# A refusal of this file's own, of class zulake_checkpoint_refusal (internal:
+# read_checkpoint() turns it into a zulake_error_checkpoint_unreadable).
+checkpoint_refusal <- function(message, parent = NULL) {
+  stop(structure(
+    class = c("zulake_checkpoint_refusal", "error", "condition"),
+    list(message = message, call = NULL, parent = parent)
+  ))
+}
+
+# `expr`, a qio call, with qio's (unclassed) errors classed as read failures.
+qio_read <- function(expr) {
+  tryCatch(expr, error = function(e) {
+    if (inherits(e, c("zulake_error", "zulake_checkpoint_refusal"))) stop(e)
+    checkpoint_refusal(conditionMessage(e), parent = e)
+  })
 }
 
 # A V2 sidecar's add and remove actions. Its `path` names a file in
@@ -116,7 +139,7 @@ log_parquet_actions <- function(storage, path) {
     writeBin(storage$get(path), tmp)
     tmp
   }
-  plan <- qio::read_plan(file)
+  plan <- qio_read(qio::read_plan(file))
   leaves <- plan$path
   top <- sub("[.].*$", "", leaves)
   keep <- top %in% checkpoint_actions & grepl(".", leaves, fixed = TRUE)
@@ -136,8 +159,14 @@ log_parquet_actions <- function(storage, path) {
 read_log_parquet <- function(file, selectors) {
   lossy <- FALSE
   data <- withCallingHandlers(
-    qio::read_parquet(file, columns = selectors),
+    qio_read(qio::read_parquet(file, columns = selectors)),
     warning = function(w) {
+      # Only qio's 64-bit coercion warning means a re-read with integer64
+      # can help; any other (an INT32 of -2^31 read as NA) is the reason
+      # the checkpoint is unreadable, as it says (#71).
+      if (!grepl("^Some INT64 or UINT64 values in column .* were coerced to NA", conditionMessage(w))) {
+        checkpoint_refusal(conditionMessage(w))
+      }
       lossy <<- TRUE
       invokeRestart("muffleWarning")
     }
@@ -146,11 +175,11 @@ read_log_parquet <- function(file, selectors) {
     return(data)
   }
   if (!has_bit64()) {
-    stop("it holds a 64-bit integer that a double cannot hold exactly, and reading it needs the bit64 package", call. = FALSE)
+    checkpoint_refusal("it holds a 64-bit integer that a double cannot hold exactly, and reading it needs the bit64 package")
   }
   withCallingHandlers(
-    qio::read_parquet(file, columns = selectors, int64 = "integer64"),
-    warning = function(w) stop(conditionMessage(w), call. = FALSE)
+    qio_read(qio::read_parquet(file, columns = selectors, int64 = "integer64")),
+    warning = function(w) checkpoint_refusal(conditionMessage(w))
   )
 }
 
@@ -178,7 +207,7 @@ parquet_actions <- function(data) {
 # mark, for an optional struct; every row, for a required one.
 struct_present <- function(col) {
   if (!is.data.frame(col)) {
-    stop("an action column is not a struct", call. = FALSE)
+    checkpoint_refusal("an action column is not a struct")
   }
   !qio::is_null_struct(col)
 }
@@ -221,7 +250,7 @@ nested_value <- function(x) {
     return(values)
   }
   if (is.list(x)) {
-    stop("a list column holds a value zulake does not read", call. = FALSE)
+    checkpoint_refusal("a list column holds a value zulake does not read")
   }
   if (!length(x)) {
     return(logical())
@@ -259,7 +288,7 @@ atomic_values <- function(x) {
     return(out)
   }
   if (inherits(x, c("Date", "POSIXct"))) {
-    stop("an action field has a date or time type, where the protocol has a long", call. = FALSE)
+    checkpoint_refusal("an action field has a date or time type, where the protocol has a long")
   }
   ok <- !is.na(x)
   if (is.double(x)) {

@@ -139,9 +139,9 @@ by design (D1).
 seed, under R CMD check and covr alike; `tools/ci-run-tests.R` runs the same
 file from the source tree. The shuffle reorders every top-level expression of
 a test file, so shared functions go in `helper-*.R`, never at file scope.
-Fixtures (Stage 1, design §8): 29 Delta tables (14 copied from `delta-rs`,
-Apache-2.0; 2 changed from them; 13 `zl-*` written with `deltalake` 1.7.0)
-and 8 hostile logs, listed in `tests/testthat/fixtures/PROVENANCE.md`. They
+Fixtures (Stage 1, design §8): 31 Delta tables (14 copied from `delta-rs`,
+Apache-2.0; 2 changed from them; 15 `zl-*` written with `deltalake` 1.7.0)
+and 9 hostile logs, listed in `tests/testthat/fixtures/PROVENANCE.md`. They
 ship packed in `tests/testthat/fixtures/delta-fixtures.tar`, because Delta
 paths pass the 100 bytes a package tarball allows; the unpacked
 `tables/` and `hostile/` trees are in git only (`.Rbuildignore`), and are

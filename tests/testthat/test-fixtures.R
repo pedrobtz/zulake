@@ -123,6 +123,7 @@ test_that("an independent Parquet reader agrees with the oracle's encoding", {
 
 test_that("each hostile log differs from the table it was made from", {
   sources <- c(
+    "column-mapping-no-physical-name" = "column_mapping",
     "corrupt-commit" = "zl-basic",
     "dv-bad-checksum" = "table-with-dv-small",
     "dv-bad-magic" = "table-with-dv-small",

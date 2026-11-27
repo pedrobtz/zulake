@@ -14,16 +14,21 @@ field_name <- function(field) {
 }
 
 # A field's name in the data files: its column mapping physical name when the
-# table maps columns, its name otherwise.
+# table maps columns, its name otherwise. snapshot_build() has checked that
+# every field has one in name mode (check_physical_names(), #77).
 field_physical <- function(field, mode) {
-  if (mode != "none") {
-    md <- field[["metadata"]]
-    physical <- if (is.list(md)) md[["delta.columnMapping.physicalName"]]
-    if (is_string(physical)) {
-      return(physical)
-    }
+  if (mode == "none") {
+    return(field_name(field))
   }
-  field_name(field)
+  field_physical_name(field)
+}
+
+# A field's `delta.columnMapping.physicalName`, or NA when it has none (no
+# metadata object, no such key, or not a non-empty string).
+field_physical_name <- function(field) {
+  md <- if (is.list(field)) field[["metadata"]]
+  physical <- if (is.list(md)) md[["delta.columnMapping.physicalName"]]
+  if (is_string(physical) && nzchar(physical)) physical else NA_character_
 }
 
 # "long", "decimal(10,2)", or "struct", "array", "map" for a nested type.
@@ -141,7 +146,7 @@ parse_partition_values <- function(x, type, int64, column) {
     timestamp_ntz = parse_time_text(x, zone = FALSE),
     x
   )
-  bad <- !is.na(x) & is.na(out) & !(type %in% c("float", "double") & x == "NaN")
+  bad <- !is.na(x) & is.na(out) & !(type %in% c("float", "double") & is.nan(double_special(x)))
   if (any(bad)) {
     zulake_abort(
       "corrupt_log",
@@ -160,10 +165,23 @@ whole_double <- function(x) {
 }
 
 partition_double <- function(x) {
-  y <- sub("^[+]", "", x)
-  y[y == "Infinity"] <- "Inf"
-  y[y == "-Infinity"] <- "-Inf"
-  suppressWarnings(as.numeric(y))
+  out <- suppressWarnings(as.numeric(sub("^[+]", "", x)))
+  special <- double_special(x)
+  out[!is.na(special) | is.nan(special)] <- special[!is.na(special) | is.nan(special)]
+  out
+}
+
+# Inf, -Inf or NaN for the spellings of an infinity or NaN that Rust's f64
+# parser takes (deltalake writes "inf", "-inf" and "NaN"; Spark "Infinity"
+# and "NaN"): "inf", "infinity" or "nan" in any case, with an optional sign.
+# NA for anything else (#67).
+double_special <- function(x) {
+  word <- tolower(sub("^[+-]", "", x))
+  out <- rep(NA_real_, length(x))
+  inf <- !is.na(word) & word %in% c("inf", "infinity")
+  out[inf] <- ifelse(startsWith(x[inf], "-"), -Inf, Inf)
+  out[!is.na(word) & word == "nan"] <- NaN
+  out
 }
 
 # The typed partition values of `actions` (add or remove actions), one

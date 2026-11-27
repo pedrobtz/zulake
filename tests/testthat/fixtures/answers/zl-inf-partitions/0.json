@@ -1,0 +1,387 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "clientVersion": "delta-rs.py-1.7.0",
+    "engineInfo": "delta-rs:py-1.7.0",
+    "operation": "WRITE",
+    "operationMetrics": {
+     "execution_time_ms": 91,
+     "num_added_files": 4,
+     "num_added_rows": 4,
+     "num_partitions": 0,
+     "num_removed_files": 0,
+     "num_retries": 0
+    },
+    "operationParameters": {
+     "mode": "ErrorIfExists",
+     "partitionBy": "[\"f64\",\"f32\"]"
+    },
+    "timestamp": 1795762286106,
+    "txnId": "e453cad1-559a-4518-9ddf-563e6d2a74bc"
+   }
+  },
+  {
+   "protocol": {
+    "minReaderVersion": 1,
+    "minWriterVersion": 2
+   }
+  },
+  {
+   "metaData": {
+    "configuration": {},
+    "createdTime": 1795762286020,
+    "description": null,
+    "format": {
+     "options": {},
+     "provider": "parquet"
+    },
+    "id": "2206474a-fc19-41ee-87d6-d7b1f8b1de0b",
+    "name": "inf-partitions",
+    "partitionColumns": [
+     "f64",
+     "f32"
+    ],
+    "schemaString": "{\"type\":\"struct\",\"fields\":[{\"name\":\"id\",\"type\":\"long\",\"nullable\":true,\"metadata\":{}},{\"name\":\"f64\",\"type\":\"double\",\"nullable\":true,\"metadata\":{}},{\"name\":\"f32\",\"type\":\"float\",\"nullable\":true,\"metadata\":{}}]}"
+   }
+  },
+  {
+   "add": {
+    "baseRowId": null,
+    "clusteringProvider": null,
+    "dataChange": true,
+    "defaultRowCommitVersion": null,
+    "modificationTime": 1795762286106,
+    "partitionValues": {
+     "f32": "2.5",
+     "f64": "NaN"
+    },
+    "path": "f64=NaN/f32=2.5/part-00000-fb2c80d6-da5e-4b0d-8012-1344cbcb8f7d-c000.snappy.parquet",
+    "size": 486,
+    "stats": "{\"numRecords\":1,\"minValues\":{\"id\":2},\"maxValues\":{\"id\":2},\"nullCount\":{\"id\":0}}",
+    "tags": null
+   }
+  },
+  {
+   "add": {
+    "baseRowId": null,
+    "clusteringProvider": null,
+    "dataChange": true,
+    "defaultRowCommitVersion": null,
+    "modificationTime": 1795762286106,
+    "partitionValues": {
+     "f32": "NaN",
+     "f64": "1.5"
+    },
+    "path": "f64=1.5/f32=NaN/part-00000-0a086a43-6f6c-44b2-bd55-111f93362bb2-c000.snappy.parquet",
+    "size": 486,
+    "stats": "{\"numRecords\":1,\"minValues\":{\"id\":3},\"maxValues\":{\"id\":3},\"nullCount\":{\"id\":0}}",
+    "tags": null
+   }
+  },
+  {
+   "add": {
+    "baseRowId": null,
+    "clusteringProvider": null,
+    "dataChange": true,
+    "defaultRowCommitVersion": null,
+    "modificationTime": 1795762286106,
+    "partitionValues": {
+     "f32": "-inf",
+     "f64": "inf"
+    },
+    "path": "f64=inf/f32=-inf/part-00000-ef7f4d51-6d9b-4bb7-82f9-b1b711744099-c000.snappy.parquet",
+    "size": 486,
+    "stats": "{\"numRecords\":1,\"minValues\":{\"id\":0},\"maxValues\":{\"id\":0},\"nullCount\":{\"id\":0}}",
+    "tags": null
+   }
+  },
+  {
+   "add": {
+    "baseRowId": null,
+    "clusteringProvider": null,
+    "dataChange": true,
+    "defaultRowCommitVersion": null,
+    "modificationTime": 1795762286106,
+    "partitionValues": {
+     "f32": "inf",
+     "f64": "-inf"
+    },
+    "path": "f64=-inf/f32=inf/part-00000-e2f43eb4-671b-42d0-8f4f-4e6e0d9fb9b4-c000.snappy.parquet",
+    "size": 486,
+    "stats": "{\"numRecords\":1,\"minValues\":{\"id\":1},\"maxValues\":{\"id\":1},\"nullCount\":{\"id\":0}}",
+    "tags": null
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [
+    {
+     "id": "1"
+    },
+    {
+     "id": "3"
+    },
+    {
+     "id": "2"
+    },
+    {
+     "id": "0"
+    }
+   ],
+   "min": [
+    {
+     "id": "1"
+    },
+    {
+     "id": "3"
+    },
+    {
+     "id": "2"
+    },
+    {
+     "id": "0"
+    }
+   ],
+   "modification_time": [
+    "1795762286106",
+    "1795762286106",
+    "1795762286106",
+    "1795762286106"
+   ],
+   "null_count": [
+    {
+     "id": "0"
+    },
+    {
+     "id": "0"
+    },
+    {
+     "id": "0"
+    },
+    {
+     "id": "0"
+    }
+   ],
+   "num_records": [
+    "1",
+    "1",
+    "1",
+    "1"
+   ],
+   "partition": [
+    {
+     "f32": "Infinity",
+     "f64": "-Infinity"
+    },
+    {
+     "f32": "NaN",
+     "f64": 1.5
+    },
+    {
+     "f32": 2.5,
+     "f64": "NaN"
+    },
+    {
+     "f32": "-Infinity",
+     "f64": "Infinity"
+    }
+   ],
+   "path": [
+    "f64=-inf/f32=inf/part-00000-e2f43eb4-671b-42d0-8f4f-4e6e0d9fb9b4-c000.snappy.parquet",
+    "f64=1.5/f32=NaN/part-00000-0a086a43-6f6c-44b2-bd55-111f93362bb2-c000.snappy.parquet",
+    "f64=NaN/f32=2.5/part-00000-fb2c80d6-da5e-4b0d-8012-1344cbcb8f7d-c000.snappy.parquet",
+    "f64=inf/f32=-inf/part-00000-ef7f4d51-6d9b-4bb7-82f9-b1b711744099-c000.snappy.parquet"
+   ],
+   "size_bytes": [
+    "486",
+    "486",
+    "486",
+    "486"
+   ]
+  },
+  "num_rows": 4,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<id: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<id: int64>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<id: int64>"
+   },
+   {
+    "name": "partition",
+    "nullable": true,
+    "type": "struct<f64: double, f32: float>"
+   }
+  ]
+ },
+ "count": 4,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "clientVersion": "delta-rs.py-1.7.0",
+   "engineInfo": "delta-rs:py-1.7.0",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "execution_time_ms": 91,
+    "num_added_files": 4,
+    "num_added_rows": 4,
+    "num_partitions": 0,
+    "num_removed_files": 0,
+    "num_retries": 0
+   },
+   "operationParameters": {
+    "mode": "ErrorIfExists",
+    "partitionBy": "[\"f64\",\"f32\"]"
+   },
+   "timestamp": 1795762286106,
+   "txnId": "e453cad1-559a-4518-9ddf-563e6d2a74bc",
+   "version": 0
+  }
+ ],
+ "loaded_version": 0,
+ "metadata": {
+  "configuration": {},
+  "created_time": 1795762286020,
+  "description": null,
+  "id": "2206474a-fc19-41ee-87d6-d7b1f8b1de0b",
+  "name": "inf-partitions",
+  "partition_columns": [
+   "f64",
+   "f32"
+  ]
+ },
+ "partitions": [
+  {
+   "f32": "-inf",
+   "f64": "inf"
+  },
+  {
+   "f32": "2.5",
+   "f64": "NaN"
+  },
+  {
+   "f32": "NaN",
+   "f64": "1.5"
+  },
+  {
+   "f32": "inf",
+   "f64": "-inf"
+  }
+ ],
+ "protocol": {
+  "min_reader_version": 1,
+  "min_writer_version": 2,
+  "reader_features": null,
+  "writer_features": null
+ },
+ "read": {
+  "columns": {
+   "f32": [
+    "-Infinity",
+    "Infinity",
+    2.5,
+    "NaN"
+   ],
+   "f64": [
+    "Infinity",
+    "-Infinity",
+    "NaN",
+    1.5
+   ],
+   "id": [
+    "0",
+    "1",
+    "2",
+    "3"
+   ]
+  },
+  "num_rows": 4,
+  "schema": [
+   {
+    "name": "id",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "f64",
+    "nullable": true,
+    "type": "double"
+   },
+   {
+    "name": "f32",
+    "nullable": true,
+    "type": "float"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {},
+    "name": "id",
+    "nullable": true,
+    "type": "long"
+   },
+   {
+    "metadata": {},
+    "name": "f64",
+    "nullable": true,
+    "type": "double"
+   },
+   {
+    "metadata": {},
+    "name": "f32",
+    "nullable": true,
+    "type": "float"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "zl-inf-partitions",
+ "timestamp_lookup": [
+  {
+   "at": "2026-11-27T06:51:26.105Z",
+   "version": 0
+  },
+  {
+   "at": "2026-11-27T06:51:26.106Z",
+   "version": 0
+  }
+ ],
+ "transactions": {},
+ "version": 0
+}
