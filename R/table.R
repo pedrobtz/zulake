@@ -18,7 +18,9 @@
 #' The commit time of a version is the commit's in-commit timestamp when
 #' the table records them, and the commit file's modification time
 #' otherwise, as the protocol prescribes and as `lake_open(timestamp =)`
-#' uses it.
+#' uses it. File times are made increasing first, as Delta and `deltalake`
+#' make them: a commit whose file time is not after the previous commit's
+#' counts as 1 millisecond after it.
 #'
 #' @inheritParams lake_files
 #' @param limit The number of commits to return, newest first. `NULL`, the
