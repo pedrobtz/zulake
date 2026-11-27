@@ -203,3 +203,7 @@
   (`amount > "100"`) is now a `zulake_error_filter`, as with a `boolean`
   column; it was read as a number, where R compares the two as strings
   (#73).
+* Changed: on R before 4.3.0, `as.character()`, `substr()`, `toupper()`,
+  `tolower()` and `grepl()` of a timestamp column in a filter are a
+  `zulake_error_filter`, since there a time's text depends on the other
+  rows of its file (#74).

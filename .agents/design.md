@@ -495,7 +495,13 @@ right, `[`, a user function) is a `zulake_error_filter` everywhere: a
 filter is decided row by row, so its result does not depend on how rows are
 split into files. A subexpression that names no column is a value,
 evaluated once in the caller's environment, and may be any R (settled
-2026-11-26, a correction to Stage 4, D8).
+2026-11-26, a correction to Stage 4, D8). Before R 4.3.0, `as.character`,
+`substr`, `toupper`, `tolower` and `grepl` with a `timestamp` or
+`timestamp_ntz` column inside are a `zulake_error_filter`, and `Depends`
+stays at R >= 3.5.0 (2026-11-27, #74: there `as.character()` of a POSIXct
+picks one format for the whole vector, date only when every value is at
+midnight and no fraction of a second, so a row's text depended on the
+other rows of its file, which is not row-wise).
 
 `lake_count(tbl)` is the sum of `numRecords` over the live files minus
 the cardinality of their deletion vectors, from the log alone. `stats` is

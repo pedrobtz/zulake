@@ -632,3 +632,37 @@ test_that("a text literal against a float or double column is refused everywhere
   }
   expect_identical(lake_read(tbl, filter = amount > 100), rows[rows$amount > 100, , drop = FALSE], ignore_attr = TRUE)
 })
+
+test_that("text functions of a timestamp column are refused on R before 4.3 (#74)", {
+  # Before R 4.3.0, as.character() of a POSIXct (and substr(), toupper(),
+  # tolower() and grepl(), which call it) chose one format for the whole
+  # vector, so its value for a row depended on the other rows of the file.
+  tbl <- lake_open(fixture_table("zl-types"))
+  rows <- suppressWarnings(lake_read(tbl, columns = c("i32", "d", "ts", "ntz")))
+  refused <- list(
+    quote(as.character(ts) == "2024-01-01"), quote(substr(ntz, 1, 4) == "2024"),
+    quote(toupper(ts) == "X"), quote(tolower(ntz) == "x"), quote(grepl("2024", ts)),
+    quote(as.character(ts + 1) == "x"), quote(i32 > 0 | nchar(as.character(ntz)) > 0)
+  )
+  allowed <- list(
+    quote(as.character(d) == "2024-01-01"), quote(as.numeric(ts) > 0), quote(nchar(as.character(i32)) > 1),
+    quote(ts > as.POSIXct("2000-01-01", tz = "UTC"))
+  )
+  read <- function(expr) eval(bquote(lake_read(tbl, columns = c("i32", "d", "ts", "ntz"), filter = .(expr))))
+  for (old in c("4.2.3", "3.5.0")) {
+    local({
+      local_mocked_bindings(r_version = function() package_version(old))
+      for (expr in refused) {
+        err <- tryCatch(read(expr), error = identity)
+        expect_s3_class(err, "zulake_error_filter")
+        expect_match(conditionMessage(err), "R 4.3.0", fixed = TRUE)
+      }
+      for (expr in allowed) expect_identical(read(expr), r_subset(rows, expr), ignore_attr = TRUE, label = deparse(expr))
+    })
+  }
+  # From R 4.3.0 on they are row-wise, and read as subset() does.
+  local_mocked_bindings(r_version = function() package_version("4.3.0"))
+  for (expr in c(refused, allowed)) {
+    expect_identical(read(expr), r_subset(rows, expr), ignore_attr = TRUE, label = deparse(expr))
+  }
+})

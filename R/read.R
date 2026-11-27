@@ -27,7 +27,11 @@
 #' `as.integer()`; and compare two columns, or use a logical column alone.
 #' R evaluates those on the rows after reading (they never prune), with base
 #' R's functions whatever the caller defines, and each must give one `TRUE`,
-#' `FALSE` or `NA` per row. Any other call with a column inside it, such as
+#' `FALSE` or `NA` per row. Before R 4.3.0, `as.character()`, `substr()`,
+#' `toupper()`, `tolower()` and `grepl()` of a `timestamp` or
+#' `timestamp_ntz` column are errors of class `zulake_error_filter`, since
+#' there a time's text depends on the other times formatted with it. Any
+#' other call with a column inside it, such as
 #' `max(x)`, `mean(x)`, `rank(x)`, `cumsum(x)`, `duplicated(x)`, `x[1]`,
 #' `%in%` with a column on its right, or a function of your own, is an error
 #' of class `zulake_error_filter`: a filter is decided row by row, so the

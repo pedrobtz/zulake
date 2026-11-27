@@ -96,6 +96,46 @@ row_wise_options <- list(
 # position: for these, every argument after the first is an option.
 row_wise_first_only <- c("as.character", "as.numeric", "as.integer")
 
+# Row-wise functions that turn their first argument into text with
+# as.character(), which before R 4.3.0 formatted a POSIXct vector with one
+# format for all of it (no time when every value was at midnight, no
+# fraction of a second): on a timestamp column their value for a row
+# depended on the file's other rows, which is not row-wise (D8, #74).
+time_text_functions <- c("as.character", "substr", "toupper", "tolower", "grepl")
+
+# The running R's version; a function, so that tests can replace it.
+r_version <- function() getRversion()
+
+# Refuses, before R 4.3.0, a call of time_text_functions with a timestamp
+# or timestamp_ntz column anywhere inside it.
+check_time_text <- function(x, types, expr, strict) {
+  if (r_version() >= "4.3.0") {
+    return(invisible())
+  }
+  times <- names(types)[types %in% c("timestamp", "timestamp_ntz")]
+  walk <- function(e) {
+    if (!is.call(e)) {
+      return(invisible())
+    }
+    name <- if (is.symbol(e[[1L]])) as.character(e[[1L]]) else ""
+    if (name %in% time_text_functions) {
+      col <- intersect(all.vars(e), times)
+      if (length(col)) {
+        filter_error(
+          expr,
+          sprintf(
+            "%s() of the timestamp column %s is not row-wise before R 4.3.0, where a time's text depends on the other rows; compare the column with a time instead",
+            name, format_string(col[1L])
+          ),
+          strict
+        )
+      }
+    }
+    for (a in as.list(e)[-1L]) walk(a)
+  }
+  walk(x)
+}
+
 # The filter checked against D8, with every value evaluated, as a tree of
 # nodes:
 #
@@ -120,6 +160,7 @@ filter_plan <- function(expr, types, env, strict = TRUE) {
   columns <- names(types)
   has_column <- function(x) length(intersect(all.vars(x), columns)) > 0L
   row_node <- function(x, why) {
+    check_time_text(x, types, expr, strict)
     call <- row_expr(x, columns, env, expr, strict)
     if (strict) {
       filter_error(expr, sprintf("%s, which filters rows and cannot prune files", why), strict = TRUE)
