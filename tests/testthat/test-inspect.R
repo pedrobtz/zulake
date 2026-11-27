@@ -559,3 +559,14 @@ test_that("integer64 arguments count as their values, and past 2^53 - 1 are refu
     expect_error(lake_changes(tbl, from = bad), class = "zulake_error_argument")
   }
 })
+
+test_that("print shows unknown for sizes and counts it cannot sum exactly (#90)", {
+  # A size and a numRecords past 2^53 - 1 are zulake_error_int64 in
+  # lake_summary() and lake_count(); print says "unknown" instead.
+  big <- "9007199254740993"
+  tbl <- lake_open(raw_table(c(raw_header(), raw_add("a.parquet", size = big, stats = sprintf('{\\"numRecords\\":%s}', big)))))
+  expect_error(lake_count(tbl), class = "zulake_error_int64")
+  out <- capture.output(print(tbl))
+  expect_identical(out[4L], "files:     1 (unknown bytes)")
+  expect_identical(out[5L], "records:   unknown (the statistics cannot be read)")
+})

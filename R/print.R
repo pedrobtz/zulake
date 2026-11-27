@@ -1,6 +1,12 @@
 #' @export
 format.zulake_table <- function(x, ...) {
   files <- nrow(x$files)
+  # A print never fails on what the log holds: the zulake_error these catch
+  # is a zulake_error_int64 (a size, numRecords or cardinality past 2^53 - 1,
+  # which a double cannot sum exactly) or a zulake_error_corrupt_log
+  # (statistics that are not JSON, a deletion vector of more rows than its
+  # file), each shown as "unknown"; lake_summary() and lake_count() raise
+  # them (#90).
   sizes <- tryCatch(
     int64_sum(int64_values(lapply(x$files$action, function(a) a[["size"]]), "double", "size"), "double", "size"),
     zulake_error = function(e) NA_real_
