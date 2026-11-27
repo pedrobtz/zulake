@@ -160,7 +160,15 @@ Settled in Stage 6 (2026-11-26):
   user information. `abfs://`, `wasbs://`, `http://`, other hosts
   (sovereign clouds included) and other schemes are refused too (D3).
   Why: the three forms are what Databricks, Synapse and `deltalake`
-  print; anything else is a guess at an endpoint.
+  print; anything else is a guess at an endpoint. A host with a port is
+  one of these other forms, even with the default port
+  (`https://<account>.blob.core.windows.net:443/...`,
+  `abfss://<container>@<account>.dfs.core.windows.net:443/...`), and is
+  refused too. The message then says that zulake cannot open the scheme,
+  not that the URI has a port. `deltalake` 1.7.0 accepts `:443` on the
+  `abfss` form. Nothing is read wrongly: dropping the port opens the
+  table (limit, 2026-11-27, #92; accepting the default port, with a
+  message that names the port, is after 0.1.0).
 - **Requests.** `x-ms-version: 2023-11-03`, the version `object_store`
   (`deltalake`'s storage layer) sends. `List Blobs` with `prefix`,
   `delimiter=/` and `include=metadata`, following `NextMarker` until it is
@@ -207,7 +215,15 @@ Settled in Stage 6 (2026-11-26):
   nonce made once per session and a counter, and an entry answers only a
   handle with its own table's URI (2026-11-27, #43: ids counted from 1 in
   every session, so a restored snapshot found another session's entry and
-  sent its token to the saved account). Why: a `function() token`
+  sent its token to the saved account). A copy restored *in the same
+  session* is a handle with the same id and URI, so it reaches the
+  original's entry: it works while the original snapshot (or one
+  `lake_load()` derived from it) lives, and its next request is a
+  `zulake_error_auth` once that is garbage-collected. A restored copy
+  registers no finalizer, so dropping it never removes the original's
+  entry. The token still goes only to the table it was given for (limit,
+  2026-11-27, #92: the roxygen speaks only of another session; the rule
+  to tell users is "open the table again after `readRDS()`"). Why: a `function() token`
   closure in the snapshot would put the token in every `saveRDS()`. The
   registry is made in `.onLoad()`, and the backend's functions carry no
   srcref and its frame no argument promises: with the package's source
@@ -642,6 +658,28 @@ Settled in Stage 3 (2026-11-26), the shapes the roxygen documents in full:
   `zulake_error_filter` in `lake_files()` and `lake_partitions()`, which
   have no rows; `lake_read()` and `lake_walk()` apply the row-wise
   functions to rows only and refuse every other call (settled 2026-11-26).
+- *The listing a snapshot keeps* (limit, 2026-11-27, #92). A snapshot
+  keeps the `_delta_log/` listing taken when it was built, and it may
+  reach past the snapshot's version. `lake_log()` shows that whole
+  listing. `lake_actions(tbl, v)` reads any commit in it, including one
+  after `lake_version(tbl)`, and a commit written later is a
+  `zulake_error_version` there. `lake_versions()` and `lake_history()`
+  stop at the snapshot's version. `lake_load()` and `lake_changes()`
+  (which uses `lake_load()` for a version other than the snapshot's) list
+  the log again, so they reach versions committed after the snapshot was
+  built, and `lake_load(tbl)` with no version is the table's latest
+  version now. No answer is wrong: each describes the version it names.
+  The roxygen should say which functions use the kept listing.
+- *`uri`* (limit, 2026-11-27, #92). `lake_files()$uri` is the table root,
+  then `/`, then the percent-decoded relative path, or the log's absolute
+  path as written. On local disk the root is normalised, and the column
+  equals `deltalake`'s `file_uris()` on the fixtures. On Azure the root is
+  the URI exactly as given to `lake_open()` (its case, its
+  percent-encoding, less a trailing `/`). So `uri` is a location to show
+  and to match on, not a uniformly encoded URI to request or parse again:
+  `abfss://lake@acct.dfs.core.windows.net/my%20t` gives
+  `.../my%20t/p=a%2Fb/part-0.parquet` for the log path `p=a%252Fb/...`.
+  Reads use the parsed blob name, never this column.
 
 `credentials` is a function of no arguments returning a bearer token as
 a single string. `zulake` calls it before the first request, and again
@@ -804,6 +842,29 @@ implementation fixes: a value inside a row-evaluated call must have length
 a logical column alone is a row-evaluated node. Row-evaluated comparisons
 are R's own (a string `<` there follows the session's collation); only the
 pruning subset uses the exact comparator above.
+
+Limits of following R (2026-11-27, #92). Each gives the rows R's
+`subset()` gives on the whole table (checked for numbers against every
+date and timestamp column of `table_with_edge_timestamps`,
+`delta-2.2.0-partitioned-types` and `zl-partitioned`), and each can
+surprise a reader who expects SQL:
+
+- A number against a `date` column counts days since 1970-01-01, and
+  against a `timestamp` or `timestamp_ntz` column seconds (`d > 19800`).
+  A `Date` or `POSIXct` against a numeric column is its number
+  (`a == as.Date(1)` matches 1). A number against a `boolean` column is R's
+  (`b == 1` is `b`). Text against a `boolean`, `float` or `double` column
+  is a `zulake_error_filter` (#73), even where R would compare
+  (`b == "TRUE"`, `f64 == "Inf"`).
+- NaN follows R: `NaN != 0.1` is `NA`, so `p != 0.1` drops a row or a
+  partition whose value is NaN. `deltalake` 1.7.0 keeps it
+  (`zl-inf-partitions`: three rows against its four). Write
+  `p != 0.1 | is.nan(p)` to keep NaN.
+- A row-wise function that R cannot apply to one row fails the whole
+  read with R's error, not a `zulake_error`. For example, `toupper()`,
+  `tolower()` and `casefold()` stop on the noncharacters U+FFFE and
+  U+FFFF ("invalid input in 'utf8towcs'"), which a Delta string may
+  hold. `subset()` fails the same way.
 
 ## 7. Types
 
