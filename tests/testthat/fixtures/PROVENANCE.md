@@ -82,7 +82,7 @@ DAT (`delta-incubator/dat`) is not used: it has no licence (design §12, Q3).
 | `column-mapping-no-physical-name` | `column_mapping` | the `delta.columnMapping.physicalName` of field `letter` removed from commit 0's schema; commit 2's schema has it (#77) |
 | `corrupt-commit` | `zl-basic` | line 2 of commit 2 is not JSON |
 | `data-type-long-for-integer` | `zl-basic` | field `id` (INT64 in every data file) typed `integer` in commit 0's schema; `deltalake` reads it, the values fitting, and zulake refuses it (#119) |
-| `data-type-string-for-long` | `zl-basic` | field `label` (strings in every data file) typed `long` in commit 0's schema (#119) |
+| `data-type-string-for-long` | `zl-types` | field `s` (strings in its one data file, so that `deltalake`'s refusal names one value) typed `long` in commit 0's schema (#119) |
 | `decimal-partition-exponent` | `zl-decimal-partitions` | the `pdec` partition value `12.30` in commit 0 written `1e2` (#112) |
 | `decimal-partition-negative-no-integer-digit` | `zl-decimal-partitions` | the `pdec` partition value `12.30` in commit 0 written `-.5` (#112) |
 | `decimal-partition-no-fraction-digit` | `zl-decimal-partitions` | the `pdec` partition value `12.30` in commit 0 written `5.` (#112) |

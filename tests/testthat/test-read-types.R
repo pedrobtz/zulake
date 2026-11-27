@@ -102,24 +102,23 @@ test_that("time text past the microsecond is truncated, and a filter literal tha
 
 test_that("a data file whose column type disagrees with the schema is a corrupt log naming the file and the column", {
   cases <- list(
-    "data-type-string-for-long" = list(column = "label", type = "long", physical = "BYTE_ARRAY"),
-    "data-type-long-for-integer" = list(column = "id", type = "integer", physical = "INT64")
+    "data-type-string-for-long" = list(column = "s", type = "long", physical = "BYTE_ARRAY", other = c("i8", "f64")),
+    "data-type-long-for-integer" = list(column = "id", type = "integer", physical = "INT64", other = c("label", "x"))
   )
   for (name in names(cases)) {
     case <- cases[[name]]
     path <- fixture_table(name, "hostile")
     tbl <- lake_open(path)
-    err <- tryCatch(lake_read(tbl), error = identity)
+    err <- tryCatch(suppressWarnings(lake_read(tbl)), error = identity)
     expect_s3_class(err, "zulake_error_corrupt_log")
     expect_identical(err$column, case$column, label = name)
     expect_identical(err$type, case$type, label = name)
     expect_identical(err$physical_type, case$physical, label = name)
     expect_true(err$file %in% lake_files(tbl, stats = FALSE)$path, label = name)
     expect_match(conditionMessage(err), err$file, fixed = TRUE)
-    expect_error(lake_walk(tbl, function(p) stop("no piece expected")), class = "zulake_error_corrupt_log")
+    expect_error(suppressWarnings(lake_walk(tbl, function(p) stop("no piece expected"))), class = "zulake_error_corrupt_log")
     # Only the columns read are checked.
-    other <- setdiff(c("id", "label", "x"), case$column)
-    expect_identical(names(lake_read(tbl, columns = other)), other)
+    expect_identical(names(lake_read(tbl, columns = case$other)), case$other)
   }
   # deltalake 1.7.0 refuses the strings; it reads the INT64 values, which
   # fit, through a cast zulake does not make (design section 7).

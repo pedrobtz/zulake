@@ -22,8 +22,8 @@
  },
  "data-type-string-for-long": {
   "refusal": {
-   "class": "ArrowInvalid",
-   "message": "C Data interface error: External error: Arrow error: Cast error: Cannot cast string 'k' to value of Int64 type"
+   "class": "DeltaError",
+   "message": "Kernel error: Json error: whilst decoding field 'minValues': whilst decoding field 's': failed to parse \"\" as Int64"
   }
  },
  "decimal-partition-exponent": {

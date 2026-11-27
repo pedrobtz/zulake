@@ -129,7 +129,7 @@ test_that("each hostile log differs from the table it was made from", {
     "column-mapping-no-physical-name" = "column_mapping",
     "corrupt-commit" = "zl-basic",
     "data-type-long-for-integer" = "zl-basic",
-    "data-type-string-for-long" = "zl-basic",
+    "data-type-string-for-long" = "zl-types",
     "decimal-partition-exponent" = "zl-decimal-partitions",
     "decimal-partition-negative-no-integer-digit" = "zl-decimal-partitions",
     "decimal-partition-no-fraction-digit" = "zl-decimal-partitions",
