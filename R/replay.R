@@ -10,22 +10,28 @@
 # version, the compaction file that starts there and reaches furthest
 # without passing `version`, else the commit itself. `failed` holds the
 # checkpoints that could not be read (conditions), for the error when a
-# commit is missing.
+# commit is missing. `fallback` holds, for a compaction file whose commits
+# are all in the log, their names: replay() reads them instead when the
+# compaction file cannot be read (#69).
 replay_plan <- function(entries, version, start = 0, failed = list()) {
   commits <- entries[entries$kind == "commit", , drop = FALSE]
   compactions <- entries[entries$kind == "compaction" & entries$end_version <= version, , drop = FALSE]
   names <- character()
   from <- numeric()
   to <- numeric()
+  fallback <- list()
   at <- start
   while (at <= version) {
     hit <- which(compactions$version == at)
     if (length(hit)) {
       best <- hit[which.max(compactions$end_version[hit])]
+      end <- compactions$end_version[best]
+      covered <- match(seq(at, end), commits$version)
       names <- c(names, compactions$name[best])
       from <- c(from, at)
-      to <- c(to, compactions$end_version[best])
-      at <- compactions$end_version[best] + 1
+      to <- c(to, end)
+      fallback[[length(names)]] <- if (!anyNA(covered)) commits$name[covered]
+      at <- end + 1
       next
     }
     hit <- match(at, commits$version)
@@ -35,17 +41,21 @@ replay_plan <- function(entries, version, start = 0, failed = list()) {
     names <- c(names, commits$name[hit])
     from <- c(from, at)
     to <- c(to, at)
+    fallback[length(names)] <- list(NULL)
     at <- at + 1
   }
-  new_data_frame(list(name = names, from = from, to = to))
+  length(fallback) <- length(names)
+  new_data_frame(list(name = names, from = from, to = to, fallback = fallback))
 }
 
 # A commit replay needs is not in the log. From commit 0, with a checkpoint
 # at or before `version` that is not whole or cannot be read: the log has
 # neither, `zulake_error_checkpoint_unreadable`. Otherwise, with a
 # checkpoint after `version`: the commits before that checkpoint were cleaned
-# up, as the protocol allows, so the version is gone, `zulake_error_version`.
-# With neither, the log is corrupt.
+# up, as the protocol allows, so the version is gone, `zulake_error_version`;
+# unless an older commit is still there: cleanup removes the oldest commits
+# first, so that is a hole in the log, which is corrupt (#70). With neither,
+# the log is corrupt.
 missing_commit <- function(entries, at, start, version, failed) {
   if (start == 0 && length(failed)) {
     e <- failed[[which.max(vapply(failed, function(f) f$checkpoint, 0))]]
@@ -61,7 +71,8 @@ missing_commit <- function(entries, at, start, version, failed) {
     )
   }
   later <- entries$version[entries$kind == "checkpoint" & entries$version > version]
-  if (length(later)) {
+  older <- any(entries$kind == "commit" & entries$version < at)
+  if (length(later) && !older) {
     zulake_abort(
       "version",
       sprintf(
@@ -129,7 +140,19 @@ replay <- function(plan, read, checkpoint = NULL) {
     apply_file(st, checkpoint$name, checkpoint$actions)
   }
   for (i in seq_len(nrow(plan))) {
-    apply_file(st, plan$name[i], read(plan$name[i]))
+    commits <- plan$fallback[[i]]
+    actions <- if (is.null(commits)) {
+      read(plan$name[i])
+    } else {
+      # A compaction file that cannot be read is passed over for the
+      # commits it covers, which hold the same actions (#69).
+      tryCatch(read(plan$name[i]), zulake_error = function(e) if (inherits(e, "zulake_error_auth")) stop(e) else NULL)
+    }
+    if (is.null(actions) && !is.null(commits)) {
+      for (name in commits) apply_file(st, name, read(name))
+    } else {
+      apply_file(st, plan$name[i], actions)
+    }
   }
   if (is.null(st$protocol)) {
     zulake_abort("corrupt_log", "the log has no `protocol` action.")

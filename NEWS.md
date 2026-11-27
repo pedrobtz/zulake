@@ -215,3 +215,10 @@
   downloaded to `tempdir()` before the first piece and kept for the
   session: a walk reads tables larger than memory, not larger than disk
   (#75).
+* Fixed: a log compaction file that cannot be read is passed over for the
+  commits it covers, and one named `<x>.<x>.compacted.json` (or with an
+  end before its start), which the protocol does not define, is no longer
+  part of the log, so both tables open as `deltalake` opens them (#69). A
+  commit missing while older commits remain is now a
+  `zulake_error_corrupt_log` (a hole in the log), not a
+  `zulake_error_version` (#70).

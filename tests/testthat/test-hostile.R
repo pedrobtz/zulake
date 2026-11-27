@@ -239,11 +239,56 @@ test_that("a removed file's partition values are not checked", {
   expect_no_snapshot(lake_open(path, version = 0), "zulake_error_corrupt_log")
 })
 
-test_that("a compaction file that ends before it starts is a corrupt log", {
-  path <- hand_table()
-  write_commit(path, 1, add_line("b.parquet"))
-  writeLines(add_line("b.parquet"), file.path(path, "_delta_log", "00000000000000000001.00000000000000000001.compacted.json"))
-  expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
+test_that("a compaction file that does not end after it starts is not a log file (#69)", {
+  # The protocol names <x>.<y>.compacted.json only for y > x; any other is
+  # left out of the log, as deltalake 1.7.0 opens the table.
+  path <- local_fixture_copy("zl-log-compaction")
+  dir <- file.path(path, "_delta_log")
+  writeLines("not json", file.path(dir, "00000000000000000002.00000000000000000002.compacted.json"))
+  writeLines("not json", file.path(dir, "00000000000000000004.00000000000000000001.compacted.json"))
+  for (version in oracle_versions("zl-log-compaction")) {
+    expect_oracle(replay_files_frame(lake_open(path, version = version), "path"), "zl-log-compaction", version, "add_actions")
+  }
+  expect_false(any(grepl("00000000000000000002.00000000000000000002", lake_log(lake_open(path))$name, fixed = TRUE)))
+  expect_false(any(grepl("00000000000000000004.00000000000000000001", lake_log(lake_open(path))$name, fixed = TRUE)))
+})
+
+test_that("an unreadable compaction file is passed over for the commits it covers (#69)", {
+  path <- local_fixture_copy("zl-log-compaction")
+  compacted <- file.path(path, "_delta_log", "00000000000000000001.00000000000000000003.compacted.json")
+  writeLines("not json", compacted)
+  for (version in oracle_versions("zl-log-compaction")) {
+    expect_oracle(replay_files_frame(lake_open(path, version = version), "path"), "zl-log-compaction", version, "add_actions")
+  }
+  # Without one of the commits it covers, it is needed, and a corrupt log.
+  unlink(file.path(path, "_delta_log", "00000000000000000002.json"))
+  for (version in 3:5) expect_no_snapshot(lake_open(path, version = version), "zulake_error_corrupt_log")
+  expect_oracle(replay_files_frame(lake_open(path, version = 1), "path"), "zl-log-compaction", 1, "add_actions")
+  # An authentication failure is never passed over.
+  storage <- zulake:::storage_local(fixture_table("zl-log-compaction"))
+  local <- storage
+  storage$local_path <- NULL
+  storage$get <- function(p) {
+    if (grepl("compacted", p, fixed = TRUE)) zulake:::zulake_abort("auth", "refused", status = 403L)
+    local$get(p)
+  }
+  expect_no_snapshot(zulake:::snapshot_build(storage, "t"), "zulake_error_auth")
+})
+
+test_that("a hole in the commits is a corrupt log, not a cleaned-up version (#70)", {
+  path <- local_fixture_copy("zl-checkpoint")
+  unlink(file.path(path, "_delta_log", "00000000000000000003.json"))
+  for (version in 3:4) {
+    expect_no_snapshot(lake_open(path, version = version), "zulake_error_corrupt_log")
+  }
+  for (version in c(0:2, 5:12)) {
+    expect_oracle(replay_files_frame(lake_open(path, version = version), "path"), "zl-checkpoint", version, "add_actions")
+  }
+  # Cleaned from the start, a version before the checkpoint is gone.
+  unlink(file.path(path, "_delta_log", sprintf("%020d.json", 0:2)))
+  for (version in 0:4) {
+    expect_no_snapshot(lake_open(path, version = version), "zulake_error_version")
+  }
 })
 
 test_that("a partition column of a nested type is a corrupt log", {

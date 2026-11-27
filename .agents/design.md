@@ -254,7 +254,15 @@ a choice:
   starts where replay stands and ends at or before the target version
   (the one reaching furthest, of several). Why: the protocol makes them
   equivalent to those commits; a log whose old commits were cleaned up
-  but compacted still opens.
+  but compacted still opens. A compaction file that cannot be read (not
+  JSON, gone) is passed over for the commits it covers when they are all
+  in the log, as an unreadable checkpoint is, and is a corrupt log only
+  when replay needs it; an authentication failure is never passed over.
+  A name `<x>.<y>.compacted.json` with `y` not greater than `x`, which the
+  protocol does not define, is not a log file and is left out of the
+  listing (2026-11-27, #69, on a design adviser's recommendation: a
+  compaction file is an optimisation, never a reason to refuse a log whose
+  commits are intact; `deltalake` 1.7.0 opens both).
 - *`_last_checkpoint`* is parsed and kept. One that is not JSON, has no
   whole `version`, or names a version past the last commit is a corrupt
   log. Why: a hint that contradicts the log means the log is not what its
@@ -309,7 +317,10 @@ a choice:
     unreadable checkpoint).
   - A version older than the earliest checkpoint whose commits were
     cleaned up is a `zulake_error_version`: it is no longer in the log
-    (a fact about the table, not a reading failure).
+    (a fact about the table, not a reading failure). A missing commit with
+    an older commit still in the log is a hole, not a cleanup (which
+    removes the oldest commits first), and is a corrupt log (2026-11-27,
+    #70).
   - A log of checkpoints alone (or one whose commit at the snapshot's
     version is gone) opens, with `timestamp` `NA` and no `commit_info`:
     the checkpoint determines the state, and log cleanup can leave this.
