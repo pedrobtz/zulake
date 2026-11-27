@@ -239,7 +239,7 @@ test_that("lake_count(footers = TRUE) counts the rows of files without numRecord
   }
 })
 
-test_that("a backend without local paths downloads each data file once per session", {
+test_that("a backend without local paths downloads each data file once per lake_open()", {
   path <- local_fixture_copy("zl-partitioned")
   tbl <- lake_open(path)
   direct <- lake_read(tbl)
@@ -390,24 +390,22 @@ test_that("a column two files store as different types is a corrupt log", {
 })
 
 test_that("a cached download deleted from disk is downloaded again, not read as missing (#63)", {
-  local_empty_download_cache()
   tbl <- lake_open(local_fixture_copy("zl-partitioned"))
   direct <- lake_read(tbl)
   env <- new.env()
   tbl$storage <- remote_storage(tbl$storage, env)
   expect_identical(lake_read(tbl), direct)
   gets <- env$calls[startsWith(env$calls, "get ")]
-  cache <- get("cache_env", envir = asNamespace("zulake"))
-  cached <- vapply(cache$files, function(e) e$file, "", USE.NAMES = FALSE)
+  cached <- unlist(tbl$downloads$files, use.names = FALSE)
   expect_length(cached, length(gets))
   # The session's temporary files go (a tempdir cleaner, the user): the
   # next read downloads each file again and returns the same rows.
   unlink(cached)
   expect_identical(lake_read(tbl), direct)
   expect_identical(env$calls[startsWith(env$calls, "get ")], c(gets, gets))
-  expect_true(all(file.exists(vapply(cache$files, function(e) e$file, "", USE.NAMES = FALSE))))
+  expect_true(all(file.exists(unlist(tbl$downloads$files, use.names = FALSE))))
   # Only one of them gone: only that one again.
-  unlink(vapply(cache$files, function(e) e$file, "", USE.NAMES = FALSE)[1L])
+  unlink(tbl$downloads$files[[1L]])
   expect_identical(lake_read(tbl), direct)
   expect_length(env$calls[startsWith(env$calls, "get ")], 2L * length(gets) + 1L)
 })

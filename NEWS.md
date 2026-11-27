@@ -238,11 +238,14 @@
   (`../other/part.parquet`) is now a `zulake_error_corrupt_log`, checked
   for every file before any is read, instead of a file read outside the
   table's root (#66).
-* Fixed: the session's download cache is keyed on the blob (account,
-  container and name), so the three URI forms of a table share it, and
-  serves a file only to the credentials that downloaded it; a copy is
-  written whole or not at all, and one changed on disk is downloaded
-  again (#72).
+* Fixed: the download cache is keyed on the blob (account, container and
+  name); a copy is written whole or not at all, and one changed on disk is
+  downloaded again (#72).
+* The download cache belongs to one `lake_open()` call: the snapshot it
+  returns and those `lake_load()` makes from it share it, and another
+  `lake_open()` of the same table downloads its files again, as delta-rs
+  does. It replaces the session-wide cache that served a file only to the
+  credentials function that downloaded it (#72).
 * Fixed: with `int64 = "integer64"`, a size or record count summed past
   2^63 - 1 is now a `zulake_error_int64` instead of `NA` with a bit64
   warning (#92).

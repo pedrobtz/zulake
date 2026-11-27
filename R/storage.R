@@ -16,8 +16,8 @@
 #                               there is no such file
 #   local_path(path)            (optional) the file's path on local disk;
 #                               a backend without it has its data files
-#                               downloaded through get() to the session
-#                               cache (read.R)
+#                               downloaded through get() to the
+#                               snapshot's download cache (read.R)
 #
 # plus `kind` ("local" or "azure") and `root`. The Azure backend (azure.R)
 # also has `location`. The interface stays internal, so a later backend (a

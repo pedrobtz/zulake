@@ -380,21 +380,27 @@ a choice:
 ### 4.3 Reading
 
 `lake_read()` takes the live files, prunes them (§6), downloads each
-survivor to a session cache, reads it with `qio` (columns selected by
+survivor to the snapshot's download cache, reads it with `qio` (columns selected by
 physical name under column mapping, then renamed), drops the rows its
 deletion vector marks, adds partition columns from the `add` action,
 filters rows exactly, and binds the pieces. `lake_walk()` does the same
 one file at a time and calls a function on each piece, for tables
 larger than memory. Data files on local disk are read in place; a backend
-without local paths (Azure) downloads each file once per session, keyed by
-path, size and modification time, into the session's temporary
-directory, which R removes when the session ends. The key is the blob
-itself (account, container, decoded name), so every URI form of a table
-shares it, and a cached file is served only to the credentials function
-that downloaded it; a copy is written under a temporary name and renamed
-when whole, and one whose size on disk is not the log's is downloaded
-again (2026-11-27, #72: the key was the root as typed, with no
-credentials, so a path-scoped caller was served another's files).
+without local paths (Azure) downloads each file once per `lake_open()`,
+keyed by path, size and modification time, into the session's temporary
+directory, which R removes when the session ends. The cache belongs to
+one `lake_open()`: an environment created there and carried in the
+snapshot, which `lake_load()` passes to every snapshot it derives from
+it, since those use the same storage and credentials; it holds file
+paths only, never the token. A second `lake_open()` of the same table
+downloads again, whatever its credentials (2026-11-27, maintainer, #72:
+matches delta-rs: no cache shared across tables; removes comparing
+credential functions). The key is the blob itself (account, container,
+decoded name); a copy is written under a temporary name and renamed
+when whole, and one whose size on disk is not the log's, or that another
+session wrote (a snapshot restored with `readRDS()`), is downloaded
+again (2026-11-27, #72: the session-wide key was the root as typed, with
+no credentials, so a path-scoped caller was served another's files).
 Deletion vectors are not cached. A relative path in the log (an `add`
 path, a deletion vector's prefix) with an empty, `.` or `..` segment,
 after percent-decoding, is a `zulake_error_corrupt_log` on every backend,
@@ -402,7 +408,7 @@ and every file's location is checked before any is read (2026-11-27,
 #66: the table URI already refuses them, and the log should not reach
 outside the table's root). Caching across sessions
 is Q4, after 0.1.0 (settled 2026-11-26, Stage 4: no `cache` argument in
-0.1.0, since a per-session cache needs none). Every file left after
+0.1.0, since a cache within one `lake_open()` needs none). Every file left after
 pruning is downloaded before the first piece, by `lake_walk()` too, and the
 disk this uses, the pruned files' size, is documented in `?lake_walk`
 rather than bounded: larger than memory, not larger than disk (2026-11-27,

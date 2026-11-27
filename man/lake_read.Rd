@@ -114,8 +114,10 @@ error of class \code{zulake_error_column_unreadable} with the same fields.
 Data files are read in place on local disk. On Azure, every file left
 after pruning is downloaded to the session's temporary directory
 (\code{\link[=tempdir]{tempdir()}}) before the first piece is read, by \code{lake_walk()} too, and
-kept there for the rest of the session, so that a later read of the same
-file downloads nothing. The disk used is the size of the files left after
+kept there for the snapshots of the same \code{\link[=lake_open]{lake_open()}} call (the snapshot
+itself and those \code{\link[=lake_load]{lake_load()}} makes from it), so that their later reads
+of the same file download nothing. Another \code{lake_open()} of the table
+downloads its files again. The disk used is the size of the files left after
 pruning: \code{lake_walk()} reads tables larger than memory, not larger than
 the temporary directory's disk.
 
