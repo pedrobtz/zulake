@@ -45,6 +45,10 @@
 #' or put in any error. Without `credentials`, requests are anonymous, which
 #' only a public container answers.
 #'
+#' A file the log names by an absolute Azure URI is read only when it is
+#' in the table's own account and container; one elsewhere is a
+#' `zulake_error_uri` error, and no request is sent there.
+#'
 #' The snapshot does not keep `credentials` either; later calls on it, such
 #' as [lake_read()], use it through the R session. A snapshot saved with
 #' [saveRDS()] and read in another session has none: open the table again.

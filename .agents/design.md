@@ -214,7 +214,12 @@ Settled in Stage 6 (2026-11-26):
   `zulake_error_uri`. A table's files stay on its own backend: a local
   path or a `file:` URI in the log of a table on Azure is a
   `zulake_error_uri` too, never read from the reader's disk (2026-11-27,
-  #44).
+  #44). An absolute Azure path is read only when it names the table's own
+  account and container (in any of the three forms, the host in any case);
+  another account or container is a `zulake_error_uri` before any request,
+  with no opt-in in 0.1.0 (2026-11-27, #76: otherwise the log, which may
+  be untrusted, chooses which accounts receive the table's token; shallow
+  clones across accounts can get an opt-in later).
 
 ### 4.2 Log replay
 

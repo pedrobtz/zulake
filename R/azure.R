@@ -490,6 +490,8 @@ storage_azure <- function(parts, handle) {
 # credentials; NULL for a local path in the log of a local table. A table's
 # files stay on its own backend: an Azure URI in a local table's log, and a
 # local path or file: URI in a remote table's, are a zulake_error_uri (#44).
+# So does an Azure URI on another account or container than the table's,
+# before any request: the log does not choose who receives the token (#76).
 storage_for_absolute <- function(storage, path) {
   if (!identical(storage$kind, "azure") || !is_azure_uri(path)) {
     if (!identical(storage$kind, "local")) {
@@ -502,6 +504,17 @@ storage_for_absolute <- function(storage, path) {
     return(NULL)
   }
   parts <- parse_azure_uri(path)
+  own <- storage$location
+  if (!identical(parts$account, own$account) || !identical(parts$container, own$container)) {
+    zulake_abort(
+      "uri",
+      sprintf(
+        "%s is not in this table's account and container (%s, %s): zulake reads a table's files only there.",
+        format_string(path), format_string(own$account), format_string(own$container)
+      ),
+      path = path
+    )
+  }
   name <- parts$path
   parts$path <- ""
   list(storage = storage_azure(parts, storage$location$handle), rel = name)

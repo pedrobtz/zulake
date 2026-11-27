@@ -512,6 +512,58 @@ test_that("an absolute Azure path in the log is read with the table's credential
   expect_error(lake_read(lake_open(file.path(dir, "local"))), class = "zulake_error_uri")
 })
 
+test_that("an absolute Azure path is read only on the table's own account and container (#76)", {
+  dir <- withr::local_tempdir()
+  src <- fixture_table("zl-basic")
+  files <- lake_files(lake_open(src), stats = FALSE)
+  dir.create(file.path(dir, "elsewhere"))
+  file.copy(file.path(src, files$path), file.path(dir, "elsewhere"))
+  table_at <- function(name, prefix) {
+    lines <- c(protocol_line(), metadata_line(c(id = "long", label = "string", x = "double")),
+               vapply(seq_len(nrow(files)), function(i) {
+                 add_line(paste0(prefix, "elsewhere/", files$path[i]), size = files$size_bytes[i])
+               }, ""))
+    write_commit(file.path(dir, name), 0, lines)
+  }
+  log <- new.env()
+  local_azure_fake(azure_fake(dir, log))
+  # The same account and container in each of the three forms, the host in
+  # upper case: read, from that container only.
+  same <- c(
+    "abfss://lake@ACCT.dfs.core.windows.net/", "https://acct.dfs.core.windows.net/lake/",
+    "https://Acct.Blob.Core.Windows.Net/lake/"
+  )
+  for (k in seq_along(same)) {
+    local_empty_download_cache()
+    table_at(paste0("same", k), same[k])
+    log$requests <- list()
+    expect_identical(nrow(lake_read(lake_open(fake_uri(paste0("same", k)), credentials = function() "tok"))), nrow(lake_read(lake_open(src))),
+                     label = same[k])
+    gets <- Filter(function(r) startsWith(r$path, "elsewhere/"), log$requests)
+    expect_length(gets, nrow(files))
+    expect_true(all(vapply(gets, function(r) identical(r$host, "acct.blob.core.windows.net"), NA)))
+  }
+  # Another account, another container, or both: refused before any request
+  # leaves for them, with or without credentials.
+  other <- c(
+    "abfss://lake@otheracct.dfs.core.windows.net/", "https://thirdacct.blob.core.windows.net/lake/",
+    "abfss://other@acct.dfs.core.windows.net/", "https://acct.blob.core.windows.net/lake2/",
+    "abfss://other@otheracct.dfs.core.windows.net/"
+  )
+  for (k in seq_along(other)) {
+    local_empty_download_cache()
+    table_at(paste0("other", k), other[k])
+    for (credentials in list(function() "tok", NULL)) {
+      tbl <- lake_open(fake_uri(paste0("other", k)), credentials = credentials)
+      log$requests <- list()
+      expect_error(lake_read(tbl), class = "zulake_error_uri", label = other[k])
+      expect_error(lake_count(tbl, footers = TRUE), class = "zulake_error_uri", label = other[k])
+      expect_length(Filter(function(r) startsWith(r$path, "elsewhere/") || r$host != "acct.blob.core.windows.net",
+                           log$requests), 0L)
+    }
+  }
+})
+
 test_that("the List Blobs parser reads Azure's documented answer and refuses others", {
   # The response body example of Azure's List Blobs reference (2023-11-03),
   # cut to the fields zulake reads, with a name that needs escaping.
@@ -649,6 +701,23 @@ test_that("a deletion vector at an absolute Azure path is read with the table's 
   for (r in got) expect_identical(r$headers$authorization, "Bearer tok")
   ranges <- unlist(lapply(got, function(r) r$headers$range))
   expect_true(sprintf("bytes=1-%.0f", 1 + 4 + length(vec) + 4 - 1) %in% ranges)
+})
+
+test_that("a deletion vector on another account or container is refused (#76)", {
+  skip_if_not_installed("zuroar")
+  for (uri in c("abfss://lake@otheracct.dfs.core.windows.net/elsewhere/dv.bin",
+                "https://acct.blob.core.windows.net/other/elsewhere/dv.bin")) {
+    dv <- list(storageType = "p", pathOrInlineDv = uri, offset = 1L, sizeInBytes = 20L, cardinality = 3L)
+    path <- dv_table(dv)
+    log <- new.env()
+    local_azure_fake(azure_fake(dirname(path), log))
+    tbl <- lake_open(fake_uri(basename(path)), credentials = function() "tok")
+    log$requests <- list()
+    expect_error(lake_deletion_vectors(tbl), class = "zulake_error_uri", label = uri)
+    expect_error(lake_read(tbl), class = "zulake_error_uri", label = uri)
+    expect_length(Filter(function(r) grepl("dv.bin", r$path, fixed = TRUE) || r$host != "acct.blob.core.windows.net",
+                         log$requests), 0L)
+  }
 })
 
 test_that("a snapshot restored in another session never sends that session's token (#43)", {

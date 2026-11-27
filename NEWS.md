@@ -187,3 +187,7 @@
   double (`limit = bit64::as.integer64(2)` gave no rows). Every whole-number
   argument now takes an `integer64` at its value, and refuses one past
   2^53 - 1 with a `zulake_error_argument` (#60).
+* Changed: a file or deletion vector the log names by an absolute Azure
+  URI on another account or container than the table's is now a
+  `zulake_error_uri`, refused before any request, so a log cannot send the
+  table's token to an account of its choosing (#76).
