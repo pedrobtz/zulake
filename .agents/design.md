@@ -302,6 +302,11 @@ a choice:
     carries the `checkpoint` version and the read failure as `parent`. A
     checkpoint that reads but whose actions break the protocol is a corrupt
     log, like a commit. An authentication failure is never passed over.
+    Only read failures are passed over: a `zulake_error`, an error of
+    `qio`'s, or a refusal of the checkpoint reader's own (internal class
+    `zulake_checkpoint_refusal`); any other error propagates unchanged
+    (2026-11-27, #89: a bug in zulake's checkpoint code was hidden as an
+    unreadable checkpoint).
   - A version older than the earliest checkpoint whose commits were
     cleaned up is a `zulake_error_version`: it is no longer in the log
     (a fact about the table, not a reading failure).

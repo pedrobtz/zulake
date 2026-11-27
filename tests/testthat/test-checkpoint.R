@@ -137,7 +137,7 @@ test_that("a 64-bit integer a double cannot hold is read again as integer64, or 
   expect_error(zulake:::read_log_parquet("f.parquet", "txn.version"), "coerced to NA")
 
   local_mocked_bindings(has_bit64 = function() FALSE)
-  expect_error(zulake:::read_log_parquet("f.parquet", "txn.version"), "bit64")
+  expect_error(zulake:::read_log_parquet("f.parquet", "txn.version"), "bit64", class = "zulake_checkpoint_refusal")
 })
 
 test_that("shapes no action has are refused, so the checkpoint is unreadable", {
@@ -207,4 +207,38 @@ test_that("a Parquet checkpoint with no action column has no protocol, and is a 
   qio::write_parquet(data.frame(foo = 1), file.path(path, name))
   expect_identical(zulake:::log_parquet_actions(storage_local(path), name), list())
   expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
+})
+
+test_that("only read failures pass a checkpoint over, never another error (#89)", {
+  path <- fixture_table("zl-checkpoint")
+  want <- lake_open(path)
+  # A plain error inside zulake's own checkpoint code (a bug) propagates as
+  # it is, rather than being passed over for the commits.
+  local({
+    local_mocked_bindings(parquet_actions = function(data) stop("a bug in parquet_actions"))
+    err <- tryCatch(lake_open(path), error = identity)
+    expect_false(inherits(err, "zulake_error"))
+    expect_identical(conditionMessage(err), "a bug in parquet_actions")
+  })
+  # An error of qio's while reading is a read failure: passed over for the
+  # commits, and checkpoint_unreadable when they are gone.
+  local({
+    local_mocked_bindings(read_plan = function(...) stop("qio: cannot open the file"), .package = "qio")
+    expect_same_state(lake_open(path), want, "qio read_plan fails")
+  })
+  local({
+    local_mocked_bindings(read_parquet = function(...) stop("qio: cannot decode a column"), .package = "qio")
+    expect_same_state(lake_open(path), want, "qio read_parquet fails")
+  })
+  copy <- local_fixture_copy("zl-checkpoint")
+  unlink(file.path(copy, "_delta_log", sprintf("%020d.json", 0:9)))
+  local_mocked_bindings(read_plan = function(...) stop("qio: cannot open the file"), .package = "qio")
+  err <- tryCatch(lake_open(copy), error = identity)
+  expect_s3_class(err, "zulake_error_checkpoint_unreadable")
+  expect_match(conditionMessage(err$parent), "qio: cannot open the file", fixed = TRUE)
+  # So is a value of a shape no action has, and a 64-bit integer without
+  # bit64: refusals of this file's own, each classed.
+  expect_error(zulake:::parquet_actions(data.frame(add = 1)), class = "zulake_checkpoint_refusal")
+  expect_error(zulake:::nested_value(list(list(1))), class = "zulake_checkpoint_refusal")
+  expect_error(zulake:::atomic_values(as.Date("2024-01-01")), class = "zulake_checkpoint_refusal")
 })
