@@ -525,6 +525,13 @@ from their Parquet footers (Stage 4), with no warning. A file with a deletion ve
 no `numRecords` is a corrupt log. The cardinality is the descriptor's,
 which the log holds, so the subtraction needs no `zuroar` and is done from
 Stage 3 on (settled 2026-11-26); Stage 5 adds the rows themselves.
+A snapshot's print shows a size or record count it cannot compute as
+"unknown" rather than failing: it catches the `zulake_error` that
+`lake_summary()` and `lake_count()` raise, which is a
+`zulake_error_int64` (a size or count past 2^53 - 1) or a
+`zulake_error_corrupt_log` (statistics that are not JSON) (2026-11-27,
+#90: a print method that fails hides the snapshot itself, and the
+inspection functions still raise the error).
 
 Settled in Stage 3 (2026-11-26), the shapes the roxygen documents in full:
 
