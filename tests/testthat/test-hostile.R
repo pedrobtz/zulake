@@ -369,3 +369,17 @@ test_that("any one byte of a deletion vector file changed, or the file cut short
   writeBin(good, f)
   expect_identical(lake_read(tbl), want)
 })
+
+test_that("a log path that decodes to a NUL or to bytes that are not UTF-8 is a corrupt log (#49)", {
+  for (path in c("a%00b.parquet", "e%C3%28f.parquet", "x%FF.parquet", "file:///tmp/a%00b.parquet")) {
+    tbl <- lake_open(hand_table(c(protocol_line(), metadata_line(), add_line(path))))
+    if (!startsWith(path, "file:")) expect_error(lake_files(tbl), class = "zulake_error_corrupt_log", label = path)
+    expect_error(lake_read(tbl), class = "zulake_error_corrupt_log", label = path)
+  }
+  # A "%" that is not an escape is kept as it is, as deltalake 1.7.0 keeps
+  # it; an escape of UTF-8 bytes is decoded.
+  tbl <- lake_open(hand_table(c(protocol_line(), metadata_line(), add_line("a%ZZb.parquet"), add_line("c%C3%A9.parquet"))))
+  expect_identical(basename(lake_files(tbl)$uri), c("a%ZZb.parquet", "cé.parquet"))
+  # A V2 sidecar path the same way.
+  expect_error(percent_decode("s%00.parquet"), class = "zulake_error_corrupt_log")
+})

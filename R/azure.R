@@ -500,6 +500,9 @@ parse_blob_list <- function(bytes, prefix) {
   bad <- function(why) {
     zulake_abort("storage", sprintf("Azure's listing of %s is not a blob list: %s.", format_string(prefix), why), path = prefix)
   }
+  if (any(bytes == as.raw(0L))) {
+    bad("it holds a NUL byte")
+  }
   text <- rawToChar(bytes)
   Encoding(text) <- "UTF-8"
   if (!validUTF8(text)) {
@@ -526,7 +529,7 @@ parse_blob_list <- function(bytes, prefix) {
     if (is.na(nm) || !nzchar(nm) || is.na(props)) {
       bad("a Blob element lacks its Name or Properties")
     }
-    name[i] <- if (encoded) percent_decode(nm) else nm
+    name[i] <- if (encoded) percent_decode(nm, "storage") else nm
     size[i] <- suppressWarnings(as.numeric(xml_element(props, "Content-Length")))
     mtime[i] <- parse_http_date(xml_element(props, "Last-Modified"))
     if (is.na(size[i]) || size[i] < 0 || is.na(mtime[i])) {

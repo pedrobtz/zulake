@@ -129,3 +129,7 @@
   `"bearer x"` was sent as `Bearer bearer x`. The prefix is dropped in any
   case before the token is checked, and a token with a space is refused
   (#47).
+* Fixed: a `%00`, or bytes that are not UTF-8, in a log path, an Azure URI
+  or an encoded List Blobs name, and a NUL byte in a List Blobs answer,
+  gave base R errors. They are a `zulake_error_corrupt_log`,
+  `zulake_error_uri` or `zulake_error_storage` (#49).

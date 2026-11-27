@@ -342,7 +342,11 @@ file_uri <- function(tbl, paths) {
   out
 }
 
-percent_decode <- function(x) {
+# Percent-decoding of paths the log, a URI or Azure's listing gives. A
+# decoded NUL or bytes that are not UTF-8 are a classed error, of `class`
+# (#49): "corrupt_log" for the log's paths, "uri" for a user's URI,
+# "storage" for Azure's answers.
+percent_decode <- function(x, class = "corrupt_log") {
   vapply(x, function(s) {
     if (!grepl("%", s, fixed = TRUE)) {
       return(s)
@@ -357,8 +361,14 @@ percent_decode <- function(x) {
         bytes <- c(bytes, as.raw(strtoi(substring(codes[i], 2L), 16L)))
       }
     }
+    if (any(bytes == as.raw(0L))) {
+      zulake_abort(class, sprintf("the path %s decodes to a NUL byte.", format_string(s)), path = s)
+    }
     out <- rawToChar(bytes)
     Encoding(out) <- "UTF-8"
+    if (!validUTF8(out)) {
+      zulake_abort(class, sprintf("the path %s does not decode to UTF-8 text.", format_string(s)), path = s)
+    }
     out
   }, "", USE.NAMES = FALSE)
 }

@@ -755,3 +755,22 @@ test_that("a token is checked after its Bearer prefix is dropped, in any case (#
     expect_identical(unique(vapply(log$requests, function(r) r$headers$authorization, "")), "Bearer x", label = good)
   }
 })
+
+test_that("NUL and invalid UTF-8 in List Blobs answers are classed errors (#49)", {
+  head <- "<?xml version=\"1.0\" encoding=\"utf-8\"?><EnumerationResults><Blobs>"
+  blob <- function(name, encoded = TRUE) {
+    paste0(if (encoded) "<Blob><Name Encoded=\"true\">" else "<Blob><Name>", name, "</Name><Properties>",
+           "<Last-Modified>Mon, 01 Jan 2024 00:00:00 GMT</Last-Modified><Content-Length>1</Content-Length>",
+           "</Properties></Blob>")
+  }
+  tail <- "</Blobs><NextMarker /></EnumerationResults>"
+  for (name in c("t/a%00b", "t/a%C3%28b", "t/a%FFb")) {
+    expect_error(parse_blob_list(charToRaw(paste0(head, blob(name), tail)), "p"), class = "zulake_error_storage",
+                 label = name)
+  }
+  with_nul <- c(charToRaw(paste0(head, blob("t/a", FALSE))), as.raw(0), charToRaw(tail))
+  expect_error(parse_blob_list(with_nul, "p"), class = "zulake_error_storage")
+  utf16 <- iconv(paste0(head, blob("t/a", FALSE), tail), "UTF-8", "UTF-16LE", toRaw = TRUE)[[1L]]
+  expect_error(parse_blob_list(utf16, "p"), class = "zulake_error_storage")
+  expect_identical(parse_blob_list(charToRaw(paste0(head, blob("t/a%C3%A9"), tail)), "p")$blobs$name, "t/aé")
+})
