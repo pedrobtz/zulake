@@ -10,7 +10,8 @@
 #' Partition values are typed by the column's Delta type: `byte` and
 #' `short` as integers, `integer` as doubles (an R integer cannot hold
 #' -2^31), `long` as 64-bit values (see `int64`), `float` and `double` as
-#' doubles, `boolean` as logicals, `date` as `Date`,
+#' doubles (a `float` rounded through single precision, as its data
+#' column reads), `boolean` as logicals, `date` as `Date`,
 #' `timestamp` and `timestamp_ntz` as `POSIXct` in UTC, and `decimal`,
 #' `string` and `binary` as the text the log holds. A null partition value
 #' is `NA`.

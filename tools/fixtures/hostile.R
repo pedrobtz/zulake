@@ -314,6 +314,27 @@ schema_edit("schema-duplicate-name", x_name, "{\\\"name\\\":\\\"label\\\",")
 schema_edit("schema-field-without-name", x_name, "{")
 schema_edit("schema-empty-name", x_name, "{\\\"name\\\":\\\"\\\",")
 
+# Names that differ only in case, which PROTOCOL.md does not allow: field
+# `x` renamed `LABEL` beside `label`, and `x` typed as a struct with fields
+# `a` and `A` (#134).
+schema_edit("schema-duplicate-name-case", x_name, "{\\\"name\\\":\\\"LABEL\\\",")
+x_double <- "{\\\"name\\\":\\\"x\\\",\\\"type\\\":\\\"double\\\","
+schema_edit(
+  "schema-duplicate-name-case-nested",
+  x_double,
+  paste0(
+    "{\\\"name\\\":\\\"x\\\",\\\"type\\\":{\\\"type\\\":\\\"struct\\\",\\\"fields\\\":[",
+    "{\\\"name\\\":\\\"a\\\",\\\"type\\\":\\\"long\\\",\\\"nullable\\\":true,\\\"metadata\\\":{}},",
+    "{\\\"name\\\":\\\"A\\\",\\\"type\\\":\\\"long\\\",\\\"nullable\\\":true,\\\"metadata\\\":{}}]},"
+  )
+)
+
+# A schema whose type for a column is not the one its data files hold
+# (#119): `label` (strings in every file) typed `long`, and `id` (INT64 in
+# every file) typed `integer`.
+schema_edit("data-type-string-for-long", label, "{\\\"name\\\":\\\"label\\\",\\\"type\\\":\\\"long\\\",")
+schema_edit("data-type-long-for-integer", id_long, "{\\\"name\\\":\\\"id\\\",\\\"type\\\":\\\"integer\\\",")
+
 # A name-mode table whose fields `letter` and `int` have one physical name
 # in commit 0's schema; commit 2's schema has `int`'s own again (#120).
 d <- copy_table("column_mapping", "column-mapping-duplicate-physical-name")

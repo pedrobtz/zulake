@@ -1,0 +1,220 @@
+{
+ "actions": [
+  {
+   "commitInfo": {
+    "clientVersion": "zulake-fixtures",
+    "operation": "WRITE",
+    "operationParameters": {},
+    "timestamp": 1795812708074
+   }
+  },
+  {
+   "add": {
+    "dataChange": true,
+    "modificationTime": 1795812708074,
+    "partitionValues": {},
+    "path": "part-int32.parquet",
+    "size": 743,
+    "stats": "{\"numRecords\":3,\"minValues\":{\"id\":2,\"x\":3},\"maxValues\":{\"id\":4,\"x\":2147483647},\"nullCount\":{\"id\":0,\"x\":1}}"
+   }
+  }
+ ],
+ "add_actions": {
+  "columns": {
+   "max": [
+    {
+     "id": "1",
+     "x": "1099511627776"
+    },
+    {
+     "id": "4",
+     "x": "2147483647"
+    }
+   ],
+   "min": [
+    {
+     "id": "0",
+     "x": "-7"
+    },
+    {
+     "id": "2",
+     "x": "3"
+    }
+   ],
+   "modification_time": [
+    "1795812708071",
+    "1795812708074"
+   ],
+   "null_count": [
+    {
+     "id": "0",
+     "x": "0"
+    },
+    {
+     "id": "0",
+     "x": "1"
+    }
+   ],
+   "num_records": [
+    "2",
+    "3"
+   ],
+   "path": [
+    "part-00000-78402067-9790-4c7a-807f-aaf3a46152a4-c000.snappy.parquet",
+    "part-int32.parquet"
+   ],
+   "size_bytes": [
+    "787",
+    "743"
+   ]
+  },
+  "num_rows": 2,
+  "schema": [
+   {
+    "name": "path",
+    "nullable": false,
+    "type": "string"
+   },
+   {
+    "name": "size_bytes",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "modification_time",
+    "nullable": false,
+    "type": "int64"
+   },
+   {
+    "name": "num_records",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "null_count",
+    "nullable": true,
+    "type": "struct<id: int64, x: int64>"
+   },
+   {
+    "name": "min",
+    "nullable": true,
+    "type": "struct<id: int64, x: int64>"
+   },
+   {
+    "name": "max",
+    "nullable": true,
+    "type": "struct<id: int64, x: int64>"
+   }
+  ]
+ },
+ "count": 5,
+ "deletion_vectors": [],
+ "deltalake": "1.7.0",
+ "engine": "datafusion",
+ "history": [
+  {
+   "clientVersion": "zulake-fixtures",
+   "operation": "WRITE",
+   "operationParameters": {},
+   "timestamp": 1795812708074,
+   "version": 1
+  },
+  {
+   "clientVersion": "delta-rs.py-1.7.0",
+   "engineInfo": "delta-rs:py-1.7.0",
+   "operation": "WRITE",
+   "operationMetrics": {
+    "execution_time_ms": 1,
+    "num_added_files": 1,
+    "num_added_rows": 2,
+    "num_partitions": 0,
+    "num_removed_files": 0,
+    "num_retries": 0
+   },
+   "operationParameters": {
+    "mode": "ErrorIfExists"
+   },
+   "timestamp": 1795812708071,
+   "txnId": "6f048ae4-8ab6-4d77-ab19-2bb92714b82b",
+   "version": 0
+  }
+ ],
+ "loaded_version": 1,
+ "metadata": {
+  "configuration": {},
+  "created_time": 1795812708070,
+  "description": null,
+  "id": "99c6219b-947f-43e5-8ed9-be9cabc8efc7",
+  "name": "int32-in-long",
+  "partition_columns": []
+ },
+ "partitions": [],
+ "protocol": {
+  "min_reader_version": 1,
+  "min_writer_version": 2,
+  "reader_features": null,
+  "writer_features": null
+ },
+ "read": {
+  "columns": {
+   "id": [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4"
+   ],
+   "x": [
+    "1099511627776",
+    "-7",
+    "3",
+    null,
+    "2147483647"
+   ]
+  },
+  "num_rows": 5,
+  "schema": [
+   {
+    "name": "id",
+    "nullable": true,
+    "type": "int64"
+   },
+   {
+    "name": "x",
+    "nullable": true,
+    "type": "int64"
+   }
+  ]
+ },
+ "refusal": null,
+ "schema": {
+  "fields": [
+   {
+    "metadata": {},
+    "name": "id",
+    "nullable": true,
+    "type": "long"
+   },
+   {
+    "metadata": {},
+    "name": "x",
+    "nullable": true,
+    "type": "long"
+   }
+  ],
+  "type": "struct"
+ },
+ "table": "zl-int32-in-long",
+ "timestamp_lookup": [
+  {
+   "at": "2026-11-27T20:51:48.073Z",
+   "version": 0
+  },
+  {
+   "at": "2026-11-27T20:51:48.074Z",
+   "version": 1
+  }
+ ],
+ "transactions": {},
+ "version": 1
+}

@@ -55,19 +55,33 @@
 #' as `amount > "100"`, is an error, since R would compare it with the
 #' column as strings. A date or timestamp column takes a `Date` or
 #' `POSIXct`, or text such as `"2024-01-31"` or
-#' `"2024-01-31 12:00:00"` (UTC unless it gives an offset).
+#' `"2024-01-31 12:00:00"` (UTC unless it gives an offset), to the
+#' microsecond: text with a non-zero digit past it is an error.
 #'
-#' Columns are typed as qio returns them (see [qio::read_parquet()]), and
-#' partition columns as [lake_files()] types them, except that a `decimal`
-#' of precision 15 or less, data or partition, is a double, which holds it
-#' exactly. An `integer` data value of -2^31 reads as `NA`, R's integer
-#' `NA`, with a warning from qio: `is.na()` is `TRUE` for it and a comparison
+#' Columns are typed as qio returns them (see [qio::read_parquet()]), and a
+#' partition column as a data column of its type: a `decimal` of precision
+#' 15 or less is a double, which holds it exactly; a `float` is the double
+#' of its single-precision value; an `integer` is an R integer; a `binary`
+#' value is a raw vector of the UTF-8 bytes of the log's text (`NULL` for
+#' null); and a time with digits past the microsecond loses them. A `void`
+#' column is all `NA`, and is never read from a file. Each data file's
+#' Parquet type for each column read must be one its type in the schema
+#' reads: an INT32 file of a `long` column is widened to the `long` mapping,
+#' and a file whose type the schema's does not read (strings in a `long`
+#' column, INT64 in an `integer` one) is an error of class
+#' `zulake_error_corrupt_log` naming the file and the column, with fields
+#' `type`, `physical_type` and `logical_type`. An error qio raises on a data
+#' file is a `zulake_error_storage` whose `path` names it. An `integer`
+#' value of -2^31, data or partition, reads as `NA`, R's integer `NA`, with
+#' a warning in qio's words: `is.na()` is `TRUE` for it and a comparison
 #' such as `x < 1` is not, and a file whose minimum may be -2^31 is never
 #' pruned on its null count. So is a `long` data value past 2^53 - 1 in
 #' magnitude with `int64 = "double"`, or -2^63 with `"integer64"`, and a
 #' file whose bounds may hold one is never pruned on its null count. Columns zulake does not return are not lost silently: nested
-#' columns (`struct`, `array`, `map`), and decimals of precision above 15
-#' until qio reads them exactly. With `columns = NULL` they are left out, each named in a
+#' columns (`struct`, `array`, `map`), decimals of precision above 15
+#' until qio reads them exactly, and a flat column whose dotted name a
+#' nested column's path also has (`a.b` beside a struct `a` with a field
+#' `b`), which qio cannot select apart from it. With `columns = NULL` they are left out, each named in a
 #' warning of class `zulake_warning_column_skipped` (fields `column` and
 #' `reason`); named in `columns` or used in `filter`, such a column is an
 #' error of class `zulake_error_column_unreadable` with the same fields.
@@ -217,8 +231,12 @@ read_scan <- function(tbl, columns, expr, env, int64) {
   )
 
   reasons <- list()
+  nested <- struct_field_paths(fields, tbl$column_mapping)
   for (col in need) {
     why <- type_unreadable(types[[col]])
+    if (is.na(why) && dotted_path_taken(physical[[col]], nested)) {
+      why <- dotted_path_reason
+    }
     if (!is.na(why)) reasons[[col]] <- why
   }
   # Every file's location is checked before anything is read (#66, #76).
@@ -237,8 +255,14 @@ read_scan <- function(tbl, columns, expr, env, int64) {
     function(k) fetch_file(tbl, keep[k], where[[k]]),
     ""
   )
-  data_cols <- setdiff(need, c(pcols, names(reasons)))
-  plans <- lapply(paths, function(p) qio::read_plan(p, int64 = int64))
+  # A void column is never read from a file: it holds only nulls (#133).
+  void_cols <- names(types)[types %in% "void"]
+  data_cols <- setdiff(need, c(pcols, void_cols, names(reasons)))
+  files <- tbl$files$path[keep]
+  layouts <- lapply(seq_along(paths), function(k) {
+    read_layout(paths[k], files[k], int64)
+  })
+  plans <- lapply(layouts, `[[`, "plan")
   for (k in seq_along(paths)) {
     for (col in setdiff(data_cols, names(reasons))) {
       why <- plan_unreadable(plans[[k]], physical[[col]])
@@ -274,10 +298,16 @@ read_scan <- function(tbl, columns, expr, env, int64) {
     )
   }
   read_cols <- setdiff(need, names(reasons))
-  data_cols <- setdiff(read_cols, pcols)
+  data_cols <- setdiff(read_cols, c(pcols, void_cols))
   present <- lapply(plans, function(pl) {
     flat <- pl$path[!pl$nested]
     data_cols[physical[data_cols] %in% flat]
+  })
+  # Each file's type for each column read, against the schema's, before any
+  # row is decoded (#119): the columns a file holds as a narrower integer
+  # of a `long` column are widened in read_piece().
+  widen <- lapply(seq_along(layouts), function(k) {
+    check_file_types(layouts[[k]], present[[k]], types, physical, files[k])
   })
   vetted <- vapply(
     seq_along(plans),
@@ -309,6 +339,7 @@ read_scan <- function(tbl, columns, expr, env, int64) {
     read_cols = read_cols,
     out_cols = setdiff(out_cols, names(reasons)),
     present = present,
+    widen = widen,
     vetted = vetted,
     deleted = deleted,
     parts = partition_read_table(
@@ -342,11 +373,57 @@ type_unreadable <- function(type) {
   NA_character_
 }
 
+# The dotted paths of the fields inside the schema's structs, by their names
+# in the files, as qio renders a nested column's path ("a.b" for field `b`
+# of struct `a`).
+struct_field_paths <- function(fields, mode) {
+  out <- character()
+  walk <- function(fs, prefix) {
+    for (f in fs) {
+      name <- if (mode == "name") field_physical_name(f) else NA_character_
+      if (is.na(name)) {
+        name <- field_name(f)
+      }
+      path <- paste0(prefix, name)
+      if (nzchar(prefix)) {
+        out <<- c(out, path)
+      }
+      type <- f[["type"]]
+      if (is.list(type) && identical(type[["type"]], "struct")) {
+        walk(type[["fields"]], paste0(path, "."))
+      }
+    }
+  }
+  walk(fields, "")
+  out
+}
+
+# Whether a flat column `name` has the path of a nested column in `paths`,
+# or a path a nested one starts with: qio selects columns by dotted path and
+# refuses such a name as ambiguous (#116).
+dotted_path_taken <- function(name, paths) {
+  any(paths == name | startsWith(paths, paste0(name, ".")))
+}
+
+dotted_path_reason <- paste(
+  "qio selects columns by path, and a nested column has the same path",
+  "(pedrobtz/qio#78)"
+)
+
 # Why a file's qio read plan cannot return column `name` (its name in the
 # file), or NA; a column the file does not have is read as NA, not refused.
+# qio selects a column by its dotted path, and refuses one a nested column
+# of the file (or of the schema, read_scan()) also renders (a flat `a.b`
+# beside a struct `a` with a field `b`): until it can select it otherwise
+# (pedrobtz/qio#78), such a column is one qio cannot return (#116). A nested
+# path that merely starts with the name counts too, which may leave out a
+# column qio could tell apart.
 plan_unreadable <- function(plan, name) {
   flat <- !plan$nested & plan$path == name
   if (any(flat)) {
+    if (dotted_path_taken(name, plan$path[plan$nested])) {
+      return(dotted_path_reason)
+    }
     if (all(plan$collectible[flat])) {
       return(NA_character_)
     }
@@ -375,10 +452,18 @@ read_piece <- function(scan, k) {
       int64 = scan$int64
     )
   }
-  df <- withCallingHandlers(
-    read(),
-    message = qio_decimal_muffler(scan$vetted[k])
+  df <- qio_data(
+    scan$tbl$files$path[i],
+    withCallingHandlers(read(), message = qio_decimal_muffler(scan$vetted[k]))
   )
+  for (col in scan$widen[[k]]) {
+    name <- scan$physical[[col]]
+    df[[name]] <- if (scan$int64 == "integer64") {
+      bit64::as.integer64(df[[name]])
+    } else {
+      as.numeric(df[[name]])
+    }
+  }
   n <- nrow(df)
   gone <- scan$deleted[[k]]
   if (length(gone) && gone[length(gone)] >= n) {
@@ -444,6 +529,7 @@ empty_column <- function(type, int64, n) {
       class = c("POSIXct", "POSIXt"),
       tzone = "UTC"
     ),
+    void = rep(NA, n),
     rep(NA, n)
   )
 }
@@ -624,12 +710,30 @@ fetch_file <- function(tbl, i, where = resolve_file(tbl, i)) {
       path = path
     )
   }
+  cannot_write <- function(why) {
+    zulake_abort(
+      "storage",
+      sprintf(
+        "cannot write a copy of %s to %s: %s.",
+        format_string(path),
+        format_string(dir),
+        why
+      ),
+      path = path
+    )
+  }
   dir.create(dir, showWarnings = FALSE)
+  if (!dir.exists(dir)) {
+    cannot_write("it is not a directory zulake can create")
+  }
   f <- tempfile("data-", tmpdir = dir, fileext = ".parquet")
   part <- paste0(f, ".part")
   ok <- FALSE
   on.exit(if (!ok) unlink(part), add = TRUE)
-  writeBin(bytes, part)
+  written <- write_bytes(bytes, part)
+  if (!isTRUE(written)) {
+    cannot_write(written)
+  }
   if (!file.rename(part, f)) {
     zulake_abort(
       "storage",
@@ -646,6 +750,21 @@ fetch_file <- function(tbl, i, where = resolve_file(tbl, i)) {
     downloads$files[[key]] <- f
   }
   f
+}
+
+# Writes `bytes` to the file `path`: TRUE, or the reason it could not, as
+# text (a directory that is read-only or not one), with no base warning.
+write_bytes <- function(bytes, path) {
+  tryCatch(
+    {
+      con <- file(path, "wb")
+      on.exit(close(con))
+      writeBin(bytes, con)
+      TRUE
+    },
+    error = function(e) conditionMessage(e),
+    warning = function(w) conditionMessage(w)
+  )
 }
 
 # Whether a path from the log (an `add` path, a deletion vector's absolute
@@ -679,9 +798,164 @@ absolute_local_path <- function(path) {
 
 # The number of rows of live file `i`, from its Parquet footer.
 footer_rows <- function(tbl, i, where = resolve_file(tbl, i)) {
-  parquet <- qio::open_parquet(fetch_file(tbl, i, where))
+  local <- fetch_file(tbl, i, where)
+  qio_data(tbl$files$path[i], footer_count(local))
+}
+
+footer_count <- function(local) {
+  parquet <- qio::open_parquet(local)
   on.exit(qio::close_parquet(parquet))
   as.numeric(dim(parquet)[1L])
+}
+
+# `expr`, a call into qio on data file `path` (its path in the log), with
+# any error qio raises (a file truncated, empty, not Parquet, a page that
+# does not decode) a zulake_error_storage naming the file, qio's message
+# kept and its condition as `parent` (#123). zulake's own errors pass.
+qio_data <- function(path, expr) {
+  tryCatch(expr, error = function(e) {
+    if (inherits(e, "zulake_error")) {
+      stop(e)
+    }
+    zulake_abort(
+      "storage",
+      sprintf(
+        "cannot read data file %s: %s",
+        format_string(path),
+        conditionMessage(e)
+      ),
+      path = path,
+      parent = e
+    )
+  })
+}
+
+# A data file's qio read plan and schema, from one open: the plan says what
+# qio returns, the schema the details of each column's Parquet type.
+read_layout <- function(local, path, int64) {
+  qio_data(path, open_layout(local, int64))
+}
+
+open_layout <- function(local, int64) {
+  parquet <- qio::open_parquet(local)
+  on.exit(qio::close_parquet(parquet))
+  list(
+    plan = qio::read_plan(parquet, int64 = int64),
+    schema = qio::schema(parquet)
+  )
+}
+
+# The columns of `cols` (logical names, read from this file) whose type in
+# the file widens to the schema's (an INT32 of a `long` column); a column
+# whose type the schema's does not read is a corrupt log naming the file,
+# the column, the Delta type and the file's type (#119, design section 7).
+check_file_types <- function(layout, cols, types, physical, file) {
+  plan <- layout$plan
+  sch <- layout$schema
+  widen <- character()
+  for (col in cols) {
+    j <- which(!plan$nested & plan$path == physical[[col]])[1L]
+    s <- match(plan$column[j], sch$column)
+    details <- if (is.na(s)) NA_character_ else sch$logical_details[s]
+    fit <- parquet_type_fit(
+      types[[col]],
+      plan$physical_type[j],
+      plan$logical_type[j],
+      details
+    )
+    if (fit == "widen") {
+      widen <- c(widen, col)
+    } else if (fit == "refuse") {
+      held <- plan$physical_type[j]
+      if (!is.na(plan$logical_type[j])) {
+        held <- paste0(
+          held,
+          " ",
+          plan$logical_type[j],
+          if (!is.na(details)) paste0(" (", details, ")")
+        )
+      }
+      zulake_abort(
+        "corrupt_log",
+        sprintf(
+          paste(
+            "data file %s holds column %s as %s, which its type in the schema,",
+            "%s, does not read."
+          ),
+          format_string(file),
+          format_string(col),
+          held,
+          types[[col]]
+        ),
+        file = file,
+        column = col,
+        type = types[[col]],
+        physical_type = plan$physical_type[j],
+        logical_type = plan$logical_type[j]
+      )
+    }
+  }
+  widen
+}
+
+# Whether a column of Delta type `type` reads a Parquet column of this
+# physical type, logical type and details (qio's schema(), such as
+# "bit_width=8, signed=true"): "read", "widen" (an INT32 of a `long` column,
+# returned as the `long` mapping, as deltalake upcasts it), or "refuse".
+# Only widenings that lose nothing and keep R's type are read (#119); the
+# casts deltalake makes beyond them (strings to numbers, a decimal of
+# another scale, a wider integer that happens to fit) depend on the values,
+# and are refused.
+parquet_type_fit <- function(type, physical, logical, details) {
+  logical <- if (is.na(logical)) "" else logical
+  details <- if (is.na(details)) "" else details
+  detail <- function(key) {
+    m <- regmatches(details, regexec(paste0(key, "=([^,]+)"), details))[[1L]]
+    if (length(m) == 2L) trimws(m[2L]) else NA_character_
+  }
+  # The width of a signed integer column, NA for any other.
+  bits <- if (!physical %in% c("INT32", "INT64")) {
+    NA
+  } else if (logical == "") {
+    if (physical == "INT32") 32 else 64
+  } else if (logical == "INTEGER" && identical(detail("signed"), "true")) {
+    as.numeric(detail("bit_width"))
+  } else {
+    NA
+  }
+  int <- function(max) {
+    physical == "INT32" && !is.na(bits) && bits <= max
+  }
+  ps <- decimal_ps(type)
+  ok <- if (!is.null(ps)) {
+    logical == "DECIMAL" &&
+      identical(as.numeric(detail("scale")), ps[["scale"]]) &&
+      isTRUE(as.numeric(detail("precision")) <= ps[["precision"]])
+  } else {
+    switch(
+      type,
+      byte = int(8),
+      short = int(16),
+      integer = int(32),
+      long = if (int(32)) {
+        return("widen")
+      } else {
+        physical == "INT64" && identical(bits, 64)
+      },
+      float = physical == "FLOAT" && logical == "",
+      double = physical %in% c("FLOAT", "DOUBLE") && logical == "",
+      string = physical == "BYTE_ARRAY" && logical == "STRING",
+      binary = physical %in% c("BYTE_ARRAY", "FIXED_LEN_BYTE_ARRAY") &&
+        logical == "",
+      boolean = physical == "BOOLEAN",
+      date = physical == "INT32" && logical == "DATE",
+      timestamp = (physical == "INT64" && logical == "TIMESTAMP") ||
+        (physical == "INT96" && logical == ""),
+      timestamp_ntz = physical == "INT64" && logical == "TIMESTAMP",
+      FALSE
+    )
+  }
+  if (ok) "read" else "refuse"
 }
 
 # A message handler for the one message qio emits per read when it returns

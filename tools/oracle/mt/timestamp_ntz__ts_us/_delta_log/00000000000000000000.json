@@ -1,0 +1,4 @@
+{"commitInfo": {"timestamp": 1, "operation": "WRITE"}}
+{"protocol": {"minReaderVersion": 3, "minWriterVersion": 7, "readerFeatures": ["timestampNtz"], "writerFeatures": ["timestampNtz"]}}
+{"metaData": {"id": "tid", "format": {"provider": "parquet", "options": {}}, "schemaString": "{\"type\": \"struct\", \"fields\": [{\"name\": \"id\", \"type\": \"long\", \"nullable\": true, \"metadata\": {}}, {\"name\": \"x\", \"type\": \"timestamp_ntz\", \"nullable\": true, \"metadata\": {}}]}", "partitionColumns": [], "configuration": {}, "createdTime": 1}}
+{"add": {"path": "a.parquet", "partitionValues": {}, "size": 780, "modificationTime": 1000, "dataChange": true, "stats": "{\"numRecords\": 2}"}}

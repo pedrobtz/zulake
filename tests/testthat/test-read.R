@@ -25,6 +25,17 @@ test_that("full reads of every fixture equal deltalake's", {
       expect_identical(length(got$warnings) > 0L, case$version >= 3)
       for (w in got$warnings) expect_match(conditionMessage(w), "'i64' were coerced to NA", fixed = TRUE)
       expect_read_oracle(got$value, case$table, case$version)
+    } else if (case$table %in% c("zl-dotted-name", "zl-void")) {
+      # The struct, and the flat column a.b, which qio cannot select apart
+      # from the struct's field b (#116), are left out by name.
+      skipped <- vapply(got$warnings, function(w) w$column, "")
+      expect_setequal(skipped, if (case$table == "zl-void") "st" else c("a", "a.b"))
+      expect_read_oracle(got$value, case$table, case$version, skipped = skipped)
+    } else if (case$table == "zl-partition-types") {
+      # -2^31 reads as NA from the partition column and the data column
+      # alike, each with qio's warning (#118).
+      for (w in got$warnings) expect_match(conditionMessage(w), "_integer' were coerced to NA", fixed = TRUE)
+      expect_read_oracle(got$value, case$table, case$version)
     } else {
       expect_length(got$warnings, 0L)
       expect_read_oracle(got$value, case$table, case$version)
@@ -101,19 +112,15 @@ test_that("the columns that cannot be read are found from qio's read plan, not f
   types[["st"]] <- "long"
   types[["li"]] <- "string"
   types[["mp"]] <- "integer"
-  types[["dec38"]] <- "double"
   file <- lake_files(tbl, stats = FALSE)
   write_commit(path, 1, c(metadata_line(types), remove_line(file$path)))
   write_commit(path, 2, add_line(file$path, size = file$size_bytes))
   tbl <- lake_open(path)
   got <- suppressMessages(collect_warnings(lake_read(tbl)))
   w <- Filter(function(w) inherits(w, "zulake_warning_column_skipped"), got$warnings)
-  expect_setequal(vapply(w, function(x) x$column, ""), c("st", "li", "mp"))
-  for (x in w) expect_match(x$reason, "nested column", fixed = TRUE)
-  expect_true("dec38" %in% names(got$value))
+  expect_setequal(vapply(w, function(x) x$column, ""), c("dec38", "st", "li", "mp"))
+  for (x in w) if (x$column != "dec38") expect_match(x$reason, "nested column", fixed = TRUE)
   expect_error(lake_read(tbl, columns = "st"), class = "zulake_error_column_unreadable")
-  # The decimal read as a double the schema did not vet: qio's message stays.
-  expect_message(suppressWarnings(lake_read(tbl, columns = "dec38")), "DECIMAL")
   expect_silent(lake_read(tbl, columns = "dec"))
 })
 
@@ -296,9 +303,11 @@ test_that("a read with no file or no matching row has the columns and types of a
     if (case$table %in% c("zl-types", "zl-catalog-managed")) next
     tbl <- case_snapshot(case)
     # qio warns that it read zl-int32-min's -2^31 and zl-int64-edges'
-    # values past 2^53 as NA (#79, #111).
-    full <- if (case$table %in% c("zl-int32-min", "zl-int64-edges")) suppressWarnings(lake_read(tbl)) else lake_read(tbl)
-    none <- lake_read(tbl, filter = FALSE)
+    # values past 2^53 as NA (#79, #111), zl-partition-types' -2^31 the
+    # same (#118), and the columns left out of zl-void and zl-dotted-name
+    # are named (#133, #116): the full reads test checks those warnings.
+    full <- suppressWarnings(lake_read(tbl))
+    none <- suppressWarnings(lake_read(tbl, filter = FALSE))
     expect_identical(nrow(none), 0L)
     expect_identical(lapply(none, class), lapply(full, class), label = paste(case$table, case$version))
     expect_identical(lapply(none, typeof), lapply(full, typeof), label = paste(case$table, case$version))
@@ -391,13 +400,16 @@ test_that("a Windows drive path is absolute, as are a root path and a URI; a tab
 test_that("a column two files store as different types is a corrupt log", {
   path <- local_fixture_copy("zl-basic")
   tbl <- lake_open(path)
-  qio::write_parquet(data.frame(id = c(100, 101), label = c("p", "q"), x = 1:2), file.path(path, "other.parquet"))
+  # x is INT32 in this file, where the schema says double: refused when the
+  # file's types are checked against the schema, before any row (#119).
+  write_parquet_long(data.frame(id = c(100, 101), label = c("p", "q"), x = 1:2), file.path(path, "other.parquet"))
   write_commit(path, 5, add_line("other.parquet", size = file.size(file.path(path, "other.parquet"))))
   err <- tryCatch(lake_read(lake_open(path)), error = identity)
   expect_s3_class(err, "zulake_error_corrupt_log")
   expect_identical(err$column, "x")
-  # Each file alone reads.
-  expect_identical(nrow(lake_read(lake_open(path), filter = id >= 100)), 2L)
+  expect_identical(err$file, "other.parquet")
+  # Without x, every file reads.
+  expect_identical(nrow(lake_read(lake_open(path), columns = c("id", "label"), filter = id >= 100)), 2L)
 })
 
 test_that("a cached download deleted from disk is downloaded again, not read as missing (#63)", {
@@ -449,5 +461,73 @@ test_that("a relative log path with an empty, \".\" or \"..\" segment is a corru
   # segment, are names like any other.
   for (p in c("..a.parquet", "a..b/c.parquet", "...")) {
     expect_false(zulake:::bad_relative_path(p), label = p)
+  }
+})
+
+# ---- errors from the read path are classed (#123, #124) ------------------------
+
+test_that("a data file qio cannot open or decode is a storage error naming the file, with qio's message kept", {
+  path <- local_fixture_copy("zl-basic")
+  tbl <- lake_open(path)
+  files <- lake_files(tbl, stats = FALSE)$path
+  f <- file.path(path, files[1L])
+  bytes <- readBin(f, "raw", file.size(f))
+  broken <- list(
+    truncated = bytes[seq_len(length(bytes) %/% 2L)],
+    empty = raw(),
+    not_parquet = charToRaw("PAR1 this is not parquet PAR1"),
+    page = local({
+      b <- bytes
+      b[40:min(400, length(b) - 20)] <- xor(b[40:min(400, length(b) - 20)], as.raw(0xff))
+      b
+    })
+  )
+  for (case in names(broken)) {
+    writeBin(broken[[case]], f)
+    for (call in list(quote(lake_read(tbl)), quote(lake_walk(tbl, identity)), quote(lake_count(tbl, footers = TRUE)))) {
+      if (case == "page" && identical(call[[1L]], as.name("lake_count"))) next
+      err <- tryCatch(eval(call), error = identity)
+      if (identical(call[[1L]], as.name("lake_count")) && !inherits(err, "error")) next
+      expect_s3_class(err, "zulake_error_storage")
+      expect_identical(err$path, files[1L], label = paste(case, deparse(call)))
+      expect_match(conditionMessage(err), files[1L], fixed = TRUE)
+      expect_false(is.null(err$parent), label = case)
+      expect_match(conditionMessage(err), conditionMessage(err$parent), fixed = TRUE)
+    }
+  }
+})
+
+test_that("a download cache directory that cannot be written is a storage error, with no base warning", {
+  tbl <- lake_open(local_fixture_copy("zl-basic"))
+  tbl$storage <- remote_storage(tbl$storage, new.env())
+  blocker <- withr::local_tempfile()
+  writeLines("not a directory", blocker)
+  local_mocked_bindings(downloads_dir = function() blocker)
+  got <- collect_warnings(tryCatch(lake_read(tbl), error = identity))
+  expect_s3_class(got$value, "zulake_error_storage")
+  expect_match(conditionMessage(got$value), "cannot write", fixed = TRUE)
+  expect_length(got$warnings, 0L)
+  if (.Platform$OS.type == "unix" && Sys.info()[["user"]] != "root") {
+    ro <- withr::local_tempdir()
+    Sys.chmod(ro, "0555")
+    withr::defer(Sys.chmod(ro, "0755"))
+    local_mocked_bindings(downloads_dir = function() ro)
+    got <- collect_warnings(tryCatch(lake_read(tbl), error = identity))
+    expect_s3_class(got$value, "zulake_error_storage")
+    expect_match(conditionMessage(got$value), "cannot write", fixed = TRUE)
+    expect_length(got$warnings, 0L)
+  }
+})
+
+test_that("a missing deletion vector file is no such file, not a corrupt log", {
+  skip_if_not_installed("zuroar")
+  path <- local_fixture_copy("table-with-dv-small")
+  unlink(list.files(path, pattern = "^deletion_vector_.*[.]bin$", full.names = TRUE))
+  tbl <- lake_open(path)
+  for (call in list(quote(lake_read(tbl)), quote(lake_deletion_vectors(tbl)))) {
+    err <- tryCatch(eval(call), error = identity)
+    expect_s3_class(err, "zulake_error_storage")
+    expect_match(conditionMessage(err), "no such file", fixed = TRUE)
+    expect_match(err$path, "^deletion_vector_.*[.]bin$")
   }
 })

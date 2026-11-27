@@ -247,6 +247,23 @@ literal_exact <- function(value, expr) {
 literal_number <- function(value, type, expr) {
   n <- length(value)
   if (is.character(value)) {
+    # Times are read to the microsecond, dropping the digits past it
+    # (#118); a literal that needs them would compare as another value.
+    sub_us <- type %in% c("timestamp", "timestamp_ntz") &
+      grepl("[.][0-9]{6}[0-9]*[1-9]", value)
+    if (any(sub_us)) {
+      filter_error(
+        expr,
+        sprintf(
+          paste(
+            "%s has digits past the microsecond, which a %s column does not",
+            "hold; give the time to the microsecond"
+          ),
+          format_string(value[sub_us][1L]),
+          type
+        )
+      )
+    }
     x <- switch(
       type,
       date = as.numeric(unclass(parse_date_text(value))),

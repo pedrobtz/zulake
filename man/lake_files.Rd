@@ -79,7 +79,8 @@ alone.
 Partition values are typed by the column's Delta type: \code{byte} and
 \code{short} as integers, \code{integer} as doubles (an R integer cannot hold
 -2^31), \code{long} as 64-bit values (see \code{int64}), \code{float} and \code{double} as
-doubles, \code{boolean} as logicals, \code{date} as \code{Date},
+doubles (a \code{float} rounded through single precision, as its data
+column reads), \code{boolean} as logicals, \code{date} as \code{Date},
 \code{timestamp} and \code{timestamp_ntz} as \code{POSIXct} in UTC, and \code{decimal},
 \code{string} and \code{binary} as the text the log holds. A null partition value
 is \code{NA}.

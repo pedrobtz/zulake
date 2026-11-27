@@ -562,6 +562,19 @@ storage_azure <- function(parts, handle) {
       keep <- keep & sorts_after(rel, after)
     }
     rel <- rel[keep]
+    # A name listed twice, on one page or two, is a listing zulake cannot
+    # trust: the log would hold a version twice (#124, #123).
+    d <- anyDuplicated(rel)
+    if (d) {
+      zulake_abort(
+        "storage",
+        sprintf(
+          "Azure listed %s twice.",
+          format_string(paste0(prefix, rel[d]))
+        ),
+        path = paste0(prefix, rel[d])
+      )
+    }
     ord <- order(rel, method = "radix")
     new_data_frame(list(
       name = rel[ord],

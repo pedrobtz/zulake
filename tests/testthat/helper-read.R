@@ -326,3 +326,11 @@ qio_read_us <- function(us) {
   qio::write_parquet(data.frame(ts = .POSIXct(us / 1e6, tz = "UTC")), f)
   as.numeric(qio::read_parquet(f)$ts)
 }
+
+# qio writes a double column as DOUBLE, which a `long` column of the schema
+# does not read (#119): a hand-written file writes the columns `long` as
+# INT64 instead.
+write_parquet_long <- function(x, file, long = "id") {
+  schema <- do.call(qio::parquet_schema, stats::setNames(as.list(rep("INT64", length(long))), long))
+  qio::write_parquet(x, file, schema = schema)
+}

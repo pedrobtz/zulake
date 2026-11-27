@@ -25,6 +25,7 @@ import json
 import os
 import shutil
 import sys
+import urllib.parse
 from pathlib import Path
 
 import pyarrow as pa
@@ -354,6 +355,148 @@ def vacuum_protocol_check():
 Z85 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#"
 
 
+PARTITION_TYPES = ["byte", "short", "integer", "long", "float", "double", "decimal", "string", "boolean", "date",
+                   "timestamp", "timestamp_ntz", "binary"]
+
+
+def partition_type_values():
+    """Two values and a null of each partition type, as Arrow arrays."""
+    D = decimal.Decimal
+    return {
+        "byte": pa.array([-128, 127, None], pa.int8()),
+        "short": pa.array([-32768, 7, None], pa.int16()),
+        "integer": pa.array([-(2**31), 2**31 - 1, None], pa.int32()),
+        "long": pa.array([2**53 - 1, -5, None], pa.int64()),
+        "float": pa.array([1.1, 3.4028234663852886e38, None], pa.float32()),
+        "double": pa.array([0.1, -0.0, None], pa.float64()),
+        "decimal": pa.array([D("12.30"), D("-0.01"), None], pa.decimal128(10, 2)),
+        "string": pa.array(["a b", "é/=%", None], pa.string()),
+        "boolean": pa.array([True, False, None], pa.bool_()),
+        "date": pa.array([dt.date(1970, 1, 1), dt.date(2024, 2, 29), None], pa.date32()),
+        "timestamp": pa.array([dt.datetime(2024, 1, 5, 10, 0, 0, 123456, tzinfo=UTC),
+                               dt.datetime(1969, 12, 31, 23, 59, 59, 999999, tzinfo=UTC), None],
+                              pa.timestamp("us", tz="UTC")),
+        "timestamp_ntz": pa.array([dt.datetime(2024, 1, 5, 10, 0, 0, 123456), dt.datetime(2000, 1, 1), None],
+                                  pa.timestamp("us")),
+        "binary": pa.array([b"abc", b"\x01\x02", None], pa.binary()),
+    }
+
+
+def partition_types():
+    """Every partition type both as a partition column p_<type> and as a data
+    column d_<type> with the same values (#118).
+
+    Version 0 is deltalake's write of three rows, one file each, renamed
+    part-<n>.parquet at the root so that paths stay short. deltalake writes a
+    binary partition value as the literal text of its escapes ("\\u0061...") and
+    reads back those bytes, so each p_binary value is rewritten as the UTF-8
+    text of its d_binary bytes, what deltalake and Spark read. Version 1 is by
+    hand: two files whose partition values are texts deltalake reads through
+    a float (16777217, 1e39) and to the microsecond (nine fraction digits),
+    with d_float and d_timestamp holding what it reads.
+    """
+    p = fresh("zl-partition-types")
+    values = partition_type_values()
+    cols = {"id": pa.array([0, 1, 2], pa.int64())}
+    for t in PARTITION_TYPES:
+        cols["p_" + t] = values[t]
+    for t in PARTITION_TYPES:
+        cols["d_" + t] = values[t]
+    write_deltalake(p, pa.table(cols), name="partition-types", partition_by=["p_" + t for t in PARTITION_TYPES])
+    f = log_dir(p) / commit_name(0)
+    actions = [json.loads(line) for line in f.read_text().splitlines() if line.strip()]
+    names = {}
+    for a in actions:
+        if "add" in a:
+            old = a["add"]["path"]
+            data = pq.ParquetFile(Path(p) / urllib.parse.unquote(old)).read()
+            row = data.column("id")[0].as_py()
+            new = f"part-{row}.parquet"
+            names[old] = new
+            a["add"]["path"] = new
+            b = data.column("d_binary")[0].as_py()
+            a["add"]["partitionValues"]["p_binary"] = None if b is None else b.decode("utf-8")
+    for old, new in names.items():
+        (Path(p) / urllib.parse.unquote(old)).rename(Path(p) / new)
+    for d in sorted((x for x in Path(p).iterdir() if x.is_dir() and x.name != "_delta_log"), reverse=True):
+        shutil.rmtree(d)
+    f.write_text("\n".join(json.dumps(a, separators=(",", ":")) for a in actions) + "\n")
+
+    template = next(a["add"] for a in actions if "add" in a and a["add"]["path"] == "part-0.parquet")
+    adds = []
+    for k, (ftext, fvalue, ttext, tvalue) in enumerate([
+        ("16777217", 16777216.0, "2024-01-05 10:00:00.123456789", dt.datetime(2024, 1, 5, 10, 0, 0, 123456, tzinfo=UTC)),
+        ("1e39", float("inf"), "2024-01-05T10:00:00.999999999Z", dt.datetime(2024, 1, 5, 10, 0, 0, 999999, tzinfo=UTC)),
+    ]):
+        data = {"id": pa.array([3 + k], pa.int64())}
+        for t in PARTITION_TYPES:
+            data["d_" + t] = values[t].slice(0, 1)
+        data["d_float"] = pa.array([fvalue], pa.float32())
+        data["d_timestamp"] = pa.array([tvalue], pa.timestamp("us", tz="UTC"))
+        name = f"part-{3 + k}.parquet"
+        pq.write_table(pa.table(data), Path(p) / name)
+        pv = dict(template["partitionValues"])
+        pv["p_float"] = ftext
+        pv["p_timestamp"] = ttext
+        adds.append({"add": {"path": name, "partitionValues": pv, "size": (Path(p) / name).stat().st_size,
+                             "modificationTime": template["modificationTime"], "dataChange": True,
+                             "stats": json.dumps({"numRecords": 1})}})
+    append_commit(p, [commit_info("WRITE")] + adds)
+
+
+def void_columns():
+    """A void column at the top level and inside a struct (#133).
+
+    deltalake writes id and a struct st; commit 0's schema is then given a
+    top-level field v of type void and a field nv of type void in st, which
+    no data file holds, as PROTOCOL.md has void columns ("never materialized
+    in data files").
+    """
+    p = fresh("zl-void")
+    t = pa.table({"id": pa.array([1, 2, 3], pa.int64()),
+                  "st": pa.array([{"a": 1}, None, {"a": 3}], pa.struct([("a", pa.int64())]))})
+    write_deltalake(p, t, name="void")
+
+    def edit(action):
+        if "metaData" in action:
+            schema = json.loads(action["metaData"]["schemaString"])
+            for field in schema["fields"]:
+                if field["name"] == "st":
+                    field["type"]["fields"].append({"name": "nv", "type": "void", "nullable": True, "metadata": {}})
+            schema["fields"].insert(1, {"name": "v", "type": "void", "nullable": True, "metadata": {}})
+            action["metaData"]["schemaString"] = json.dumps(schema, separators=(",", ":"))
+        return action
+
+    rewrite_commit(p, 0, edit)
+
+
+def dotted_name():
+    """A top-level column named a.b beside a struct a with a field b (#116)."""
+    p = fresh("zl-dotted-name")
+    t = pa.table({"id": pa.array([1, 2], pa.int64()),
+                  "a": pa.array([{"b": 7}, None], pa.struct([("b", pa.int64())])),
+                  "a.b": pa.array([42, None], pa.int64())})
+    write_deltalake(p, t, name="dotted-name")
+
+
+def int32_in_long():
+    """A long column whose second file holds it as INT32, which deltalake
+    upcasts (#119). Version 0 is deltalake's INT64 file; version 1 adds by
+    hand a file pyarrow writes with x as int32."""
+    p = fresh("zl-int32-in-long")
+    sch = pa.schema([("id", pa.int64()), ("x", pa.int64())])
+    write_deltalake(p, pa.table({"id": [0, 1], "x": [2**40, -7]}, schema=sch), name="int32-in-long")
+    name = "part-int32.parquet"
+    pq.write_table(pa.table({"id": pa.array([2, 3, 4], pa.int64()),
+                             "x": pa.array([3, None, 2**31 - 1], pa.int32())}), Path(p) / name)
+    stats = {"numRecords": 3, "minValues": {"id": 2, "x": 3}, "maxValues": {"id": 4, "x": 2**31 - 1},
+             "nullCount": {"id": 0, "x": 1}}
+    append_commit(p, [commit_info("WRITE"), {"add": {
+        "path": name, "partitionValues": {}, "size": (Path(p) / name).stat().st_size,
+        "modificationTime": int(dt.datetime.now(UTC).timestamp() * 1000), "dataChange": True,
+        "stats": json.dumps(stats, separators=(",", ":"))}}])
+
+
 def z85(data):
     """ZeroMQ RFC 32 Z85, the encoding of inline deletion vectors."""
     assert len(data) % 4 == 0
@@ -521,7 +664,8 @@ def main():
     else:
         wanted = None
     for fn in (basic, types, int32_min, int64_edges, decimal_partitions, inf_partitions, partitioned, checkpointed, checkpoint_no_last, multipart_checkpoint, compacted, file_times, domains,
-               unknown_feature, catalog_managed, vacuum_protocol_check, inline_dv, column_mapping_id, orders):
+               unknown_feature, catalog_managed, vacuum_protocol_check, inline_dv, column_mapping_id, orders,
+               partition_types, void_columns, dotted_name, int32_in_long):
         if wanted is None or fn.__name__ in wanted:
             fn()
             print("wrote", fn.__name__)

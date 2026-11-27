@@ -97,19 +97,33 @@ too. A \code{float} or \code{double} column takes only numbers: text there, such
 as \code{amount > "100"}, is an error, since R would compare it with the
 column as strings. A date or timestamp column takes a \code{Date} or
 \code{POSIXct}, or text such as \code{"2024-01-31"} or
-\code{"2024-01-31 12:00:00"} (UTC unless it gives an offset).
+\code{"2024-01-31 12:00:00"} (UTC unless it gives an offset), to the
+microsecond: text with a non-zero digit past it is an error.
 
-Columns are typed as qio returns them (see \code{\link[qio:read_parquet]{qio::read_parquet()}}), and
-partition columns as \code{\link[=lake_files]{lake_files()}} types them, except that a \code{decimal}
-of precision 15 or less, data or partition, is a double, which holds it
-exactly. An \code{integer} data value of -2^31 reads as \code{NA}, R's integer
-\code{NA}, with a warning from qio: \code{is.na()} is \code{TRUE} for it and a comparison
+Columns are typed as qio returns them (see \code{\link[qio:read_parquet]{qio::read_parquet()}}), and a
+partition column as a data column of its type: a \code{decimal} of precision
+15 or less is a double, which holds it exactly; a \code{float} is the double
+of its single-precision value; an \code{integer} is an R integer; a \code{binary}
+value is a raw vector of the UTF-8 bytes of the log's text (\code{NULL} for
+null); and a time with digits past the microsecond loses them. A \code{void}
+column is all \code{NA}, and is never read from a file. Each data file's
+Parquet type for each column read must be one its type in the schema
+reads: an INT32 file of a \code{long} column is widened to the \code{long} mapping,
+and a file whose type the schema's does not read (strings in a \code{long}
+column, INT64 in an \code{integer} one) is an error of class
+\code{zulake_error_corrupt_log} naming the file and the column, with fields
+\code{type}, \code{physical_type} and \code{logical_type}. An error qio raises on a data
+file is a \code{zulake_error_storage} whose \code{path} names it. An \code{integer}
+value of -2^31, data or partition, reads as \code{NA}, R's integer \code{NA}, with
+a warning in qio's words: \code{is.na()} is \code{TRUE} for it and a comparison
 such as \code{x < 1} is not, and a file whose minimum may be -2^31 is never
 pruned on its null count. So is a \code{long} data value past 2^53 - 1 in
 magnitude with \code{int64 = "double"}, or -2^63 with \code{"integer64"}, and a
 file whose bounds may hold one is never pruned on its null count. Columns zulake does not return are not lost silently: nested
-columns (\code{struct}, \code{array}, \code{map}), and decimals of precision above 15
-until qio reads them exactly. With \code{columns = NULL} they are left out, each named in a
+columns (\code{struct}, \code{array}, \code{map}), decimals of precision above 15
+until qio reads them exactly, and a flat column whose dotted name a
+nested column's path also has (\code{a.b} beside a struct \code{a} with a field
+\code{b}), which qio cannot select apart from it. With \code{columns = NULL} they are left out, each named in a
 warning of class \code{zulake_warning_column_skipped} (fields \code{column} and
 \code{reason}); named in \code{columns} or used in \code{filter}, such a column is an
 error of class \code{zulake_error_column_unreadable} with the same fields.

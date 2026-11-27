@@ -19,7 +19,17 @@ test_that("lake_files() equals deltalake's add actions at every version", {
     actual <- files[c("path", "size_bytes")]
     actual$modification_time <- round(as.numeric(files$modification_time) * 1000)
     if (!is.null(aa$columns$deletion_vector)) actual$deletion_vector <- I(files$deletion_vector)
-    if (!is.null(aa$columns$partition)) actual$partition <- I(files$partition)
+    if (!is.null(aa$columns$partition)) {
+      # A binary partition value is the log's text in lake_files(), and its
+      # bytes in deltalake's answer (UTF-8, as it reads it, #118).
+      types <- column_types(tbl)
+      actual$partition <- I(lapply(files$partition, function(p) {
+        for (col in intersect(names(p), names(types)[types == "binary"])) {
+          if (!is.na(p[[col]])) p[[col]] <- charToRaw(enc2utf8(p[[col]]))
+        }
+        p
+      }))
+    }
     expect_oracle(actual, case$table, case$version, "add_actions")
     expect_identical(files$path, sort(files$path, method = "radix"), label = label)
     # Where each file is: on disk at `uri`.
@@ -40,9 +50,16 @@ test_that("lake_files() statistics equal deltalake's, by logical name", {
     ord <- order(unlist(aa$columns$path), method = "radix")
     map <- physical_to_logical(case$table, case$version)
     expect_oracle(files["num_records"], case$table, case$version, "add_actions")
+    # A decimal statistic is the log's JSON text ("12.3"), deltalake's the
+    # decimal of the column's scale ("12.30"): compared as numbers.
+    types <- column_types(tbl)
+    numbers <- function(x) {
+      for (c in intersect(names(x), names(types)[grepl("^decimal", types)])) x[[c]] <- as.numeric(x[[c]])
+      x
+    }
     for (col in c("min", "max", "null_count")) {
-      expected <- lapply(aa$columns[[col]][ord], function(x) strip_nulls(rename_keys(x, map)))
-      actual <- lapply(files[[col]], strip_nulls)
+      expected <- lapply(aa$columns[[col]][ord], function(x) numbers(strip_nulls(rename_keys(x, map))))
+      actual <- lapply(files[[col]], function(x) numbers(strip_nulls(x)))
       expect_identical(lapply(actual, oracle_canon), lapply(expected, oracle_canon),
                        label = paste(case$table, case$version, col))
     }

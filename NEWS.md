@@ -321,8 +321,8 @@
   an unreadable one is, and is a `zulake_error_corrupt_log` only when
   replay needs it (#117).
 * Changed: the schema is checked when a table is opened. A type the
-  protocol does not define (`varchar(10)`, `STRING`, `void`, `decimal`
-  without its precision), a field without a `type`, a field without a
+  protocol does not define (`varchar(10)`, `STRING`, `decimal` without
+  its precision), a field without a `type`, a field without a
   `name` or with an empty one, two fields of one struct with one name, and
   in `name` column mapping mode two fields with one physical name are a
   `zulake_error_corrupt_log` naming the field. A `variant` or
@@ -344,3 +344,44 @@
   `zulake_error_storage` with the `path`, the `size` read and the
   `listed_size`. A checkpoint so cut is passed over for an earlier one or
   the commits, as an unreadable one is (#122).
+* Fixed: a column named `a.b` beside a struct `a` with a field `b` failed
+  the whole read with qio's unclassed "Ambiguous Parquet column". qio
+  selects columns only by dotted path (pedrobtz/qio#78), so such a column
+  is now one zulake cannot return: left out with a
+  `zulake_warning_column_skipped`, or a `zulake_error_column_unreadable`
+  when named in `columns` or used in `filter`, and the other columns read
+  (#116).
+* Changed: a partition column reads as a data column of its type does. A
+  `float` value is rounded through single precision (`1.1` reads as
+  1.100000023841858, `1e39` as `Inf`), in `lake_files()` and pruning too;
+  an `integer` is an R integer, with -2^31 as `NA` and qio's warning; a
+  `binary` value is a list of raw vectors, the UTF-8 bytes of the log's
+  text. Times with more than six fraction digits, in partition values and
+  statistics, are truncated to the microsecond as `deltalake` does, not
+  rounded; a filter literal with a non-zero digit past the microsecond is
+  a `zulake_error_filter` (#118).
+* Changed: each data file's Parquet type is checked against the schema
+  before any row is read. A type the column's Delta type does not read
+  (strings in a `long` column, INT64 in an `integer` one, a decimal of
+  another scale) is a `zulake_error_corrupt_log` naming the `file` and the
+  `column`, with the `type`, `physical_type` and `logical_type`; an INT32
+  file of a `long` column is widened to the `long` mapping, as `deltalake`
+  upcasts it. A column's R type now follows its Delta type in every file
+  (#119).
+* Fixed: errors of the read path that were not classed. A data file qio
+  cannot open or decode (truncated, empty, not Parquet, a corrupt page) is
+  a `zulake_error_storage` whose `path` names it, with qio's message; a
+  download cache directory that is a file or read-only is a
+  `zulake_error_storage`, without a base warning; a deletion-vector file
+  that is not there is "no such file", not a corrupt log; and a listing on
+  Azure that names a blob twice is a `zulake_error_storage` (it listed the
+  version twice, or failed with a base R error for the latest commit)
+  (#123, #124).
+* Changed: a `void` column, which the protocol defines as holding only
+  nulls, is read: an all-`NA` logical column never read from a file, a
+  `void` partition column accepting only null values, and `is.na()` `TRUE`
+  on it (#133).
+* Changed: two fields of one struct whose names differ only in case (`id`
+  and `ID`) are a `zulake_error_corrupt_log`, as the protocol requires
+  names unique regardless of case; names are folded in ASCII only, so
+  non-ASCII names that differ only in case still open (#134).

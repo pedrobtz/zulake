@@ -209,7 +209,8 @@ delta_primitive_types <- c(
   "date",
   "timestamp",
   "timestamp_ntz",
-  "variant"
+  "variant",
+  "void"
 )
 
 # Types a table may hold only with a reader feature its protocol declares.
@@ -217,10 +218,12 @@ type_features <- c(timestamp_ntz = "timestampNtz", variant = "variantType")
 
 # The schema of the snapshot, checked once at open, at every level of
 # nesting (#120): every field an object with a non-empty `name` and a type
-# the protocol defines (a primitive type, `decimal(p, s)` with p from 1 to
-# 38 and s from 0 to p, or a struct, array or map with its members), no two
-# fields of one struct with one name (compared byte for byte), and in name
-# mode no two with one physical name. Any of these is a corrupt log. A type
+# the protocol defines (a primitive type, `void` included (#133),
+# `decimal(p, s)` with p from 1 to 38 and s from 0 to p, or a struct, array
+# or map with its members), no two fields of one struct with one name
+# (compared byte for byte) or with names that differ only in ASCII case
+# (#134, fold_case()), and in name mode no two with one physical name. Any
+# of these is a corrupt log. A type
 # that needs a reader feature the protocol does not declare (`variant`,
 # `timestamp_ntz`) is a zulake_error_unsupported_feature naming the
 # feature. Unrefused, a field without a name failed the read with a base R
@@ -345,6 +348,23 @@ check_schema <- function(protocol, metadata, mode, version) {
         paths[d]
       )
     }
+    folded <- fold_case(names)
+    d <- anyDuplicated(folded)
+    if (d) {
+      i <- match(folded[d], folded)
+      bad(
+        sprintf(
+          paste(
+            "%s has fields %s and %s, which differ only in case; the protocol",
+            "requires names unique regardless of case."
+          ),
+          where,
+          format_string(names[i]),
+          format_string(names[d])
+        ),
+        paths[d]
+      )
+    }
     if (mode == "name") {
       physical <- vapply(fs, field_physical_name, "")
       named <- which(!is.na(physical))
@@ -372,6 +392,19 @@ check_schema <- function(protocol, metadata, mode, version) {
     invisible()
   }
   fields(metadata[["schema"]][["fields"]], NULL)
+}
+
+# Names folded to lower case for the protocol's rule that names are unique
+# regardless of case: ASCII letters only, so that the answer is the same on
+# every platform and in every locale (#134). Names that differ only in the
+# case of a non-ASCII letter (`"\u00e9"`, `"\u00c9"`) are not refused: an
+# under-refusal, documented in design section 4.2.
+fold_case <- function(x) {
+  chartr(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "abcdefghijklmnopqrstuvwxyz",
+    enc2utf8(x)
+  )
 }
 
 # ---- partition values ----------------------------------------------------
@@ -416,11 +449,15 @@ check_partition_values <- function(adds, metadata, mode) {
         zulake_abort(
           "corrupt_log",
           sprintf(
-            "file %s has partition value %s for column %s, which is not a %s.",
+            "file %s has partition value %s for column %s, which %s.",
             format_string(a[["path"]]),
             format_string(value),
             format_string(col),
-            type
+            if (type == "void") {
+              "a void column cannot hold (it holds only nulls)"
+            } else {
+              paste("is not a", type)
+            }
           ),
           file = a[["path"]],
           column = col
@@ -450,6 +487,8 @@ partition_value_ok <- function(x, type) {
     type,
     string = ,
     binary = TRUE,
+    # A void column holds only nulls (#133); a null never reaches here.
+    void = FALSE,
     boolean = tolower(x) %in% c("true", "false"),
     float = ,
     double = grepl(number, x) ||
