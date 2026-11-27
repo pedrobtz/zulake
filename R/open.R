@@ -270,7 +270,9 @@ snapshot_build <- function(storage, uri, version = NULL, timestamp = NULL) {
         break
       }
     }
-    time <- commit_time_ms(entry, ict_info(state$protocol, state$metadata), read)
+    commits <- listing_commits(entries)
+    commits <- commits[commits$version <= version, , drop = FALSE]
+    time <- commit_times_ms(commits, ict_info(state$protocol, state$metadata), read, nrow(commits))
   }
 
   structure(

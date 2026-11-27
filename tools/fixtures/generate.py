@@ -199,6 +199,30 @@ def compacted():
     DeltaTable(p).compact_logs(1, 3)
 
 
+FILE_TIMES_MS = [1735689700000, 1735689650000, 1735689800000]
+
+
+def file_times():
+    """Commit times that go back: commit 1 dated 50 s before commit 0.
+
+    answers.py dates each commit file by its commitInfo.timestamp, so the
+    file times decrease from 0 to 1, as a copy that does not keep times can
+    leave them; readers make them increasing before a timestamp lookup.
+    """
+    p = fresh("zl-file-times")
+    sch = pa.schema([("id", pa.int64())])
+    write_deltalake(p, pa.table({"id": [0]}, schema=sch))
+    for i in range(1, len(FILE_TIMES_MS)):
+        write_deltalake(p, pa.table({"id": [i]}, schema=sch), mode="append")
+    for version, ms in enumerate(FILE_TIMES_MS):
+        def edit(action, ms=ms):
+            if "commitInfo" in action:
+                action["commitInfo"]["timestamp"] = ms
+            return action
+
+        rewrite_commit(p, version, edit)
+
+
 def domains():
     """domainMetadata added, changed and removed by hand-written commits."""
     p = fresh("zl-domains")
@@ -440,7 +464,7 @@ def main():
         wanted = set(sys.argv[1:])
     else:
         wanted = None
-    for fn in (basic, types, partitioned, checkpointed, checkpoint_no_last, multipart_checkpoint, compacted, domains,
+    for fn in (basic, types, partitioned, checkpointed, checkpoint_no_last, multipart_checkpoint, compacted, file_times, domains,
                unknown_feature, catalog_managed, vacuum_protocol_check, inline_dv, column_mapping_id, orders):
         if wanted is None or fn.__name__ in wanted:
             fn()

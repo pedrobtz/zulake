@@ -263,7 +263,14 @@ a choice:
   must therefore pass the feature gate too, and the file's modification
   time otherwise. Why: the protocol's split at the enablement version
   gives the same answer under this rule, since in-commit timestamps only
-  grow from there.
+  grow from there. File times are first made increasing, as Delta's
+  history manager and `deltalake` 1.7.0 make them: a commit whose file
+  time is not after the previous commit's counts as 1 ms after it, in
+  `lake_open(timestamp =)`, `lake_versions()`, `lake_history()` and a
+  snapshot's `timestamp` alike (2026-11-27, #52: a copy that drops file
+  times opened another version than `deltalake`; fixture `zl-file-times`).
+  A log with no commit file (checkpoints alone) keeps no commit time:
+  timestamp travel on it is a `zulake_error_version` (2026-11-27, #51).
 - *File times* (settled 2026-11-26, Stage 5). File modification times
   are read through R, which on Windows is exact only to about 1 µs;
   zulake rounds to 10 µs and then truncates to milliseconds, so a file

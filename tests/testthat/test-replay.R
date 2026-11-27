@@ -637,3 +637,51 @@ test_that("non-ASCII paths stay distinct in a session whose encoding is not UTF-
   expect_no_warning(v1 <- lake_files(lake_open(path))$path)
   expect_identical(enc2utf8(v1), enc2utf8(e))
 })
+
+test_that("timestamp travel on a log of checkpoints alone is a classed error, without a warning (#51)", {
+  path <- local_fixture_copy("zl-checkpoint")
+  log <- file.path(path, "_delta_log")
+  unlink(list.files(log, pattern = "^[0-9]{20}[.]json$", full.names = TRUE))
+  expect_identical(lake_version(lake_open(path)), 10)
+  for (at in list(Sys.time(), as.POSIXct("1970-01-01", tz = "UTC"), as.POSIXct("2100-01-01", tz = "UTC"))) {
+    expect_no_warning(expect_error(lake_open(path, timestamp = at), class = "zulake_error_version"))
+  }
+  expect_identical(nrow(lake_versions(lake_open(path))), 0L)
+})
+
+test_that("file-time commit times are made increasing before a lookup, as deltalake makes them (#52)", {
+  # The oracle: zl-file-times, whose commit 1 is dated before commit 0.
+  path <- set_commit_mtimes(local_fixture_copy("zl-file-times"))
+  ms <- commit_mtimes_ms(path)
+  expect_lt(ms[["1"]], ms[["0"]])
+  for (version in oracle_versions("zl-file-times")) {
+    for (l in oracle_field("zl-file-times", version, "timestamp_lookup")) {
+      expect_identical(lake_version(lake_open(path, timestamp = answer_time(l$at))), as.numeric(l$version),
+                       label = l$at)
+    }
+  }
+  # Commit 1 is dated 1 ms after commit 0, everywhere a commit time is
+  # given, and each time opens its own version.
+  tbl <- lake_open(path)
+  v <- lake_versions(tbl)
+  want <- c(ms[["0"]], ms[["0"]] + 1, ms[["2"]])
+  expect_identical(round(as.numeric(v$timestamp) * 1000), want)
+  expect_identical(lake_history(tbl)$timestamp, rev(v$timestamp))
+  expect_identical(lake_history(tbl, limit = 2)$timestamp, rev(v$timestamp)[1:2])
+  expect_identical(lake_open(path, version = 1)$timestamp, v$timestamp[2L])
+  expect_identical(lake_summary(lake_open(path, version = 1))$timestamp, v$timestamp[2L])
+  for (i in seq_len(nrow(v))) {
+    expect_identical(lake_version(lake_open(path, timestamp = v$timestamp[i])), v$version[i])
+  }
+  # A hand-built log: B + 100 s, B + 50 s, B + 200 s; at B + 75 s, version 0.
+  hand <- hand_table(c(protocol_line(), metadata_line(), add_line("0.parquet")))
+  write_commit(hand, 1, add_line("1.parquet"))
+  write_commit(hand, 2, add_line("2.parquet"))
+  B <- 1.7e9
+  for (v in 0:2) {
+    Sys.setFileTime(file.path(hand, "_delta_log", sprintf("%020d.json", v)), as.POSIXct(B + c(100, 50, 200)[v + 1] + 5e-4, tz = "UTC"))
+  }
+  expect_identical(lake_version(lake_open(hand, timestamp = as.POSIXct(B + 75, tz = "UTC"))), 0)
+  expect_identical(lake_version(lake_open(hand, timestamp = as.POSIXct(B + 100.0005, tz = "UTC"))), 0)
+  expect_identical(lake_version(lake_open(hand, timestamp = as.POSIXct(B + 100.0015, tz = "UTC"))), 1)
+})

@@ -242,10 +242,13 @@ snapshot_commits <- function(tbl) {
   commits
 }
 
-# Commit times of `commits` (rows of the listing), as POSIXct in UTC.
+# Commit times of `commits` (rows of the snapshot's commits, in any order
+# or a subset), as POSIXct in UTC; file times made increasing over all of
+# the snapshot's commits.
 commit_times <- function(tbl, commits) {
   ict <- ict_info(tbl$protocol, tbl$metadata)
   read <- function(name) read_actions(tbl$storage, name)
-  ms <- vapply(seq_len(nrow(commits)), function(i) commit_time_ms(commits[i, , drop = FALSE], ict, read), 0)
+  all <- snapshot_commits(tbl)
+  ms <- commit_times_ms(all, ict, read, match(commits$version, all$version))
   ms_to_posixct(ms)
 }

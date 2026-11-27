@@ -147,3 +147,11 @@
   `lake_open()` with a base R error, and in a session whose encoding is not
   UTF-8 two distinct non-ASCII paths could be taken for one file. Keys are
   now kept so that neither can happen (#50).
+* Fixed: commit times taken from file modification times are made
+  increasing before time travel, as `deltalake` and Delta's history make
+  them (a commit not after the previous one counts as 1 ms after it), so
+  a copied table whose file times go back opens the version `deltalake`
+  opens; `lake_versions()`, `lake_history()` and a snapshot's timestamp
+  report the same times (#52). Timestamp travel on a log of checkpoints
+  alone is a `zulake_error_version` instead of a warning and a false
+  corrupt-log error (#51).

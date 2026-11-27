@@ -20,27 +20,48 @@ ict_info <- function(protocol, metadata) {
   list(enabled = TRUE, version = as.numeric(from))
 }
 
-# A commit file's timestamp in milliseconds since the epoch: its
+# The timestamps of `commits` (rows of the listing, in version order) in
+# milliseconds since the epoch, for the rows `rows`: a commit's
 # `commitInfo.inCommitTimestamp` when the table records them from that
-# version on, otherwise the file's modification time, as the protocol says.
-commit_time_ms <- function(entry, ict, read) {
-  if (ict$enabled && entry$version >= ict$version) {
-    actions <- read(entry$name)
-    info <- if (length(actions)) actions[[1L]][["commitInfo"]] else NULL
-    ts <- if (is.list(info)) info[["inCommitTimestamp"]] else NULL
-    if (!is_whole(ts)) {
-      zulake_abort(
-        "corrupt_log",
-        sprintf(
-          "commit %s has no `inCommitTimestamp` in a first `commitInfo` action, which the table's in-commit timestamps require.",
-          format_number(entry$version)
-        ),
-        version = entry$version
-      )
+# version on, otherwise its file's modification time, as the protocol says.
+# File times are made increasing first, as Delta's history and deltalake
+# 1.7.0 make them: a commit whose time is not after the previous one's
+# counts as 1 ms after it (#52). In-commit timestamps only grow, and start
+# where file times end, so they need no such step.
+commit_times_ms <- function(commits, ict, read, rows = seq_len(nrow(commits))) {
+  ms <- mtime_ms(commits$modification_time)
+  for (i in seq_along(ms)[-1L]) {
+    if (ms[i] <= ms[i - 1L]) {
+      ms[i] <- ms[i - 1L] + 1
     }
-    return(as.numeric(ts))
   }
-  mtime_ms(entry$modification_time)
+  out <- ms[rows]
+  in_commit <- ict$enabled & commits$version[rows] >= ict$version
+  out[in_commit] <- vapply(rows[in_commit], function(i) in_commit_time_ms(commits[i, , drop = FALSE], read), 0)
+  out
+}
+
+in_commit_time_ms <- function(entry, read) {
+  actions <- read(entry$name)
+  info <- if (length(actions)) actions[[1L]][["commitInfo"]] else NULL
+  ts <- if (is.list(info)) info[["inCommitTimestamp"]] else NULL
+  if (!is_whole(ts)) {
+    zulake_abort(
+      "corrupt_log",
+      sprintf(
+        "commit %s has no `inCommitTimestamp` in a first `commitInfo` action, which the table's in-commit timestamps require.",
+        format_number(entry$version)
+      ),
+      version = entry$version
+    )
+  }
+  as.numeric(ts)
+}
+
+# The commit entries of a listing, in version order.
+listing_commits <- function(entries) {
+  commits <- entries[entries$kind == "commit", , drop = FALSE]
+  commits[order(commits$version), , drop = FALSE]
 }
 
 # Milliseconds, truncated as Delta readers truncate file times, after
@@ -58,7 +79,7 @@ ms_to_posixct <- function(ms) {
 }
 
 # The version a timestamp selects: the latest commit at or before it, each
-# commit timed as commit_time_ms() says; a timestamp before every commit
+# commit timed as commit_times_ms() says; a timestamp before every commit
 # selects the first version, as deltalake 1.7.0 does.
 #
 # With in-commit timestamps enabled part-way, the protocol's recommendation
@@ -68,10 +89,17 @@ ms_to_posixct <- function(ms) {
 # enablement version itself, and one before it by no later version, since
 # in-commit timestamps start there and only grow.
 version_at <- function(timestamp, entries, protocol, metadata, read) {
-  commits <- entries[entries$kind == "commit", , drop = FALSE]
+  commits <- listing_commits(entries)
+  if (!nrow(commits)) {
+    # A log of checkpoints alone keeps no commit time (#51).
+    zulake_abort(
+      "version",
+      "the log holds no commit file, so it keeps no commit times to travel by: open a `version` instead."
+    )
+  }
   ict <- ict_info(protocol, metadata)
   t_us <- round(as.numeric(timestamp) * 1e6)
-  ms <- vapply(seq_len(nrow(commits)), function(i) commit_time_ms(commits[i, , drop = FALSE], ict, read), 0)
+  ms <- commit_times_ms(commits, ict, read)
   hit <- ms * 1000 <= t_us
   if (any(hit)) max(commits$version[hit]) else min(commits$version)
 }
