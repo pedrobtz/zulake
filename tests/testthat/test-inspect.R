@@ -501,3 +501,37 @@ test_that("results do not depend on the locale or on number formatting options",
   expect_identical(lake_files(tbl, filter = p_str == factor("a"))$path, ref_files$path[2:3])
   expect_identical(lake_files(tbl, filter = p_str %in% factor(c("a", "café")))$path, ref_files$path[2:4])
 })
+
+test_that("lake_partitions() keeps every distinct value the log writes, as deltalake does (#55)", {
+  # deltalake 1.7.0's partitions() for this log: eight rows, one per text.
+  values <- list("0.3", "0.30000000000000004", "0", "-0", "NaN", NULL, "1", "1.0")
+  adds <- vapply(seq_along(values), function(i) {
+    add_line(sprintf("f%d.parquet", i), partition = if (is.null(values[[i]])) list() else list(p = values[[i]]))
+  }, "")
+  tbl <- lake_open(hand_table(c(protocol_line(), metadata_line(c(id = "long", p = "double"), partition = "p"), adds,
+                                add_line("again.parquet", partition = list(p = "0.3")))))
+  p <- lake_partitions(tbl)$p
+  expect_length(p, 8L)
+  expect_identical(sum(is.na(p) & !is.nan(p)), 1L)
+  expect_identical(sum(is.nan(p)), 1L)
+  expect_identical(sum(p %in% 0.3 & p == 0.3), 1L)
+  expect_identical(sum(p == 0.30000000000000004 & p != 0.3, na.rm = TRUE), 1L)
+  expect_identical(sum(p == 0 & 1 / p < 0, na.rm = TRUE), 1L)
+  expect_identical(sum(p == 0 & 1 / p > 0, na.rm = TRUE), 1L)
+  expect_identical(sum(p == 1, na.rm = TRUE), 2L)
+  # A timestamp partition below the second, and long partitions ordered by
+  # value in both int64 modes.
+  ts <- c("2024-01-01 00:00:00.000001", "2024-01-01 00:00:00.000002")
+  tbl <- lake_open(hand_table(c(protocol_line(), metadata_line(c(id = "long", p = "timestamp"), partition = "p"),
+                                vapply(ts, function(x) add_line(paste0(x, ".parquet"), partition = list(p = x)), ""))))
+  expect_identical(nrow(lake_partitions(tbl)), 2L)
+  longs <- c("-10", "-1", "0", "1", "9", "10", "100", "9223372036854775807", "-9223372036854775807")
+  tbl <- lake_open(hand_table(c(protocol_line(), metadata_line(c(id = "long", p = "long"), partition = "p"),
+                                vapply(sample(longs), function(x) add_line(paste0(x, ".parquet"), partition = list(p = x)), ""))))
+  skip_if_not_installed("bit64")
+  expect_identical(as.character(lake_partitions(tbl, int64 = "integer64")$p),
+                   c("-9223372036854775807", "-10", "-1", "0", "1", "9", "10", "100", "9223372036854775807"))
+  small <- lake_open(hand_table(c(protocol_line(), metadata_line(c(id = "long", p = "long"), partition = "p"),
+                                  vapply(sample(longs[1:7]), function(x) add_line(paste0(x, ".parquet"), partition = list(p = x)), ""))))
+  expect_identical(as.character(lake_partitions(small, int64 = "integer64")$p), as.character(lake_partitions(small)$p))
+})

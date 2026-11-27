@@ -162,3 +162,8 @@
   `"... 99:99:99"` is refused instead of moved to another day (#53). A time
   is now the same double qio reads for those microseconds, so a filter on
   a time within seconds of 1970-01-01 finds its rows (#54).
+* Fixed: `lake_partitions()` merged distinct partition values (doubles
+  equal to 15 digits, `0` and `-0`, `NaN` and null), because it compared
+  them as printed text. Rows are now distinct on the log's own values, as
+  `deltalake`'s are, and `long` partitions sort by value with
+  `int64 = "integer64"` too (#55).

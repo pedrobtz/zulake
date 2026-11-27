@@ -108,16 +108,32 @@ lake_partitions <- function(tbl, filter = NULL, int64 = c("double", "integer64")
   if (!length(parts)) {
     return(new_data_frame_n(list(), 0L))
   }
-  key <- do.call(paste, c(lapply(parts, function(col) {
-    ifelse(is.na(col), "\x1fNA", as.character(col))
+  # Distinct on the log's own text, as deltalake 1.7.0 is: typed values
+  # print to 15 digits, lose the sign of zero, and NaN is.na() (#55).
+  actions <- tbl$files$action[keep]
+  key <- do.call(paste, c(lapply(names(parts), function(col) {
+    raw <- partition_raw(actions, tbl, col)
+    ifelse(is.na(raw), "N", paste0("V", raw))
   }), sep = "\x1e"))
   parts <- parts[!duplicated(key), , drop = FALSE]
   ord <- do.call(order, c(unname(lapply(parts, function(col) {
-    if (inherits(col, "integer64")) as.character(col) else col
+    if (inherits(col, "integer64")) integer64_order_key(col) else col
   })), method = "radix", na.last = TRUE))
   parts <- parts[ord, , drop = FALSE]
   row.names(parts) <- NULL
   parts
+}
+
+# Text that sorts as the integer64 values `x` do, NA as NA: the sign, then
+# the digits padded to 20 places, complemented for a negative value.
+integer64_order_key <- function(x) {
+  text <- as.character(x)
+  neg <- !is.na(text) & startsWith(text, "-")
+  digits <- sub("^-", "", text)
+  padded <- paste0(strrep("0", pmax(0L, 20L - nchar(digits))), digits)
+  out <- ifelse(neg, paste0("0", chartr("0123456789", "9876543210", padded)), paste0("1", padded))
+  out[is.na(text)] <- NA_character_
+  out
 }
 
 #' @rdname lake_files
