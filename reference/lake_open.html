@@ -74,8 +74,10 @@ the latest version.</p></dd>
 <dd><p>Open the latest version committed at or before this
 time, a <code>POSIXct</code>. The commit time is the commit's in-commit timestamp
 when the table records them, and the commit file's modification time
-otherwise. A time before the first commit opens the first version. Give
-<code>version</code> or <code>timestamp</code>, not both.</p></dd>
+otherwise, made increasing as <code><a href="lake_versions.html">lake_versions()</a></code> describes. A time
+before the first commit opens the first version; a log with no commit
+file (checkpoints alone) has no commit times, and is a
+<code>zulake_error_version</code>. Give <code>version</code> or <code>timestamp</code>, not both.</p></dd>
 
 
 <dt id="arg-credentials">credentials<a class="anchor" aria-label="anchor" href="#arg-credentials"></a></dt>

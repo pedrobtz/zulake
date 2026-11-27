@@ -31,9 +31,12 @@ lake_version(tbl)
 
   Open the latest version committed at or before this time, a `POSIXct`.
   The commit time is the commit's in-commit timestamp when the table
-  records them, and the commit file's modification time otherwise. A
-  time before the first commit opens the first version. Give `version`
-  or `timestamp`, not both.
+  records them, and the commit file's modification time otherwise, made
+  increasing as
+  [`lake_versions()`](https://pedrobtz.github.io/zulake/reference/lake_versions.md)
+  describes. A time before the first commit opens the first version; a
+  log with no commit file (checkpoints alone) has no commit times, and
+  is a `zulake_error_version`. Give `version` or `timestamp`, not both.
 
 - credentials:
 

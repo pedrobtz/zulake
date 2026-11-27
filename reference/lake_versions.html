@@ -139,7 +139,9 @@ each marked supported or not.</p></li>
 </ul><p>The commit time of a version is the commit's in-commit timestamp when
 the table records them, and the commit file's modification time
 otherwise, as the protocol prescribes and as <code>lake_open(timestamp =)</code>
-uses it.</p>
+uses it. File times are made increasing first, as Delta and <code>deltalake</code>
+make them: a commit whose file time is not after the previous commit's
+counts as 1 millisecond after it.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

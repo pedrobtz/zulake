@@ -164,6 +164,109 @@
   the Get started vignette
   ([`vignette("zulake")`](https://pedrobtz.github.io/zulake/articles/zulake.md)),
   now evaluated, and every help page’s examples run on it.
-- zulake needs R 3.5.0 or later, as `qio` and `zuhttp` do; the test
-  cassettes are saved in R’s serialization format 3
-  ([\#37](https://github.com/pedrobtz/zulake/issues/37)).
+- zulake needs R 3.5.0 or later, as `qio` and `zuhttp` do
+  ([\#37](https://github.com/pedrobtz/zulake/issues/37)). The test
+  cassettes are saved in R’s serialization format 2, so that
+  `R CMD build` adds and announces no dependency of its own
+  ([\#65](https://github.com/pedrobtz/zulake/issues/65)).
+- Fixed: a snapshot saved in one R session and restored in another could
+  send the other session’s bearer token to the saved table’s account,
+  because credential handles were numbered from 1 in every session.
+  Handle ids now start with a random per-session nonce, and a handle
+  reaches only the entry made for its own table; a restored snapshot is
+  a `zulake_error_auth` asking for
+  [`lake_open()`](https://pedrobtz.github.io/zulake/reference/lake_open.md)
+  again ([\#43](https://github.com/pedrobtz/zulake/issues/43)).
+- Fixed: a List Blobs answer whose markers cycle (A, B, A, …) made
+  [`lake_open()`](https://pedrobtz.github.io/zulake/reference/lake_open.md)
+  send requests forever. Any marker seen before is now a
+  `zulake_error_storage`
+  ([\#45](https://github.com/pedrobtz/zulake/issues/45)).
+  `ContainerNotFound` after the first page is a `zulake_error_storage`
+  too, instead of ending the listing and opening an older version
+  ([\#46](https://github.com/pedrobtz/zulake/issues/46)).
+- Fixed: `credentials()` returning `"Bearer "` sent an empty token, and
+  `"bearer x"` was sent as `Bearer bearer x`. The prefix is dropped in
+  any case before the token is checked, and a token with a space is
+  refused ([\#47](https://github.com/pedrobtz/zulake/issues/47)).
+- Fixed: a `%00`, or bytes that are not UTF-8, in a log path, an Azure
+  URI or an encoded List Blobs name, and a NUL byte in a List Blobs
+  answer, gave base R errors. They are a `zulake_error_corrupt_log`,
+  `zulake_error_uri` or `zulake_error_storage`
+  ([\#49](https://github.com/pedrobtz/zulake/issues/49)).
+- Fixed: `abfss://user:password@<account>...` was taken as a container
+  named `user:password`, and the refusal quoted it and kept the URI in
+  the condition; it is now refused as user information without either
+  ([\#48](https://github.com/pedrobtz/zulake/issues/48)). An Azure URI
+  with an empty path segment (`.../lake//t`) is refused, as the design
+  says, instead of opening `t`
+  ([\#61](https://github.com/pedrobtz/zulake/issues/61)).
+- Fixed: the log of a table on Azure naming a local path or a `file:`
+  URI (a data file or a deletion vector) was read from the reader’s own
+  disk. A table’s files now stay on its own storage: such a path is a
+  `zulake_error_uri`
+  ([\#44](https://github.com/pedrobtz/zulake/issues/44)).
+- Fixed: replay kept live files under R variable names, so a key past
+  10000 bytes (an inline deletion vector of a few thousand rows) stopped
+  [`lake_open()`](https://pedrobtz.github.io/zulake/reference/lake_open.md)
+  with a base R error, and in a session whose encoding is not UTF-8 two
+  distinct non-ASCII paths could be taken for one file. Keys are now
+  kept so that neither can happen
+  ([\#50](https://github.com/pedrobtz/zulake/issues/50)).
+- Fixed: commit times taken from file modification times are made
+  increasing before time travel, as `deltalake` and Delta’s history make
+  them (a commit not after the previous one counts as 1 ms after it), so
+  a copied table whose file times go back opens the version `deltalake`
+  opens;
+  [`lake_versions()`](https://pedrobtz.github.io/zulake/reference/lake_versions.md),
+  [`lake_history()`](https://pedrobtz.github.io/zulake/reference/lake_versions.md)
+  and a snapshot’s timestamp report the same times
+  ([\#52](https://github.com/pedrobtz/zulake/issues/52)). Timestamp
+  travel on a log of checkpoints alone is a `zulake_error_version`
+  instead of a warning and a false corrupt-log error
+  ([\#51](https://github.com/pedrobtz/zulake/issues/51)).
+- Fixed: date and time text (partition values, statistics, filter
+  literals) is checked by one parser with calendar, hour, minute, second
+  and offset ranges, so `"2024-02-30"` is refused when the table is
+  opened rather than later, and `"2024-01-01 25:61:61"` or a filter on
+  `"... 99:99:99"` is refused instead of moved to another day
+  ([\#53](https://github.com/pedrobtz/zulake/issues/53)). A time is now
+  the same double qio reads for those microseconds, so a filter on a
+  time within seconds of 1970-01-01 finds its rows
+  ([\#54](https://github.com/pedrobtz/zulake/issues/54)).
+- Fixed:
+  [`lake_partitions()`](https://pedrobtz.github.io/zulake/reference/lake_files.md)
+  merged distinct partition values (doubles equal to 15 digits, `0` and
+  `-0`, `NaN` and null), because it compared them as printed text. Rows
+  are now distinct on the log’s own values, as `deltalake`’s are, and
+  `long` partitions sort by value with `int64 = "integer64"` too
+  ([\#55](https://github.com/pedrobtz/zulake/issues/55)).
+- Fixed: a string in the log that starts with U+001E (a statistic, a
+  partition value, a `commitInfo` field) was taken for a 64-bit number,
+  so
+  [`lake_files()`](https://pedrobtz.github.io/zulake/reference/lake_files.md)
+  showed a number and a filter pruned the file holding the value
+  ([\#56](https://github.com/pedrobtz/zulake/issues/56)). A commit with
+  a very long string before a number past 2^53 left that number to
+  round, with only a base R warning; the scan is now linear, and a
+  failure of it is a `zulake_error_corrupt_log`
+  ([\#57](https://github.com/pedrobtz/zulake/issues/57)).
+- Fixed: a table setting `delta.columnMapping.mode` without declaring
+  column mapping in its protocol was read by logical names, returning
+  `NA` for every value. It is now refused with a
+  `zulake_error_unsupported_feature` naming `columnMapping`, as
+  `deltalake` refuses it
+  ([\#58](https://github.com/pedrobtz/zulake/issues/58)).
+- Fixed: a deletion vector of more rows than its file’s `numRecords`, or
+  a negative `numRecords`, gave negative counts in
+  [`lake_count()`](https://pedrobtz.github.io/zulake/reference/lake_files.md)
+  and
+  [`lake_summary()`](https://pedrobtz.github.io/zulake/reference/lake_versions.md);
+  it is now a `zulake_error_corrupt_log` there and in
+  [`lake_files()`](https://pedrobtz.github.io/zulake/reference/lake_files.md)
+  ([\#59](https://github.com/pedrobtz/zulake/issues/59)).
+- Fixed: `lake_history(limit =)` given an `integer64` read its bits as a
+  double (`limit = bit64::as.integer64(2)` gave no rows). Every
+  whole-number argument now takes an `integer64` at its value, and
+  refuses one past 2^53 - 1 with a `zulake_error_argument`
+  ([\#60](https://github.com/pedrobtz/zulake/issues/60)).

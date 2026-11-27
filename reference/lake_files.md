@@ -64,7 +64,9 @@ and `max`, and last `action`, the `add` action as the log holds it.
 
 `lake_partitions()` returns a data frame with one column per partition
 column and one row per distinct combination of values among the live
-files the filter keeps; a table without partition columns has none.
+files the filter keeps, distinct as the log writes them (so `"1"` and
+`"1.0"` are two rows, as in `deltalake`); a table without partition
+columns has none.
 
 `lake_removed()` returns a data frame with one row per tombstone:
 `path`, `deletion_timestamp` (`POSIXct`), `data_change`, `size_bytes`,
