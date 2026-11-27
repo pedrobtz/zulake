@@ -182,3 +182,7 @@
   negative `numRecords`, gave negative counts in `lake_count()` and
   `lake_summary()`; it is now a `zulake_error_corrupt_log` there and in
   `lake_files()` (#59).
+* Fixed: `lake_history(limit =)` given an `integer64` read its bits as a
+  double (`limit = bit64::as.integer64(2)` gave no rows). Every whole-number
+  argument now takes an `integer64` at its value, and refuses one past
+  2^53 - 1 with a `zulake_error_argument` (#60).

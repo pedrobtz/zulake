@@ -94,6 +94,7 @@ lake_versions <- function(tbl) {
 lake_history <- function(tbl, limit = NULL, int64 = c("double", "integer64")) {
   check_table(tbl)
   int64 <- check_int64(int64)
+  limit <- arg_number(limit)
   if (!is.null(limit) && (!is_whole(limit) || limit < 0)) {
     zulake_abort("argument", "`limit` must be NULL or a whole number of 0 or more.")
   }

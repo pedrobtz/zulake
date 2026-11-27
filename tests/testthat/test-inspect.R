@@ -535,3 +535,27 @@ test_that("lake_partitions() keeps every distinct value the log writes, as delta
                                   vapply(sample(longs[1:7]), function(x) add_line(paste0(x, ".parquet"), partition = list(p = x)), ""))))
   expect_identical(as.character(lake_partitions(small, int64 = "integer64")$p), as.character(lake_partitions(small)$p))
 })
+
+test_that("integer64 arguments count as their values, and past 2^53 - 1 are refused (#60)", {
+  skip_if_not_installed("bit64")
+  i64 <- bit64::as.integer64
+  tbl <- lake_open(fixture_table("zl-basic"))
+  for (n in c(0, 2, 4, 5, 9)) {
+    expect_identical(lake_history(tbl, limit = i64(n)), lake_history(tbl, limit = n), label = n)
+  }
+  expect_identical(nrow(lake_history(tbl, limit = i64("9007199254740991"))), 5L)
+  expect_identical(nrow(lake_history(tbl, limit = .Machine$integer.max + 1)), 5L)
+  for (bad in list(i64("9007199254740992"), i64("9007199254740993"), i64(-1), i64(NA), i64(c(1, 2)), Inf)) {
+    expect_error(lake_history(tbl, limit = bad), class = "zulake_error_argument")
+  }
+  # The sibling arguments: version, from and to.
+  expect_identical(lake_version(lake_open(fixture_table("zl-basic"), version = i64(2))), 2)
+  expect_identical(lake_version(lake_load(tbl, version = i64(1))), 1)
+  expect_identical(lake_actions(tbl, i64(3)), lake_actions(tbl, 3))
+  expect_identical(lake_changes(tbl, from = i64(1), to = i64(3)), lake_changes(tbl, from = 1, to = 3))
+  for (bad in list(i64("9007199254740992"), i64("9223372036854775807"), i64(-1), i64(NA))) {
+    expect_error(lake_open(fixture_table("zl-basic"), version = bad), class = "zulake_error_argument")
+    expect_error(lake_actions(tbl, bad), class = "zulake_error_argument")
+    expect_error(lake_changes(tbl, from = bad), class = "zulake_error_argument")
+  }
+})
