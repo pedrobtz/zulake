@@ -67,6 +67,10 @@ jobs:
       - name: Hostile logs
         run: Rscript tools/fixtures/hostile.R
 
+      - name: The hostile log that needs a Parquet writer
+        working-directory: tools/oracle
+        run: uv run --frozen python ../fixtures/hostile_parquet.py
+
       - name: Pack the fixtures
         working-directory: tools/oracle
         run: uv run --frozen python ../fixtures/pack.py

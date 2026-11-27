@@ -22,7 +22,9 @@ at every version (`tools/oracle/README.md`).
   `deltalake` 1.7.0's writer through `tools/fixtures/generate.py`, with the
   log edits stated below.
 - **Hostile logs**: made by `tools/fixtures/hostile.R` from the tables
-  above, each under its source table's licence.
+  above (and `checkpoint-map-repeated-key` by
+  `tools/fixtures/hostile_parquet.py`, which needs a Parquet writer), each
+  under its source table's licence.
 
 DAT (`delta-incubator/dat`) is not used: it has no licence (design §12, Q3).
 
@@ -68,6 +70,7 @@ DAT (`delta-incubator/dat`) is not used: it has no licence (design §12, Q3).
 | Log | From | Change |
 | --- | --- | --- |
 | `add-then-remove-same-file` | `zl-basic` | commit 2 ends with a `remove` of the file its `add` (line 2) adds, which the protocol forbids in one commit (#103) |
+| `checkpoint-map-repeated-key` | `zl-checkpoint-no-last` | the checkpoint at 2, rewritten by pyarrow 22.0.0 (`hostile_parquet.py`, uncompressed): its first `add` has the `partitionValues` MAP `[x: 1, x: 2]`, a key twice (#108). The one hostile log that opens: the checkpoint is passed over for the commits, and is unreadable once commit 0 is gone |
 | `column-mapping-no-physical-name` | `column_mapping` | the `delta.columnMapping.physicalName` of field `letter` removed from commit 0's schema; commit 2's schema has it (#77) |
 | `corrupt-commit` | `zl-basic` | line 2 of commit 2 is not JSON |
 | `duplicate-action-key` | `zl-basic` | line 3 of commit 2 holds a second `remove` key, removing the file commit 1 added (#102) |
@@ -79,7 +82,13 @@ DAT (`delta-incubator/dat`) is not used: it has no licence (design §12, Q3).
 | `missing-checkpoint-part` | `zl-multipart-checkpoint` | part 2 of the three-part checkpoint deleted |
 | `partition-value-wrong-type` | `zl-partitioned` | an integer partition value `"one"` in commit 1 |
 | `remove-then-add-same-file` | `zl-basic` | commit 2 has a `remove` of the file its `add` adds, on the line before it (#103) |
+| `schema-repeated-key` | `zl-basic` | the `schemaString` of commit 0 gives field `id` a second `type` key, `"string"` before `"long"` (#107) |
+| `stats-repeated-column` | `zl-basic` | the statistics of commit 4's `add` hold `id` twice in `minValues`, 13 before 12 (#107) |
+| `stats-repeated-key` | `zl-basic` | the statistics of commit 4's `add` hold `maxValues` twice, `{"id":11}` before the writer's (#107) |
 | `truncated-commit` | `zl-basic` | commit 4 cut to its first half, mid-line |
+| `two-adds-same-file` | `zl-basic` | commit 2's `add` (line 2) repeated on line 3 with `minValues.id` 0 instead of 1 (#106) |
+| `two-adds-same-path-new-dv` | `table-with-dv-small` | commit 1 ends with a second `add` of its file, with `table-with-dv-small-inline`'s inline deletion vector (#106) |
+| `two-removes-same-file` | `zl-basic` | commit 3's `remove` of `part-...e10fff6f...` repeated on the next line, with `deletionTimestamp` one millisecond later (#106) |
 <!-- markdownlint-enable MD013 -->
 
 ## Regenerating
@@ -90,6 +99,7 @@ From the package root, in this order (each step's output is committed):
 sh tools/fixtures/fetch-delta-rs.sh                       # delta-rs tables
 (cd tools/oracle && uv run --frozen python ../fixtures/generate.py)   # zl-* and changed tables
 Rscript tools/fixtures/hostile.R                          # hostile logs
+(cd tools/oracle && uv run --frozen python ../fixtures/hostile_parquet.py) # the Parquet one
 (cd tools/oracle && uv run --frozen python ../fixtures/pack.py)       # delta-fixtures.tar
 (cd tools/oracle && uv run --frozen python answers.py)    # answers/
 ```
@@ -97,5 +107,5 @@ Rscript tools/fixtures/hostile.R                          # hostile logs
 `generate.py` names files by random UUID and stamps commits with the clock,
 so rerunning it changes the `zl-*` tables and every answer for them; run it
 only to change a table. `zl-orders` is the exception: its build is
-deterministic, and `oracle.yaml` rebuilds it with `generate.py orders`. The last three steps are deterministic, and
+deterministic, and `oracle.yaml` rebuilds it with `generate.py orders`. The last four steps are deterministic, and
 `.github/workflows/oracle.yaml` reruns them and fails on any difference.

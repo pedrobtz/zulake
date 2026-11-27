@@ -816,6 +816,15 @@ so that its table describes the commit that is submitted.
   the three forms, as `deltalake` 1.7.0 does on `abfss`. Refused today,
   with a message that names the port, which is safe
   ([§4.1](design.md#41-storage)).
+- A snapshot-level check that no path is live twice (2026-11-27,
+  [#106](https://github.com/pedrobtz/zulake/issues/106)). Inside one
+  commit two adds of one path are refused; across checkpoints and commits
+  a path can still be live under two deletion vectors when a writer
+  breaks the protocol, and the file would be read twice.
+- The cost of the repeated-key check on statistics (2026-11-27,
+  [#107](https://github.com/pedrobtz/zulake/issues/107)): `parse_stats()`
+  costs about 0.24 ms per file, 24 s for 100,000 files. Correct as it is;
+  `zujson`'s `duplicate_keys = "error"` would make it near free.
 
 ## Blocking open questions
 

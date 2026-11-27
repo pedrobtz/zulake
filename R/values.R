@@ -306,7 +306,8 @@ file_stats_text <- function(actions) {
 }
 
 # `stats` strings (NA where a file has none) parsed with every number kept
-# as text (int64.R). A string that is not JSON is a corrupt log.
+# as text (int64.R). A string that is not JSON, or holds an object with a
+# key twice (#107, the rule of the log's own JSON), is a corrupt log.
 parse_stats <- function(stats, paths) {
   out <- vector("list", length(stats))
   have <- !is.na(stats)
@@ -340,6 +341,19 @@ parse_stats <- function(stats, paths) {
           format_string(paths[i])
         ),
         file = paths[i]
+      )
+    }
+    key <- repeated_key(x)
+    if (!is.null(key)) {
+      zulake_abort(
+        "corrupt_log",
+        sprintf(
+          "the statistics of file %s have an object with the key %s twice.",
+          format_string(paths[i]),
+          format_string(key)
+        ),
+        file = paths[i],
+        key = key
       )
     }
     out[[i]] <- x

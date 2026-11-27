@@ -647,3 +647,141 @@ test_that("zujson keeps every member of an object under its decoded name, which 
     expect_identical(names(x[[3L]][[1L]]), c("c", "c"))
   }
 })
+
+# ---- two adds, or two removes, of one path in one commit (#106) -------------
+
+test_that("a commit with two adds, or two removes, of one path is a corrupt log, whatever the deletion vectors (#106)", {
+  # deltalake 1.7.0 opens all three (design section 4.2). Unrefused, the
+  # two adds of one path under two deletion vectors are two live files, and
+  # the file is read twice.
+  e10 <- "part-00000-e10fff6f-4360-42ee-8090-3f777493cca7-c000.snappy.parquet"
+  dv <- "part-00000-fae5310a-a37d-4e51-827b-c3d5516560ca-c000.snappy.parquet"
+  cases <- list(
+    "two-adds-same-file" = list(table = "zl-basic", commit = 2, versions = list(NULL, 2, 3, 4), path = e10, what = "adds", before = 1),
+    "two-removes-same-file" = list(table = "zl-basic", commit = 3, versions = list(NULL, 3, 4), path = e10, what = "removes", before = 2),
+    "two-adds-same-path-new-dv" = list(table = "table-with-dv-small", commit = 1, versions = list(NULL, 1), path = dv, what = "adds", before = 0)
+  )
+  for (name in names(cases)) {
+    case <- cases[[name]]
+    path <- fixture_table(name, "hostile")
+    for (version in case$versions) {
+      expect_no_snapshot(lake_open(path, version = version), "zulake_error_corrupt_log")
+    }
+    err <- tryCatch(lake_open(path), error = identity)
+    expect_identical(err[c("file", "path")], list(file = sprintf("%020d.json", case$commit), path = case$path), label = name)
+    expect_match(conditionMessage(err), sprintf("%s \"%s\" twice", case$what, case$path), fixed = TRUE, label = name)
+    tbl <- lake_open(path, version = case$before)
+    expect_oracle(replay_files_frame(tbl, "path"), case$table, case$before, "add_actions")
+    expect_oracle(lake_count(tbl), case$table, case$before, "count")
+  }
+})
+
+test_that("two adds of one path are refused even when they are the same action, and across commits they are not (#106)", {
+  dv <- list(storageType = "u", pathOrInlineDv = "vBn[lx{q8@P<9BNH/isA", offset = 1L, sizeInBytes = 36L, cardinality = 2L)
+  path <- hand_table(c(protocol_line(3L, 7L, "deletionVectors", "deletionVectors"), metadata_line(), add_line("a.parquet")))
+  refused <- list(
+    adds = c(add_line("b.parquet"), add_line("b.parquet")),
+    removes = c(remove_line("a.parquet"), remove_line("a.parquet")),
+    removes = c(remove_line("a.parquet"), remove_line("a.parquet", dv = dv))
+  )
+  for (i in seq_along(refused)) {
+    write_commit(path, 1, refused[[i]])
+    err <- tryCatch(lake_open(path), error = identity)
+    expect_s3_class(err, "zulake_error_corrupt_log")
+    expect_identical(err[c("file", "path")], list(file = "00000000000000000001.json", path = if (i == 1L) "b.parquet" else "a.parquet"))
+    expect_match(conditionMessage(err), names(refused)[i], fixed = TRUE)
+  }
+  # One add of a path per commit, in two commits: the second replaces it.
+  write_commit(path, 1, add_line("b.parquet", size = 1))
+  write_commit(path, 2, add_line("b.parquet", size = 2))
+  files <- lake_files(lake_open(path))
+  expect_identical(files$path, c("a.parquet", "b.parquet"))
+  expect_identical(files$size_bytes[files$path == "b.parquet"], 2)
+})
+
+test_that("a compaction file with two adds of one path is a corrupt log, and a checkpoint is not checked (#106)", {
+  path <- local_fixture_copy("zl-log-compaction")
+  name <- "00000000000000000001.00000000000000000003.compacted.json"
+  f <- file.path(path, "_delta_log", name)
+  lines <- readLines(f, warn = FALSE, encoding = "UTF-8")
+  j <- which(startsWith(lines, "{\"add\":{"))[1L]
+  writeLines(append(lines, lines[j], after = j), f, useBytes = TRUE)
+  err <- tryCatch(lake_open(path), error = identity)
+  expect_s3_class(err, "zulake_error_corrupt_log")
+  expect_identical(err$file, name)
+  expect_identical(err$path, zujson::json_parse(lines[j])$add$path)
+  # A checkpoint is the reconciled state: replay keeps one of the two.
+  path <- hand_table()
+  write_commit(path, 1, add_line("part-1.parquet"))
+  write_json_checkpoint(path, 1, c(
+    protocol_line(3L, 7L, "v2Checkpoint", "v2Checkpoint"), metadata_line(),
+    add_line("part-0.parquet"), add_line("part-1.parquet"), add_line("part-1.parquet")
+  ))
+  unlink(file.path(path, "_delta_log", "00000000000000000000.json"))
+  expect_identical(lake_open(path)$files$path, c("part-0.parquet", "part-1.parquet"))
+})
+
+# ---- a repeated key in stats and schemaString (#107) -------------------------
+
+test_that("statistics with a repeated key are a corrupt log where they are used (#107)", {
+  # Unrefused, the first `maxValues` (id 11), or the first `id` of
+  # `minValues` (13), would prune the file for `id == 12`.
+  file <- "part-00000-08a25d6d-31b9-4a28-aeb4-7dc9520ede42-c000.snappy.parquet"
+  for (case in list(c("stats-repeated-key", "maxValues"), c("stats-repeated-column", "id"))) {
+    path <- fixture_table(case[1L], "hostile")
+    tbl <- lake_open(path)
+    for (err in list(tryCatch(lake_files(tbl), error = identity), tryCatch(lake_read(tbl, filter = id == 12), error = identity))) {
+      expect_s3_class(err, "zulake_error_corrupt_log")
+      expect_identical(err[c("file", "key")], list(file = file, key = case[2L]), label = case[1L])
+      expect_match(conditionMessage(err), sprintf("the statistics of file \"%s\" have an object with the key \"%s\" twice", file, case[2L]), fixed = TRUE)
+    }
+    # Before commit 4 the statistics are zl-basic's.
+    tbl <- lake_open(path, version = 3)
+    expect_oracle(lake_read(tbl, filter = id >= 0), "zl-basic", 3, "read")
+  }
+})
+
+test_that("a schemaString with a repeated key is a corrupt log, and other JSON in strings is not checked (#107)", {
+  path <- fixture_table("schema-repeated-key", "hostile")
+  for (version in list(NULL, 0, 4)) {
+    expect_no_snapshot(lake_open(path, version = version), "zulake_error_corrupt_log")
+  }
+  err <- tryCatch(lake_open(path), error = identity)
+  expect_identical(err[c("file", "action", "key")], list(file = "00000000000000000000.json", action = "metaData", key = "type"))
+  expect_match(conditionMessage(err), "`schemaString` has an object with the key \"type\" twice", fixed = TRUE)
+  # A tag holding JSON text is a string, not checked.
+  path <- hand_table()
+  write_commit(path, 1, '{"add":{"path":"b.parquet","partitionValues":{},"size":1,"modificationTime":0,"dataChange":true,"tags":{"t":"{\\"a\\":1,\\"a\\":2}"}}}')
+  expect_identical(lake_files(lake_open(path))$path, c("b.parquet", "part-0.parquet"))
+})
+
+# ---- a repeated key in a Parquet checkpoint MAP (#108) -----------------------
+
+test_that("a Parquet checkpoint whose MAP repeats a key is passed over, and unreadable when needed (#108)", {
+  # The first add of the checkpoint at 2 has partitionValues [x: 1, x: 2].
+  table <- "zl-checkpoint-no-last"
+  path <- fixture_table("checkpoint-map-repeated-key", "hostile")
+  for (version in oracle_versions(table)) {
+    tbl <- lake_open(path, version = version)
+    answer <- oracle_field(table, version, "add_actions")
+    expect_oracle(replay_files_frame(tbl, names(answer$columns)), table, version, "add_actions")
+    expect_oracle(lake_count(tbl), table, version, "count")
+    expect_oracle(lake_read(tbl), table, version, "read")
+    expect_identical(tbl$metadata[["id"]], oracle_field(table, version, c("metadata", "id")))
+    expect_same_state(tbl, lake_open(fixture_table(table), version = version), paste(table, version))
+  }
+  copy <- local_fixture_copy("checkpoint-map-repeated-key", "hostile")
+  unlink(file.path(copy, "_delta_log", "00000000000000000000.json"))
+  for (version in list(NULL, 2, 3)) {
+    expect_no_snapshot(lake_open(copy, version = version), "zulake_error_checkpoint_unreadable")
+  }
+  err <- tryCatch(lake_open(copy), error = identity)
+  expect_identical(err$checkpoint, 2)
+  # A refusal of the checkpoint, not a corrupt log, is the cause.
+  cause <- err$parent
+  while (!is.null(cause) && !inherits(cause, "zulake_checkpoint_refusal")) cause <- cause$parent
+  expect_false(is.null(cause))
+  expect_false(inherits(cause, "zulake_error"))
+  expect_match(conditionMessage(cause), "a map holds the key \"x\" twice", fixed = TRUE)
+  expect_match(conditionMessage(err), "a map holds the key \"x\" twice", fixed = TRUE)
+})

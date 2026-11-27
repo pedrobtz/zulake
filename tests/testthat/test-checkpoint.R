@@ -275,3 +275,15 @@ test_that("a qio warning other than 64-bit loss is reported as itself (#71)", {
     expect_error(zulake:::read_log_parquet("f.parquet", "add.size"), "bit64", class = "zulake_checkpoint_refusal")
   }
 })
+
+test_that("a MAP that repeats a key is a refusal of the checkpoint, not a corrupt log (#108)", {
+  map <- function(k, v) data.frame(key = k, value = v, stringsAsFactors = FALSE)
+  for (keys in list(c("p", "q", "p"), c("p", "p"), c("pa\u00eds", "k", "pa\u00eds"))) {
+    err <- tryCatch(zulake:::nested_value(map(keys, as.character(seq_along(keys)))), error = identity)
+    expect_s3_class(err, "zulake_checkpoint_refusal")
+    expect_false(inherits(err, "zulake_error"))
+    expect_match(conditionMessage(err), sprintf("the key \"%s\" twice", keys[1L]), fixed = TRUE)
+  }
+  # Keys that differ only in case, or only in a null value, are distinct.
+  expect_identical(names(zulake:::nested_value(map(c("p", "P"), c("1", NA)))), c("p", "P"))
+})
