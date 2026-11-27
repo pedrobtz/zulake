@@ -132,7 +132,7 @@ parse_partition_values <- function(x, type, int64, column) {
     byte = ,
     short = suppressWarnings(as.integer(x)),
     integer = whole_double(x),
-    long = int64_values(as.list(ifelse(is.na(x), NA, paste0(num_mark, sub("^[+]", "", x)))), int64, what),
+    long = int64_values(lapply(x, function(v) if (is.na(v)) NA else make_marked(sub("^[+]", "", v))), int64, what),
     float = ,
     double = partition_double(x),
     boolean = ifelse(is.na(x), NA, tolower(x) == "true"),
@@ -235,7 +235,7 @@ parse_stats <- function(stats, paths) {
   for (k in seq_along(idx)) {
     i <- idx[k]
     x <- tryCatch(
-      zujson::json_parse(marked[k]),
+      seal_marks(zujson::json_parse(marked[k])),
       zujson_error = function(e) {
         zulake_abort(
           "corrupt_log",

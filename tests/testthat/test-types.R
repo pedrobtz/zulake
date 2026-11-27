@@ -341,3 +341,65 @@ test_that("timestamp text becomes the double qio reads for the same microseconds
   expect_identical(nrow(lake_files(lake_open(part), filter = p == as.POSIXct(-1e-6, origin = "1970-01-01", tz = "UTC"))), 1L)
   expect_identical(nrow(lake_files(lake_open(part), filter = p == -1e-6)), 1L)
 })
+
+test_that("a string that starts with U+001E is a string, never a marked number (#56)", {
+  for (big in c(FALSE, TRUE)) {
+    path <- file.path(withr::local_tempdir(), "t")
+    dir.create(path)
+    s <- c("\x1e12", "\x1eabc", "plain")
+    qio::write_parquet(data.frame(s = s), file.path(path, "a.parquet"))
+    stats <- zujson::json_write(list(numRecords = 3L, minValues = list(s = "\x1e12"), maxValues = list(s = "plain"),
+                                     nullCount = list(s = 0L)), auto_unbox = TRUE)
+    add <- list(path = "a.parquet", partitionValues = list(p = "\x1e77"), size = file.size(file.path(path, "a.parquet")),
+                modificationTime = 0, dataChange = TRUE, stats = stats)
+    info <- list(timestamp = 0, operation = "WRITE", note = "\x1e123", `\x1ekey` = "v",
+                 n = if (big) bit64::as.integer64("9007199254740993") else 5)
+    lines <- c(json_line(list(commitInfo = info)), protocol_line(),
+               metadata_line(c(s = "string", p = "string"), partition = "p"), json_line(list(add = add)))
+    # zujson writes U+001E as \u001e; a writer may write \u001E.
+    lines[4L] <- sub("\\\\u001e77", "\\\\u001E77", lines[4L])
+    if (big) skip_if_not_installed("bit64")
+    write_commit(path, 0, lines)
+    tbl <- lake_open(path)
+    label <- if (big) "with a number past 2^53" else "without one"
+    expect_identical(lake_files(tbl)$min[[1L]]$s, "\x1e12", label = label)
+    expect_identical(lake_files(tbl)$max[[1L]]$s, "plain", label = label)
+    expect_identical(lake_files(tbl)$action[[1L]]$partitionValues$p, "\x1e77", label = label)
+    expect_identical(lake_files(tbl)$partition[[1L]]$p, "\x1e77", label = label)
+    actions <- lake_actions(tbl, 0, int64 = if (big) "integer64" else "double")
+    expect_identical(actions$action[[which(actions$type == "add")]]$partitionValues$p, "\x1e77", label = label)
+    expect_identical(lake_partitions(tbl)$p, "\x1e77", label = label)
+    ci <- lake_history(tbl, int64 = if (big) "integer64" else "double")$commit_info[[1L]]
+    expect_identical(ci$note, "\x1e123", label = label)
+    expect_identical(ci[["\x1ekey"]], "v", label = label)
+    expect_identical(nrow(lake_files(tbl, filter = s == "\x1e12")), 1L, label = label)
+    expect_identical(nrow(lake_files(tbl, filter = p == "\x1e77")), 1L, label = label)
+    expect_identical(lake_read(tbl, filter = s == "\x1e12")$s, "\x1e12", label = label)
+    expect_identical(lake_read(tbl, filter = s %in% "\x1eabc")$s, "\x1eabc", label = label)
+    expect_identical(lake_read(tbl, filter = s < "0")$s, c("\x1e12", "\x1eabc"), label = label)
+  }
+})
+
+test_that("a long string before a number past 2^53 leaves it exact, and a scan failure is an error (#57)", {
+  skip_if_not_installed("bit64")
+  for (n in c(1e3, 1e6, 5e6)) {
+    path <- hand_table(c(
+      json_line(list(commitInfo = list(timestamp = 0, userMetadata = strrep("x", n)))),
+      protocol_line(), metadata_line(), add_line("a.parquet"),
+      '{"txn":{"appId":"a","version":9007199254740993}}'
+    ))
+    expect_identical(as.character(lake_transactions(lake_open(path), int64 = "integer64")$version), "9007199254740993",
+                     label = n)
+    expect_error(lake_transactions(lake_open(path)), class = "zulake_error_int64")
+  }
+  # Escapes all through a long string, too.
+  long <- paste0('{"commitInfo":{"timestamp":0,"userMetadata":"', strrep('\\"', 2e6), '"}}')
+  path <- hand_table(c(long, protocol_line(), metadata_line(), '{"txn":{"appId":"a","version":9007199254740993}}'))
+  expect_identical(as.character(lake_transactions(lake_open(path), int64 = "integer64")$version), "9007199254740993")
+  # PCRE failing (its match limit) is a corrupt log, never unmarked digits.
+  local_mocked_bindings(json_tokens = function(pattern, text) {
+    warning("PCRE error\n\t'match limit exceeded'")
+    gregexpr(pattern, text, perl = TRUE)
+  })
+  expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
+})

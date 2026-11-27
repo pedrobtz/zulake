@@ -716,7 +716,11 @@ Delta's types map to what `qio` returns for the Parquet column, so
 `timestamp` is `POSIXct` in UTC. `timestamp_ntz` is `POSIXct` with
 `tzone = "UTC"`, and `lake_schema()` marks the column as zone-less.
 `decimal` statistics stay as their JSON text, since a double would round
-them (D10). Data columns zulake does not return (nested ones, D14) are handled so that none is lost
+them (D10). Integers past 2^53 - 1 cross `zujson` as marked strings; a
+string of the log that itself starts with the mark is given a second one,
+and right after parsing a marked number becomes a classed object, so no
+string is ever read as a number, and a failure of the scan that marks
+them is a corrupt log, never digits left to round (2026-11-27, #56, #57). Data columns zulake does not return (nested ones, D14) are handled so that none is lost
 silently (D7): with `columns = NULL` the readable columns are returned and
 each unreadable one is named in a classed warning,
 `zulake_warning_column_skipped` (fields `column`, `reason`); a column named

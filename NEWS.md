@@ -167,3 +167,9 @@
   them as printed text. Rows are now distinct on the log's own values, as
   `deltalake`'s are, and `long` partitions sort by value with
   `int64 = "integer64"` too (#55).
+* Fixed: a string in the log that starts with U+001E (a statistic, a
+  partition value, a `commitInfo` field) was taken for a 64-bit number,
+  so `lake_files()` showed a number and a filter pruned the file holding
+  the value (#56). A commit with a very long string before a number past
+  2^53 left that number to round, with only a base R warning; the scan is
+  now linear, and a failure of it is a `zulake_error_corrupt_log` (#57).

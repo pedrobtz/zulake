@@ -230,8 +230,7 @@ nested_value <- function(x) {
     # The JSON array a commit would hold, parsed the way a commit is.
     text <- as.character(x)
     text[is.na(text)] <- "null"
-    json <- mark_numbers(paste0("{\"v\":[", paste(text, collapse = ","), "]}"))
-    return(zujson::json_parse(json)$v)
+    return(parse_marked(paste0("{\"v\":[", paste(text, collapse = ","), "]}"))$v)
   }
   if (is.double(x) && all(is_int32_value(x[!is.na(x)]))) {
     return(as.integer(x))
@@ -254,7 +253,7 @@ atomic_values <- function(x) {
     text <- as.character(x)
     ok <- !is.na(text)
     big <- ok & integer_past_exact(ifelse(ok, text, "0"))
-    out[big] <- as.list(paste0(num_mark, text[big]))
+    out[big] <- lapply(text[big], make_marked)
     small <- ok & !big
     out[small] <- atomic_values(as.numeric(text[small]))
     return(out)
@@ -268,7 +267,7 @@ atomic_values <- function(x) {
     big <- ok & !int & abs(x) > max_exact
     rest <- ok & !int & !big
     out[int] <- as.list(as.integer(x[int]))
-    out[big] <- as.list(paste0(num_mark, sprintf("%.0f", x[big])))
+    out[big] <- lapply(sprintf("%.0f", x[big]), make_marked)
     out[rest] <- as.list(x[rest])
     return(out)
   }
