@@ -57,7 +57,10 @@ in_commit_time_ms <- function(entry, read) {
     zulake_abort(
       "corrupt_log",
       sprintf(
-        "commit %s has no `inCommitTimestamp` in a first `commitInfo` action, which the table's in-commit timestamps require.",
+        paste(
+          "commit %s has no `inCommitTimestamp` in a first `commitInfo` action,",
+          "which the table's in-commit timestamps require."
+        ),
         format_number(entry$version)
       ),
       version = entry$version
@@ -102,7 +105,10 @@ version_at <- function(timestamp, entries, protocol, metadata, read) {
     # A log of checkpoints alone keeps no commit time (#51).
     zulake_abort(
       "version",
-      "the log holds no commit file, so it keeps no commit times to travel by: open a `version` instead."
+      paste(
+        "the log holds no commit file, so it keeps no commit times to travel",
+        "by: open a `version` instead."
+      )
     )
   }
   ict <- ict_info(protocol, metadata)

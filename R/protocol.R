@@ -179,7 +179,10 @@ check_physical_names <- function(metadata, mode) {
       zulake_abort(
         "corrupt_log",
         sprintf(
-          "field %s has no `delta.columnMapping.physicalName`, which column mapping in \"name\" mode requires.",
+          paste(
+            "field %s has no `delta.columnMapping.physicalName`, which column",
+            "mapping in \"name\" mode requires."
+          ),
           format_string(name)
         ),
         column = name

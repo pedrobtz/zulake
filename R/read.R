@@ -328,7 +328,10 @@ type_unreadable <- function(type) {
   ps <- decimal_ps(type)
   if (!is.null(ps) && ps[["precision"]] > max_double_precision) {
     return(sprintf(
-      "decimal precision %s > %d, which a double cannot hold exactly; qio reads exact decimals from version 0.2.0",
+      paste(
+        "decimal precision %s > %d, which a double cannot hold exactly; qio",
+        "reads exact decimals from version 0.2.0"
+      ),
       format_number(ps[["precision"]]),
       max_double_precision
     ))
@@ -465,7 +468,10 @@ bind_pieces <- function(pieces, scan) {
         zulake_abort(
           "corrupt_log",
           sprintf(
-            "column %s reads as %s from one file and %s from another; the files of a table must agree on its type.",
+            paste(
+              "column %s reads as %s from one file and %s from another; the files of",
+              "a table must agree on its type."
+            ),
             format_string(col),
             class(first)[1L],
             class(parts[[j]])[1L]

@@ -221,7 +221,10 @@ int64_values <- function(x, int64, what) {
       zulake_abort(
         "int64",
         sprintf(
-          "%s holds %s, which a double cannot hold exactly (the limit is 2^53 - 1); use `int64 = \"integer64\"`.",
+          paste(
+            "%s holds %s, which a double cannot hold exactly (the limit is 2^53 -",
+            "1); use `int64 = \"integer64\"`."
+          ),
           what,
           v
         ),
@@ -241,7 +244,10 @@ int64_values <- function(x, int64, what) {
     zulake_abort(
       "int64",
       sprintf(
-        "%s holds %s, outside what an integer64 holds (-2^63 + 1 to 2^63 - 1; bit64 keeps -2^63 for NA).",
+        paste(
+          "%s holds %s, outside what an integer64 holds (-2^63 + 1 to 2^63 - 1;",
+          "bit64 keeps -2^63 for NA)."
+        ),
         what,
         v
       ),
@@ -277,7 +283,10 @@ int64_sum <- function(x, int64, what) {
     zulake_abort(
       "int64",
       sprintf(
-        "%s is %s or more, which a double cannot hold exactly (the limit is 2^53 - 1); use `int64 = \"integer64\"`.",
+        paste(
+          "%s is %s or more, which a double cannot hold exactly (the limit is",
+          "2^53 - 1); use `int64 = \"integer64\"`."
+        ),
         what,
         format_number(total)
       ),

@@ -317,7 +317,10 @@ credential_token <- function(handle, refresh = FALSE) {
   ) {
     zulake_abort(
       "auth",
-      "`credentials()` must return a bearer token: a single non-empty string without spaces or control characters."
+      paste(
+        "`credentials()` must return a bearer token: a single non-empty string",
+        "without spaces or control characters."
+      )
     )
   }
   entry$token <- token
@@ -682,7 +685,10 @@ storage_for_absolute <- function(storage, path) {
       zulake_abort(
         "uri",
         sprintf(
-          "%s is not a location of this table's storage: a remote table's files are not read from local disk.",
+          paste(
+            "%s is not a location of this table's storage: a remote table's files",
+            "are not read from local disk."
+          ),
           format_string(path)
         ),
         path = path
@@ -699,7 +705,10 @@ storage_for_absolute <- function(storage, path) {
     zulake_abort(
       "uri",
       sprintf(
-        "%s is not in this table's account and container (%s, %s): zulake reads a table's files only there.",
+        paste(
+          "%s is not in this table's account and container (%s, %s): zulake reads",
+          "a table's files only there."
+        ),
         format_string(path),
         format_string(own$account),
         format_string(own$container)

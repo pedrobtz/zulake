@@ -306,7 +306,10 @@ dv_rows <- function(tbl, i, versions) {
     zulake_abort(
       "int64",
       sprintf(
-        "The deletion vector of file %s deletes row %s, which a double cannot hold exactly (the limit is 2^53 - 1).",
+        paste(
+          "The deletion vector of file %s deletes row %s, which a double cannot",
+          "hold exactly (the limit is 2^53 - 1)."
+        ),
         format_string(file),
         top
       ),
@@ -337,7 +340,10 @@ dv_file <- function(tbl, dv, bad) {
     rel <- dv_relative_path(substr(text, 1L, n - 20L), uuid)
     if (bad_relative_path(rel)) {
       bad(
-        "has a prefix with an empty, \".\" or \"..\" path segment, which would leave the table's root"
+        paste(
+          "has a prefix with an empty, \".\" or \"..\" path segment, which would",
+          "leave the table's root"
+        )
       )
     }
     storage <- tbl$storage

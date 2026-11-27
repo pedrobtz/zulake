@@ -230,7 +230,11 @@ lake_count <- function(tbl, footers = FALSE) {
   zulake_warn(
     "count_unknown",
     sprintf(
-      "%s live file%s no `numRecords` statistic, so the row count is unknown (NA); `lake_files()` shows which, and `footers = TRUE` reads their counts from the files.",
+      paste(
+        "%s live file%s no `numRecords` statistic, so the row count is unknown",
+        "(NA); `lake_files()` shows which, and `footers = TRUE` reads their",
+        "counts from the files."
+      ),
       format_number(n),
       if (n == 1) " has" else "s have"
     ),
@@ -339,7 +343,10 @@ warn_int64 <- function(value, column, path, int64) {
   zulake_warn(
     "int64",
     sprintf(
-      "The `long` statistics of column %s include %s (file %s), shown as NA: %s. The exact value stays in `action`.",
+      paste(
+        "The `long` statistics of column %s include %s (file %s), shown as NA:",
+        "%s. The exact value stays in `action`."
+      ),
       format_string(column),
       value,
       format_string(path),
@@ -433,7 +440,10 @@ file_counts <- function(tbl, int64) {
     zulake_abort(
       "corrupt_log",
       sprintf(
-        "file %s has a deletion vector but no `numRecords` statistic, which the protocol requires with one.",
+        paste(
+          "file %s has a deletion vector but no `numRecords` statistic, which the",
+          "protocol requires with one."
+        ),
         format_string(paths[bad][1L])
       ),
       file = paths[bad][1L]

@@ -210,7 +210,10 @@ read_log_parquet <- function(file, selectors) {
   }
   if (!has_bit64()) {
     checkpoint_refusal(
-      "it holds a 64-bit integer that a double cannot hold exactly, and reading it needs the bit64 package"
+      paste(
+        "it holds a 64-bit integer that a double cannot hold exactly, and",
+        "reading it needs the bit64 package"
+      )
     )
   }
   withCallingHandlers(

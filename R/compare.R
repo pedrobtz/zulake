@@ -209,7 +209,10 @@ literal_exact <- function(value, expr) {
         filter_error(
           expr,
           sprintf(
-            "the double %s has no exact decimal form of 15 digits; write it as text, such as \"%s\", to compare it exactly",
+            paste(
+              "the double %s has no exact decimal form of 15 digits; write it as",
+              "text, such as \"%s\", to compare it exactly"
+            ),
             sprintf("%.17g", bad),
             sprintf("%.15g", bad)
           )
@@ -248,7 +251,10 @@ literal_number <- function(value, type, expr) {
       filter_error(
         expr,
         sprintf(
-          "%s is text, which zulake does not compare with a %s column (R would compare them as strings); give a number",
+          paste(
+            "%s is text, which zulake does not compare with a %s column (R would",
+            "compare them as strings); give a number"
+          ),
           format_string(value[bad][1L]),
           type
         )

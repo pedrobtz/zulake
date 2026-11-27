@@ -66,7 +66,10 @@ missing_commit <- function(entries, at, start, version, failed) {
     zulake_abort(
       "checkpoint_unreadable",
       sprintf(
-        "Version %s needs the checkpoint at version %s, since commit %s is no longer in the log, and %s",
+        paste(
+          "Version %s needs the checkpoint at version %s, since commit %s is no",
+          "longer in the log, and %s"
+        ),
         format_number(version),
         format_number(e$checkpoint),
         format_number(at),
@@ -85,7 +88,10 @@ missing_commit <- function(entries, at, start, version, failed) {
     zulake_abort(
       "version",
       sprintf(
-        "Version %s can no longer be built: commit %s is gone from the log, which a checkpoint at version %s replaces.",
+        paste(
+          "Version %s can no longer be built: commit %s is gone from the log,",
+          "which a checkpoint at version %s replaces."
+        ),
         format_number(version),
         format_number(at),
         format_number(min(later))

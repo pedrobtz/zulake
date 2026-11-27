@@ -51,7 +51,8 @@ Azure's error \code{code}),
 partition value of the wrong type, or a \verb{_last_checkpoint} naming a
 checkpoint the log does not hold whole),
 \code{zulake_error_checkpoint_unreadable} (its \code{checkpoint} field gives the
-version, \code{parent} the read failure) and \code{zulake_error_unsupported_feature}, whose \code{feature} field names the
+version, \code{parent} the read failure) and
+\code{zulake_error_unsupported_feature}, whose \code{feature} field names the
 feature.
 }
 \description{

@@ -84,7 +84,8 @@
 #'   partition value of the wrong type, or a `_last_checkpoint` naming a
 #'   checkpoint the log does not hold whole),
 #'   `zulake_error_checkpoint_unreadable` (its `checkpoint` field gives the
-#'   version, `parent` the read failure) and `zulake_error_unsupported_feature`, whose `feature` field names the
+#'   version, `parent` the read failure) and
+#'   `zulake_error_unsupported_feature`, whose `feature` field names the
 #'   feature.
 #' @seealso [lake_is_table()] to check a location first.
 #' @export

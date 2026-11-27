@@ -79,9 +79,16 @@ prune_files <- function(tbl, plan, int64) {
 
 filter_error <- function(expr, problem, strict = TRUE) {
   hint <- if (strict) {
-    "A filter here is comparisons (==, !=, <, <=, >, >=), %in% and is.na() between a column and values, joined by !, & and |."
+    paste(
+      "A filter here is comparisons (==, !=, <, <=, >, >=), %in% and is.na()",
+      "between a column and values, joined by !, & and |."
+    )
   } else {
-    "A filter is comparisons (==, !=, <, <=, >, >=), %in% and is.na() between a column and values, and the row-wise functions listed in ?lake_read, joined by !, & and |."
+    paste(
+      "A filter is comparisons (==, !=, <, <=, >, >=), %in% and is.na()",
+      "between a column and values, and the row-wise functions listed in",
+      "?lake_read, joined by !, & and |."
+    )
   }
   zulake_abort(
     "filter",
@@ -171,7 +178,11 @@ check_time_text <- function(x, types, expr, strict) {
         filter_error(
           expr,
           sprintf(
-            "%s() of the timestamp column %s is not row-wise before R 4.3.0, where a time's text depends on the other rows; compare the column with a time instead",
+            paste(
+              "%s() of the timestamp column %s is not row-wise before R 4.3.0, where",
+              "a time's text depends on the other rows; compare the column with a",
+              "time instead"
+            ),
             name,
             format_string(col[1L])
           ),
@@ -487,7 +498,11 @@ quoted_filter_error <- function(x, expr, strict) {
   filter_error(
     expr,
     sprintf(
-      "%s is an expression, and `filter` takes the expression written in the call; to pass a quoted one, write eval(bquote(lake_read(tbl, filter = .(%s))))",
+      paste(
+        "%s is an expression, and `filter` takes the expression written in the",
+        "call; to pass a quoted one, write eval(bquote(lake_read(tbl, filter =",
+        ".(%s))))"
+      ),
       deparse_one(x),
       deparse_one(x)
     ),
