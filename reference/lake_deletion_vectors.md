@@ -22,7 +22,9 @@ lake_deletion_vectors(tbl, files = NULL, rows = TRUE)
 - tbl:
 
   A snapshot, from
-  [`lake_open()`](https://pedrobtz.github.io/zulake/reference/lake_open.md).
+  [`lake_open()`](https://pedrobtz.github.io/zulake/reference/lake_open.md)
+  or
+  [`lake_load()`](https://pedrobtz.github.io/zulake/reference/lake_open.md).
 
 - files:
 
@@ -113,7 +115,7 @@ writeLines(c(
 tbl <- lake_open(path)
 lake_deletion_vectors(tbl, rows = FALSE)
 #>                                                uri storage_type
-#> 1 /tmp/RtmpQjdjoj/table194973dd1009/part-0.parquet            i
+#> 1 /tmp/Rtmp0dNu1J/table18d46939921d/part-0.parquet            i
 #>                               path_or_inline_dv offset size_in_bytes
 #> 1 ^Bg9^0rr910000000000iXQKl0rr91000315c8Xg000r9     NA            36
 #>   cardinality

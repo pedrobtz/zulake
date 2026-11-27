@@ -28,7 +28,9 @@ lake_summary(tbl, int64 = c("double", "integer64"))
 - tbl:
 
   A snapshot, from
-  [`lake_open()`](https://pedrobtz.github.io/zulake/reference/lake_open.md).
+  [`lake_open()`](https://pedrobtz.github.io/zulake/reference/lake_open.md)
+  or
+  [`lake_load()`](https://pedrobtz.github.io/zulake/reference/lake_open.md).
 
 - limit:
 

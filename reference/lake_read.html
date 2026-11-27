@@ -74,7 +74,7 @@ Azure not larger than disk; see below).</p>
 
 
 <dl><dt id="arg-tbl">tbl<a class="anchor" aria-label="anchor" href="#arg-tbl"></a></dt>
-<dd><p>A snapshot, from <code><a href="lake_open.html">lake_open()</a></code>.</p></dd>
+<dd><p>A snapshot, from <code><a href="lake_open.html">lake_open()</a></code> or <code><a href="lake_open.html">lake_load()</a></code>.</p></dd>
 
 
 <dt id="arg-columns">columns<a class="anchor" aria-label="anchor" href="#arg-columns"></a></dt>
@@ -150,10 +150,10 @@ that is not the number its 15-digit form reads back as (<code>1/3</code>,
 <code>0.1 + 0.2</code>) is an error asking for the value as text. R has already
 rounded a literal such as <code>9007199254740993</code> to a double
 (9007199254740992) before zulake sees it, so give such a value as text
-too. A <code>float</code> or <code>double</code> column takes
-only numbers: text there, such as <code>amount &gt; "100"</code>, is an error, since R
-would compare it with the column as strings. A date or timestamp column takes a
-<code>Date</code> or <code>POSIXct</code>, or text such as <code>"2024-01-31"</code> or
+too. A <code>float</code> or <code>double</code> column takes only numbers: text there, such
+as <code>amount &gt; "100"</code>, is an error, since R would compare it with the
+column as strings. A date or timestamp column takes a <code>Date</code> or
+<code>POSIXct</code>, or text such as <code>"2024-01-31"</code> or
 <code>"2024-01-31 12:00:00"</code> (UTC unless it gives an offset).</p>
 <p>Columns are typed as qio returns them (see <code><a href="https://pedrobtz.github.io/qio/reference/read_parquet.html" class="external-link">qio::read_parquet()</a></code>), and
 partition columns as <code><a href="lake_files.html">lake_files()</a></code> types them, except that a <code>decimal</code>

@@ -69,7 +69,7 @@ alone.</p>
 
 
 <dl><dt id="arg-tbl">tbl<a class="anchor" aria-label="anchor" href="#arg-tbl"></a></dt>
-<dd><p>A snapshot, from <code><a href="lake_open.html">lake_open()</a></code>.</p></dd>
+<dd><p>A snapshot, from <code><a href="lake_open.html">lake_open()</a></code> or <code><a href="lake_open.html">lake_load()</a></code>.</p></dd>
 
 
 <dt id="arg-filter">filter<a class="anchor" aria-label="anchor" href="#arg-filter"></a></dt>
@@ -123,8 +123,9 @@ delete (each descriptor's <code>cardinality</code>). When a live file has no
 <code>numRecords</code> the count is unknown: <code>NA_real_</code>, with a warning of class
 <code>zulake_warning_count_unknown</code> whose <code>files</code> field gives the number of
 such files, unless <code>footers = TRUE</code> reads those files' row counts from
-their Parquet footers. It is never a partial sum. A file with a deletion vector
-and no <code>numRecords</code> breaks the protocol: <code>zulake_error_corrupt_log</code>.</p>
+their Parquet footers. It is never a partial sum. A file with a
+deletion vector and no <code>numRecords</code> breaks the protocol:
+<code>zulake_error_corrupt_log</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>

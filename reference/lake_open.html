@@ -100,14 +100,16 @@ that says why: <code>zulake_error_argument</code> (an argument of the wrong type
 or value, such as a <code>version</code> that is not a whole number),
 <code>zulake_error_not_table</code> (no Delta log at <code>uri</code>),
 <code>zulake_error_version</code> (no such version, or one no longer in the log),
-<code>zulake_error_uri</code> (a URI zulake cannot open), <code>zulake_error_storage</code> (a file that cannot be
-read; from Azure with the HTTP <code>status</code> and Azure's error <code>code</code>),
+<code>zulake_error_uri</code> (a URI zulake cannot open), <code>zulake_error_storage</code>
+(a file that cannot be read; from Azure with the HTTP <code>status</code> and
+Azure's error <code>code</code>),
 <code>zulake_error_auth</code> (credentials refused), <code>zulake_error_corrupt_log</code>
 (a log that breaks the protocol, such as a commit that is not JSON or a
 partition value of the wrong type, or a <code>_last_checkpoint</code> naming a
 checkpoint the log does not hold whole),
-<code>zulake_error_checkpoint_unreadable</code> (its <code>checkpoint</code> field gives the version, <code>parent</code> the read failure)
-and <code>zulake_error_unsupported_feature</code>, whose <code>feature</code> field names the
+<code>zulake_error_checkpoint_unreadable</code> (its <code>checkpoint</code> field gives the
+version, <code>parent</code> the read failure) and
+<code>zulake_error_unsupported_feature</code>, whose <code>feature</code> field names the
 feature.</p>
     </div>
     <div class="section level2">
