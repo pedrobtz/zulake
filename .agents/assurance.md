@@ -36,7 +36,7 @@ call to r-actions.
 | Check      | Status                                                                                                                                  | Where |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----- |
 | fuzz       | n/a: no compiled code (D1), and r-actions fuzz.yml runs libFuzzer harnesses over C; the R parsers get seeded random inputs with an oracle instead: random byte and JSON-type changes to commits (test-hostile.R), every byte change and truncation of a deletion-vector file, random filters against R's subset (test-filter.R); full counts in CI and `tools/ci-run-tests.R` (`NOT_CRAN=true`), reduced counts on CRAN (`tests/testthat/helper-iterations.R`) | |
-| fuzz-reach | n/a: follows fuzz, with no harness and so no corpus to measure; the R suite's line coverage (coverage.yaml) is read for gaps instead | |
+| fuzz-reach | n/a: follows fuzz, with no harness and so no corpus to measure; the R suite's line coverage (coverage.yaml) is read for gaps instead, with a floor of 98.5% (`fail-under`, #83) under the 99.3% measured at 5414ca7 | |
 <!-- markdownlint-enable MD013 -->
 
 ## Boundaries

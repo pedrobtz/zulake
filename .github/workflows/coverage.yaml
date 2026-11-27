@@ -1,5 +1,7 @@
 on:
   pull_request:
+    # `labeled`/`unlabeled` so that adding or removing a CI label reruns it.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   # Weekly on main rather than on every push to it, and on demand; the
   # badge follows (README, "Pushes to main").
   schedule:
@@ -13,13 +15,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Gated by r-actions' changes.yml (ci.md, #83): a documentation-only pull
+  # request and the `ci:docs`, `ci:minimal` and `skip-ci:coverage` labels
+  # skip it, as they skip the package's other own jobs.
+  changes:
+    # Labels are decided here, without a runner (ci.md, Labels).
+    if: >-
+      github.event_name != 'pull_request'
+      || contains(github.event.pull_request.labels.*.name, 'full-ci')
+      || !(contains(github.event.pull_request.labels.*.name, 'ci:docs')
+        || contains(github.event.pull_request.labels.*.name, 'ci:minimal')
+        || contains(github.event.pull_request.labels.*.name, 'skip-ci:coverage'))
+    uses: pedrobtz/r-actions/.github/workflows/changes.yml@v1
+    with:
+      name: coverage
+    permissions:
+      contents: read
+
   coverage:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.result != 'skipped' && needs.changes.outputs.docs-only != 'true' }}
     # Pinned to a commit, not `@v1`, because this call holds a write token:
-    # a moved tag cannot change what runs with it. Same commit as the sibling
-    # packages (qio, zuhttp).
-    uses: pedrobtz/r-actions/.github/workflows/coverage.yml@59c917ddee2cd0191f8f015016c4c76c4f2a8c87 # v1.18.0
+    # a moved tag cannot change what runs with it. v1.46.1 rather than the
+    # siblings' v1.18.0 for `fail-under`, which v1.18.0 does not have.
+    uses: pedrobtz/r-actions/.github/workflows/coverage.yml@72ecdaf3536ed6b5984ed12815e168ee16ab8aa4 # v1.46.1
     with:
       badge-branch: gh-pages
       badge-path: badges/coverage.svg
+      # The floor (.agents/assurance.md, "Coverage"): a little under the
+      # 99.3% covr measured at 5414ca7, so a change that drops coverage
+      # goes red instead of only moving the badge.
+      fail-under: 98.5
     permissions:
       contents: write

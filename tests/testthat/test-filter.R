@@ -5,7 +5,7 @@
 
 test_that("partition filters keep exactly the files R's evaluation on deltalake's partition values keeps", {
   withr::local_seed(20261126)
-  withr::local_collate("C")
+  local_hostile_locale()
   filter_tables <- c("zl-partitioned", "delta-2.2.0-partitioned-types", "delta-0.8.0-partitioned",
                      "delta-0.8.0-null-partition", "table_with_column_mapping")
   for (table in filter_tables) {
@@ -106,7 +106,7 @@ test_that("filters work on a table without partition columns and on a table with
 
 test_that("lake_read(filter = f) equals the full read subset in R, and no pruned file has a matching row", {
   withr::local_seed(20261127)
-  withr::local_collate("C")
+  local_hostile_locale()
   tables <- c("zl-partitioned", "zl-basic", "delta-2.2.0-partitioned-types", "delta-0.8.0-partitioned",
               "delta-0.8.0-null-partition", "zl-types", "zl-checkpoint", "checkpoint-v2-table",
               "table_failed_last_checkpoint_update", "table_with_edge_timestamps")
@@ -139,7 +139,7 @@ test_that("lake_read(filter = f) equals the full read subset in R, and no pruned
 })
 
 test_that("partition values are compared as their Delta type, exactly as deltalake typed them", {
-  withr::local_collate("C")
+  local_hostile_locale()
   for (case in inspect_cases()) {
     tbl <- case_snapshot(case)
     pcols <- lake_partition_columns(tbl)
@@ -449,12 +449,16 @@ test_that("filter values arrive the same in a hostile session", {
   plain_ts <- run_ts()
   expect_identical(plain_ts[[1L]], as.POSIXct("2024-01-05 10:00:00.123", tz = "UTC"))
   expect_identical(plain_ts[3:4], list(0L, 0L))
-  hostile_ts <- withr::with_options(list(OutDec = ",", scipen = -5, digits = 3), run_ts())
+  hostile_ts <- local({
+    local_hostile_locale()
+    run_ts()
+  })
   expect_identical(hostile_ts, plain_ts)
   plain <- run()
-  hostile <- withr::with_locale(c(LC_COLLATE = "C", LC_CTYPE = "C"), withr::with_options(
-    list(OutDec = ",", scipen = -5, digits = 3), run()
-  ))
+  hostile <- local({
+    local_hostile_locale()
+    run()
+  })
   expect_identical(hostile, plain)
 })
 
@@ -542,7 +546,7 @@ test_that("a call outside the pruning subset and the row-wise list is refused ev
 
 test_that("a filter gives the same rows however the rows are split into files", {
   withr::local_seed(20261129)
-  withr::local_collate("C")
+  local_hostile_locale()
   n <- 60L
   data <- data.frame(
     id = as.numeric(seq_len(n)),

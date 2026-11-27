@@ -162,9 +162,11 @@ oracle_partition_frame <- function(table, version) {
       at <- regexpr(": [^:]*$", piece)
       name <- substr(piece, 1L, at - 1L)
       arrow <- substr(piece, at + 2L, nchar(piece))
+      # A double as "%.17g", not as.character(), which writes 1.5 as "1,5"
+      # under options(OutDec = ",").
       vals <- vapply(aa$columns$partition, function(p) {
         v <- p[[name]]
-        if (is.null(v)) NA_character_ else as.character(v)
+        if (is.null(v)) NA_character_ else if (is.double(v)) sprintf("%.17g", v) else as.character(v)
       }, "")
       out[[name]] <- switch(arrow,
         int8 = , int16 = , int32 = as.integer(vals),
@@ -232,8 +234,10 @@ random_filter <- function(parts, data_cols, depth = 0L) {
 
 # The paths a filter keeps, by brute force: each comparison on a data column
 # can be TRUE, FALSE or NA on some row, so a file is kept when some choice of
-# those makes R's evaluation on deltalake's partition values TRUE.
+# those makes R's evaluation on deltalake's partition values TRUE, in the
+# oracles' locale whatever the session's (with_oracle_locale()).
 oracle_filter_paths <- function(expr, parts, data_cols) {
+  withr::local_locale(c(LC_COLLATE = "C", LC_CTYPE = session_ctype))
   atoms <- list()
   mark <- function(x) {
     if (is.call(x) && as.character(x[[1L]]) %in% filter_atom_calls &&

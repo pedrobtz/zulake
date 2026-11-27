@@ -115,12 +115,24 @@ jobs:
           export ZULAKE_AZURITE_TOKEN="$(Rscript -e 'source("../../tests/testthat/helper-azure.R"); cat(azurite_token)')"
           uv run --frozen python azurite.py "$ZULAKE_AZURITE_ANSWERS"
 
+      # Shuffled, as tests/testthat.R runs the rest of the suite (#84): the
+      # seed is printed before and after the tests, and ZULAKE_TEST_SEED in
+      # this step's env replays an order.
       - name: The Azure suites, none skipped
         run: |
           Rscript -e '
             library(testthat)
-            r <- test_dir("tests/testthat", filter = "azure$|azure-emulator", package = "zulake",
-                          load_package = "installed", reporter = "summary", stop_on_failure = TRUE)
+            seed <- suppressWarnings(as.integer(Sys.getenv("ZULAKE_TEST_SEED")))
+            if (is.na(seed)) seed <- sample.int(.Machine$integer.max, 1L)
+            say <- function() cat("zulake test order seed:", seed, "(ZULAKE_TEST_SEED to replay)\n")
+            say()
+            set.seed(seed)
+            r <- tryCatch(
+              test_dir("tests/testthat", filter = "azure$|azure-emulator", package = "zulake",
+                       load_package = "installed", reporter = "summary", stop_on_failure = TRUE,
+                       shuffle = TRUE),
+              finally = say()
+            )
             d <- as.data.frame(r)
             print(d[c("file", "test", "nb", "failed", "skipped", "error")])
             if (any(d$skipped & d$file == "test-azure-emulator.R")) stop("an emulator test skipped")

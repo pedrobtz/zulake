@@ -101,3 +101,23 @@ inline_dv <- function(bytes, cardinality) {
 read_each_file_raw <- function(tbl) {
   lapply(seq_len(nrow(tbl$files)), function(i) qio::read_parquet(fetch_file(tbl, i)))
 }
+
+# The connections `code` leaves open: their numbers, after closing them.
+# base::file() is traced while `code` runs, so every connection it opens is
+# held here and the garbage collector cannot close a leaked one first (it
+# would, quietly, at any allocation, and a count of open connections taken
+# after the call would then see nothing).
+connections_left_open <- function(code) {
+  before <- getAllConnections()
+  held <- list()
+  record <- function(con) held[[length(held) + 1L]] <<- con
+  suppressMessages(trace("file", exit = bquote(.(record)(returnValue())), print = FALSE, where = baseenv()))
+  traced <- TRUE
+  on.exit(if (traced) suppressMessages(untrace("file", where = baseenv())))
+  force(code)
+  suppressMessages(untrace("file", where = baseenv()))
+  traced <- FALSE
+  left <- setdiff(getAllConnections(), before)
+  for (i in left) close(getConnection(i))
+  left
+}

@@ -150,6 +150,10 @@ test_that("vectors at a relative path with a prefix, at an absolute path and at 
     expect_identical(lake_deletion_vectors(tbl)$rows[[1L]], rows, label = where)
     expect_identical(lake_read(tbl)$id, setdiff(0:9, rows) + 0, label = where)
     expect_identical(lake_count(tbl), 7)
+    # A range of the file is its bytes, and the reader closes the file.
+    file <- dv_file(tbl, dv, stop)
+    expect_identical(connections_left_open(got <- file$range(1, 4)), integer(), label = where)
+    expect_identical(got, readBin(target, "raw", 5L)[2:5], label = where)
   }
   # Another scheme is a zulake_error_uri.
   dv <- list(storageType = "p", pathOrInlineDv = "abfss://lake@account.dfs.core.windows.net/t/dv.bin",
