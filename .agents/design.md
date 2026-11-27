@@ -693,7 +693,11 @@ statistics and on rows, so pruning and the row filter cannot disagree:
   truncate it to milliseconds; and a `float` or `double` column may hold
   NaN, which no statistic counts, so `is.na()` and `!(x %in% v)` keep its
   files. A date or timestamp column takes text (`"2024-01-31"`, UTC unless
-  an offset is given) as well as a `Date` or `POSIXct`.
+  an offset is given) as well as a `Date` or `POSIXct`. Text against a
+  `float` or `double` column is a `zulake_error_filter`, as against a
+  `boolean` one (2026-11-27, #73: R compares a double with text as
+  strings, so reading the text as a number gave other rows than
+  `subset()`, against D8's claim).
 - *Strings* compare in UTF-8 byte order on rows too, whatever the
   session's collation; a string maximum is taken as a prefix the true
   maximum may extend. A maximum ending in U+FFFD is taken as the prefix

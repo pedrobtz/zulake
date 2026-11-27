@@ -42,7 +42,9 @@
 #' whatever the session's collation, as the table's statistics are. A value
 #' given as text, such as `"12.30"`, is read as that decimal number; a double
 #' that has no exact decimal form of 15 digits (`1/3`, `0.1 + 0.2`) is an
-#' error asking for the value as text. A date or timestamp column takes a
+#' error asking for the value as text. A `float` or `double` column takes
+#' only numbers: text there, such as `amount > "100"`, is an error, since R
+#' would compare it with the column as strings. A date or timestamp column takes a
 #' `Date` or `POSIXct`, or text such as `"2024-01-31"` or
 #' `"2024-01-31 12:00:00"` (UTC unless it gives an offset).
 #'

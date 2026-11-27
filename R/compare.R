@@ -206,6 +206,9 @@ literal_exact <- function(value, expr) {
   list(keys = exact_parse(text), nan = nan)
 }
 
+# Text is a date or a time on those columns only: against a boolean, float
+# or double column R would compare the two as strings, so it is refused
+# rather than read as a number (#73).
 literal_number <- function(value, type, expr) {
   n <- length(value)
   if (is.character(value)) {
@@ -213,10 +216,18 @@ literal_number <- function(value, type, expr) {
       date = as.numeric(unclass(parse_date_text(value))),
       timestamp = as.numeric(unclass(parse_time_text(value, zone = TRUE))),
       timestamp_ntz = as.numeric(unclass(parse_time_text(value, zone = FALSE))),
-      boolean = rep(NA_real_, n),
-      ifelse(is_exact_text(value), suppressWarnings(as.numeric(value)), NA_real_)
+      rep(NA_real_, n)
     )
     bad <- !is.na(value) & is.na(x)
+    if (any(bad) && type %in% c("float", "double")) {
+      filter_error(
+        expr,
+        sprintf(
+          "%s is text, which zulake does not compare with a %s column (R would compare them as strings); give a number",
+          format_string(value[bad][1L]), type
+        )
+      )
+    }
     if (any(bad)) {
       filter_error(expr, sprintf("%s is not a %s", format_string(value[bad][1L]), type))
     }

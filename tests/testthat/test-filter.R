@@ -404,7 +404,15 @@ test_that("filter values become exact text by the documented rules", {
                "write it as text", fixed = TRUE)
   # Number columns.
   num <- function(v, type = "double") literal_keys(v, "number", type, expr)$keys
-  expect_identical(num("1.5e3"), 1500)
+  # Text against a float or double column is refused, as against a boolean
+  # one: R would compare the two as strings (#73).
+  for (type in c("double", "float", "boolean")) {
+    for (v in list("1.5e3", "100", c("1", "2"), c(NA, "1"))) {
+      expect_error(num(v, type), class = "zulake_error_filter", label = paste(type, deparse(v)))
+    }
+    expect_identical(num(NA_character_, type), NA_real_)
+  }
+  expect_identical(num(1500), 1500)
   expect_identical(num(as.Date("1970-01-11"), "date"), 10)
   expect_identical(num("1970-01-11", "date"), 10)
   expect_identical(num("1970-01-01 00:00:01.5", "timestamp"), 1.5)
@@ -608,4 +616,19 @@ test_that("a binary column is filtered on rows; is.na() of it is TRUE for a null
   expect_identical(read(quote(!is.na(b))), r_subset(full, bquote(.(!null))))
   expect_identical(nrow(r_subset(full, quote(is.na(b)))), 0L)
   expect_identical(nrow(suppressWarnings(lake_files(tbl, filter = is.na(b)))), 1L)
+})
+
+test_that("a text literal against a float or double column is refused everywhere (#73)", {
+  tbl <- lake_open(system.file("extdata", "orders", package = "zulake"))
+  rows <- lake_read(tbl)
+  # R compares a double with text as strings, which is not what pruning on
+  # the number would keep: the two disagree on the shipped table.
+  expect_false(identical(nrow(subset(rows, amount > "100")), nrow(subset(rows, amount > 100))))
+  for (expr in list(quote(amount > "100"), quote(amount == "12.5"), quote(amount %in% c("1", "2")),
+                    quote(region == "EU" & amount >= "100"), quote(!(amount < "100")))) {
+    expect_error(eval(bquote(lake_read(tbl, filter = .(expr)))), class = "zulake_error_filter", label = deparse(expr))
+    expect_error(eval(bquote(lake_walk(tbl, identity, filter = .(expr)))), class = "zulake_error_filter", label = deparse(expr))
+    expect_error(eval(bquote(lake_files(tbl, filter = .(expr)))), class = "zulake_error_filter", label = deparse(expr))
+  }
+  expect_identical(lake_read(tbl, filter = amount > 100), rows[rows$amount > 100, , drop = FALSE], ignore_attr = TRUE)
 })

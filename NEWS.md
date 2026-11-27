@@ -199,3 +199,7 @@
   appends to a truncated maximum, is now taken as the prefix before it, so
   a filter on a value with a character above U+FFFD (an emoji) no longer
   prunes the file that holds it (#78).
+* Changed: a text literal compared with a `float` or `double` column
+  (`amount > "100"`) is now a `zulake_error_filter`, as with a `boolean`
+  column; it was read as a number, where R compares the two as strings
+  (#73).
