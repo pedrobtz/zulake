@@ -3,11 +3,11 @@
 ## zulake 0.0.0.9000
 
 - [`lake_open()`](https://pedrobtz.github.io/zulake/reference/lake_open.md)
-  opens a Delta Lake table on local disk at its latest version, at a
-  `version` or at a `timestamp`, replaying its log from commit 0 as the
-  Delta protocol prescribes: JSON commits, log compaction files, and the
-  reconciliation of `add`, `remove`, `metaData`, `protocol`, `txn` and
-  `domainMetadata` actions.
+  opens a Delta Lake table on local disk or on Azure at its latest
+  version, at a `version` or at a `timestamp`, replaying its log from
+  the latest checkpoint (or commit 0) as the Delta protocol prescribes:
+  JSON commits, log compaction files, and the reconciliation of `add`,
+  `remove`, `metaData`, `protocol`, `txn` and `domainMetadata` actions.
   [`lake_load()`](https://pedrobtz.github.io/zulake/reference/lake_open.md)
   builds another snapshot of the same table,
   [`lake_version()`](https://pedrobtz.github.io/zulake/reference/lake_open.md)
@@ -270,3 +270,83 @@
   whole-number argument now takes an `integer64` at its value, and
   refuses one past 2^53 - 1 with a `zulake_error_argument`
   ([\#60](https://github.com/pedrobtz/zulake/issues/60)).
+- Changed: a file or deletion vector the log names by an absolute Azure
+  URI on another account or container than the table’s is now a
+  `zulake_error_uri`, refused before any request, so a log cannot send
+  the table’s token to an account of its choosing
+  ([\#76](https://github.com/pedrobtz/zulake/issues/76)).
+- Changed: in a table that maps columns in `name` mode, a field without
+  a `delta.columnMapping.physicalName` is now a
+  `zulake_error_corrupt_log` naming the field, instead of being read by
+  its logical name, which after a rename could be another column’s data
+  ([\#77](https://github.com/pedrobtz/zulake/issues/77)).
+- Fixed: a string maximum ending in U+FFFD, the tie-breaker Delta Spark
+  appends to a truncated maximum, is now taken as the prefix before it,
+  so a filter on a value with a character above U+FFFD (an emoji) no
+  longer prunes the file that holds it
+  ([\#78](https://github.com/pedrobtz/zulake/issues/78)).
+- Changed: a text literal compared with a `float` or `double` column
+  (`amount > "100"`) is now a `zulake_error_filter`, as with a `boolean`
+  column; it was read as a number, where R compares the two as strings
+  ([\#73](https://github.com/pedrobtz/zulake/issues/73)).
+- Changed: on R before 4.3.0,
+  [`as.character()`](https://rdrr.io/r/base/character.html),
+  [`substr()`](https://rdrr.io/r/base/substr.html),
+  [`toupper()`](https://rdrr.io/r/base/chartr.html),
+  [`tolower()`](https://rdrr.io/r/base/chartr.html) and
+  [`grepl()`](https://rdrr.io/r/base/grep.html) of a timestamp column in
+  a filter are a `zulake_error_filter`, since there a time’s text
+  depends on the other rows of its file
+  ([\#74](https://github.com/pedrobtz/zulake/issues/74)).
+- Fixed: an `integer` value of -2^31, which qio reads as `NA`, was
+  missed by [`is.na()`](https://rdrr.io/r/base/NA.html) and `%in% NA`
+  filters whenever its file’s null count was 0; such a file is now kept
+  unless its minimum is known and above -2^31, so equivalent filters
+  agree.
+  [`?lake_read`](https://pedrobtz.github.io/zulake/reference/lake_read.md)
+  documents the `NA`
+  ([\#79](https://github.com/pedrobtz/zulake/issues/79)).
+- [`?lake_walk`](https://pedrobtz.github.io/zulake/reference/lake_read.md)
+  now says that on Azure every file left after pruning is downloaded to
+  [`tempdir()`](https://rdrr.io/r/base/tempfile.html) before the first
+  piece and kept for the session: a walk reads tables larger than
+  memory, not larger than disk
+  ([\#75](https://github.com/pedrobtz/zulake/issues/75)).
+- Fixed: a log compaction file that cannot be read is passed over for
+  the commits it covers, and one named `<x>.<x>.compacted.json` (or with
+  an end before its start), which the protocol does not define, is no
+  longer part of the log, so both tables open as `deltalake` opens them
+  ([\#69](https://github.com/pedrobtz/zulake/issues/69)). A commit
+  missing while older commits remain is now a `zulake_error_corrupt_log`
+  (a hole in the log), not a `zulake_error_version`
+  ([\#70](https://github.com/pedrobtz/zulake/issues/70)).
+- Fixed: a checkpoint that qio reads with a warning other than 64-bit
+  loss (an INT32 of -2^31) is reported as unreadable for that reason,
+  instead of as needing the bit64 package
+  ([\#71](https://github.com/pedrobtz/zulake/issues/71)).
+- Fixed: a blob size from Azure (List Blobs, a HEAD, a range’s total)
+  that is not decimal digits up to 2^53 - 1, such as `Inf`, `0x10`,
+  `1e3` or `9007199254740993`, is now a `zulake_error_storage` instead
+  of a number read loosely or rounded
+  ([\#68](https://github.com/pedrobtz/zulake/issues/68)).
+- Fixed: `double` and `float` partition values written as `inf`, `-inf`
+  (as `deltalake` writes them) or in any case of `infinity` and `nan`
+  with a sign are now read as infinities and NaN, instead of refusing
+  the table as a corrupt log
+  ([\#67](https://github.com/pedrobtz/zulake/issues/67)).
+- Fixed: a relative path in the log with an empty, `.` or `..` segment
+  (`../other/part.parquet`) is now a `zulake_error_corrupt_log`, checked
+  for every file before any is read, instead of a file read outside the
+  table’s root ([\#66](https://github.com/pedrobtz/zulake/issues/66)).
+- Fixed: the session’s download cache is keyed on the blob (account,
+  container and name), so the three URI forms of a table share it, and
+  serves a file only to the credentials that downloaded it; a copy is
+  written whole or not at all, and one changed on disk is downloaded
+  again ([\#72](https://github.com/pedrobtz/zulake/issues/72)).
+- Fixed: with `int64 = "integer64"`, a size or record count summed past
+  2^63 - 1 is now a `zulake_error_int64` instead of `NA` with a bit64
+  warning ([\#92](https://github.com/pedrobtz/zulake/issues/92)).
+- `filter = q`, with `q` a quoted expression, is now refused with a
+  message that says how to pass one (`eval(bquote(...))`), instead of “a
+  value must be a vector”
+  ([\#92](https://github.com/pedrobtz/zulake/issues/92)).

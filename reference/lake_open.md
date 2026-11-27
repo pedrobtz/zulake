@@ -55,14 +55,16 @@ lake_version(tbl)
 whole number as a double.
 
 Every error is a condition of class `zulake_error`, with a subclass that
-says why: `zulake_error_not_table` (no Delta log at `uri`),
-`zulake_error_version` (no such version, or one no longer in the log),
-`zulake_error_uri` (a URI zulake cannot open), `zulake_error_storage` (a
-file that cannot be read; from Azure with the HTTP `status` and Azure's
-error `code`), `zulake_error_auth` (credentials refused),
-`zulake_error_corrupt_log` (a log that breaks the protocol, such as a
-commit that is not JSON or a partition value of the wrong type, or a
-`_last_checkpoint` naming a checkpoint the log does not hold whole),
+says why: `zulake_error_argument` (an argument of the wrong type or
+value, such as a `version` that is not a whole number),
+`zulake_error_not_table` (no Delta log at `uri`), `zulake_error_version`
+(no such version, or one no longer in the log), `zulake_error_uri` (a
+URI zulake cannot open), `zulake_error_storage` (a file that cannot be
+read; from Azure with the HTTP `status` and Azure's error `code`),
+`zulake_error_auth` (credentials refused), `zulake_error_corrupt_log` (a
+log that breaks the protocol, such as a commit that is not JSON or a
+partition value of the wrong type, or a `_last_checkpoint` naming a
+checkpoint the log does not hold whole),
 `zulake_error_checkpoint_unreadable` (its `checkpoint` field gives the
 version, `parent` the read failure) and
 `zulake_error_unsupported_feature`, whose `feature` field names the
@@ -112,6 +114,10 @@ and once more when Azure answers `401` (an expired token); a second
 only in the `Authorization` header: it is not kept in the snapshot,
 printed, or put in any error. Without `credentials`, requests are
 anonymous, which only a public container answers.
+
+A file the log names by an absolute Azure URI is read only when it is in
+the table's own account and container; one elsewhere is a
+`zulake_error_uri` error, and no request is sent there.
 
 The snapshot does not keep `credentials` either; later calls on it, such
 as

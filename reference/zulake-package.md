@@ -1,13 +1,13 @@
-# zulake: Inspect and Read 'Delta Lake' Tables
+# zulake: Inspect and Read Delta Lake Tables
 
-Opens a 'Delta Lake' table where it is stored, on 'Azure Data Lake
-Storage Gen2', 'Azure Blob Storage' or local disk, and returns what the
-table's own log records as data frames: its versions and commits, the
-files of each version with their partition values, statistics and
-deletion vectors, its schema, protocol and properties, and the changes
-between two versions. Reads the table's data too, pruning files by
-partition values and statistics before downloading any of them. The log
-is replayed in R, following the 'Delta Lake' protocol
+Opens a Delta Lake table where it is stored, on 'Azure Data Lake Storage
+Gen2', 'Azure Blob Storage' or local disk, and returns what the table's
+own log records as data frames: its versions and commits, the files of
+each version with their partition values, statistics and deletion
+vectors, its schema, protocol and properties, and the changes between
+two versions. Reads the table's data too, pruning files by partition
+values and statistics before downloading any of them. The log is
+replayed in 'R', following the Delta Lake protocol
 <https://github.com/delta-io/delta/blob/master/PROTOCOL.md>.
 
 ## See also
@@ -30,5 +30,8 @@ Authors:
 
 Other contributors:
 
-- The delta-rs authors (Delta test tables in tests/testthat/fixtures)
-  \[copyright holder\]
+- QP Hou (Copyright holder of the 'delta-rs' test tables in
+  tests/testthat/fixtures) \[copyright holder\]
+
+- The delta-rs authors (Other contributors to the 'delta-rs' test tables
+  in tests/testthat/fixtures) \[copyright holder\]

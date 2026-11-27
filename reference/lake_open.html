@@ -96,7 +96,9 @@ anonymous requests. Not used for local paths.</p></dd>
 class <code>zulake_table</code>. <code>lake_version()</code> returns the version a snapshot
 holds, a whole number as a double.</p>
 <p>Every error is a condition of class <code>zulake_error</code>, with a subclass
-that says why: <code>zulake_error_not_table</code> (no Delta log at <code>uri</code>),
+that says why: <code>zulake_error_argument</code> (an argument of the wrong type
+or value, such as a <code>version</code> that is not a whole number),
+<code>zulake_error_not_table</code> (no Delta log at <code>uri</code>),
 <code>zulake_error_version</code> (no such version, or one no longer in the log),
 <code>zulake_error_uri</code> (a URI zulake cannot open), <code>zulake_error_storage</code> (a file that cannot be
 read; from Azure with the HTTP <code>status</code> and Azure's error <code>code</code>),
@@ -147,6 +149,9 @@ and once more when Azure answers <code>401</code> (an expired token); a second
 in the <code>Authorization</code> header: it is not kept in the snapshot, printed,
 or put in any error. Without <code>credentials</code>, requests are anonymous, which
 only a public container answers.</p>
+<p>A file the log names by an absolute Azure URI is read only when it is
+in the table's own account and container; one elsewhere is a
+<code>zulake_error_uri</code> error, and no request is sent there.</p>
 <p>The snapshot does not keep <code>credentials</code> either; later calls on it, such
 as <code><a href="lake_read.html">lake_read()</a></code>, use it through the R session. A snapshot saved with
 <code><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">saveRDS()</a></code> and read in another session has none: open the table again.</p>

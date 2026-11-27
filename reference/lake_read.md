@@ -6,7 +6,7 @@ could match are read, then reads each one with qio, adds the partition
 columns from the log, keeps the rows `filter` is `TRUE` for, and binds
 the pieces. `lake_walk()` does the same one file at a time and calls
 `FUN` on each piece instead of binding them, for tables larger than
-memory.
+memory (but on Azure not larger than disk; see below).
 
 ## Usage
 
@@ -42,9 +42,9 @@ lake_walk(
 - int64:
 
   How 64-bit integers reach R, in data and partition columns: `"double"`
-  (the default), exact up to 2^53 (qio returns `NA` with a warning past
-  it, and a `long` partition value past 2^53 - 1 is an error of class
-  `zulake_error_int64`), or `"integer64"` from the bit64 package.
+  (the default), exact up to 2^53 - 1 (qio returns `NA` with a warning
+  past it, and a `long` partition value past 2^53 - 1 is an error of
+  class `zulake_error_int64`), or `"integer64"` from the bit64 package.
 
 - FUN:
 
@@ -100,7 +100,15 @@ A filter may also apply these row-wise functions to columns: `+`, `-`,
 columns, or use a logical column alone. R evaluates those on the rows
 after reading (they never prune), with base R's functions whatever the
 caller defines, and each must give one `TRUE`, `FALSE` or `NA` per row.
-Any other call with a column inside it, such as `max(x)`, `mean(x)`,
+Before R 4.3.0,
+[`as.character()`](https://rdrr.io/r/base/character.html),
+[`substr()`](https://rdrr.io/r/base/substr.html),
+[`toupper()`](https://rdrr.io/r/base/chartr.html),
+[`tolower()`](https://rdrr.io/r/base/chartr.html) and
+[`grepl()`](https://rdrr.io/r/base/grep.html) of a `timestamp` or
+`timestamp_ntz` column are errors of class `zulake_error_filter`, since
+there a time's text depends on the other times formatted with it. Any
+other call with a column inside it, such as `max(x)`, `mean(x)`,
 `rank(x)`, `cumsum(x)`, `duplicated(x)`, `x[1]`, `%in%` with a column on
 its right, or a function of your own, is an error of class
 `zulake_error_filter`: a filter is decided row by row, so the rows it
@@ -114,27 +122,41 @@ Inside the pruning subset, comparisons are exact: a `long`, `integer`,
 decimal numbers, digit by digit, and a `string` column in UTF-8 byte
 order whatever the session's collation, as the table's statistics are. A
 value given as text, such as `"12.30"`, is read as that decimal number;
-a double that has no exact decimal form of 15 digits (`1/3`,
-`0.1 + 0.2`) is an error asking for the value as text. A date or
-timestamp column takes a `Date` or `POSIXct`, or text such as
-`"2024-01-31"` or `"2024-01-31 12:00:00"` (UTC unless it gives an
-offset).
+a double that is not the number its 15-digit form reads back as (`1/3`,
+`0.1 + 0.2`) is an error asking for the value as text. R has already
+rounded a literal such as `9007199254740993` to a double
+(9007199254740992) before zulake sees it, so give such a value as text
+too. A `float` or `double` column takes only numbers: text there, such
+as `amount > "100"`, is an error, since R would compare it with the
+column as strings. A date or timestamp column takes a `Date` or
+`POSIXct`, or text such as `"2024-01-31"` or `"2024-01-31 12:00:00"`
+(UTC unless it gives an offset).
 
 Columns are typed as qio returns them (see
 [`qio::read_parquet()`](https://pedrobtz.github.io/qio/reference/read_parquet.html)),
 and partition columns as
 [`lake_files()`](https://pedrobtz.github.io/zulake/reference/lake_files.md)
 types them, except that a `decimal` of precision 15 or less, data or
-partition, is a double, which holds it exactly. Columns zulake does not
-return are not lost silently: nested columns (`struct`, `array`, `map`),
-and decimals of precision above 15 until qio reads them exactly. With
+partition, is a double, which holds it exactly. An `integer` data value
+of -2^31 reads as `NA`, R's integer `NA`, with a warning from qio:
+[`is.na()`](https://rdrr.io/r/base/NA.html) is `TRUE` for it and a
+comparison such as `x < 1` is not, and a file whose minimum may be -2^31
+is never pruned on its null count. Columns zulake does not return are
+not lost silently: nested columns (`struct`, `array`, `map`), and
+decimals of precision above 15 until qio reads them exactly. With
 `columns = NULL` they are left out, each named in a warning of class
 `zulake_warning_column_skipped` (fields `column` and `reason`); named in
 `columns` or used in `filter`, such a column is an error of class
 `zulake_error_column_unreadable` with the same fields.
 
-Data files are read in place on local disk; other stores download each
-file once per session, to the session's temporary directory.
+Data files are read in place on local disk. On Azure, every file left
+after pruning is downloaded to the session's temporary directory
+([`tempdir()`](https://rdrr.io/r/base/tempfile.html)) before the first
+piece is read, by `lake_walk()` too, and kept there for the rest of the
+session, so that a later read of the same file downloads nothing. The
+disk used is the size of the files left after pruning: `lake_walk()`
+reads tables larger than memory, not larger than the temporary
+directory's disk.
 
 Rows a deletion vector marks as deleted are never returned (see
 [`lake_deletion_vectors()`](https://pedrobtz.github.io/zulake/reference/lake_deletion_vectors.md));
