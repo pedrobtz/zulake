@@ -471,3 +471,179 @@ test_that("a name-mode field without a physical name is a corrupt log naming it 
   # Without column mapping no physical name is needed.
   expect_identical(lake_version(lake_open(hand_table(c(protocol_line(2L, 5L), metadata_line())))), 0)
 })
+
+# ---- a repeated key (#102) ---------------------------------------------------
+
+test_that("an add with a repeated key is a corrupt log at every version that replays it (#102)", {
+  # zujson's lookup would take the first `path`, deltalake 1.7.0 the last.
+  path <- fixture_table("duplicate-key-in-add", "hostile")
+  for (version in list(NULL, 2, 3, 4)) {
+    expect_no_snapshot(lake_open(path, version = version), "zulake_error_corrupt_log")
+  }
+  err <- tryCatch(lake_open(path), error = identity)
+  expect_identical(err$file, "00000000000000000002.json")
+  expect_identical(err$line, 2L)
+  expect_identical(err$key, "path")
+  expect_match(conditionMessage(err), "line 2 of log file \"00000000000000000002.json\"", fixed = TRUE)
+  expect_match(conditionMessage(err), "\"path\" twice", fixed = TRUE)
+  for (version in 0:1) {
+    expect_oracle(replay_files_frame(lake_open(path, version = version), "path"), "zl-basic", version, "add_actions")
+  }
+})
+
+test_that("two actions under one key on a line are a corrupt log (#102)", {
+  path <- fixture_table("duplicate-action-key", "hostile")
+  for (version in list(NULL, 2, 4)) {
+    expect_no_snapshot(lake_open(path, version = version), "zulake_error_corrupt_log")
+  }
+  err <- tryCatch(lake_open(path), error = identity)
+  expect_identical(err[c("file", "line", "key")], list(file = "00000000000000000002.json", line = 3L, key = "remove"))
+  expect_oracle(replay_files_frame(lake_open(path, version = 1), "path"), "zl-basic", 1, "add_actions")
+})
+
+test_that("a key repeated in partitionValues or tags is a corrupt log, and the same commit without it opens (#102)", {
+  meta <- metadata_line(c(id = "long", p = "string"), partition = "p")
+  cases <- list(
+    p = c('"partitionValues":{"p":"1","p":"2"}', '"partitionValues":{"p":"1"}'),
+    k = c('"partitionValues":{"p":"1"},"tags":{"k":"a","k":"b"}', '"partitionValues":{"p":"1"},"tags":{"k":"a","K":"b"}'),
+    # Keys are compared once unescaped.
+    path = c('"pa\\u0074h":"c.parquet","partitionValues":{"p":"1"}', '"partitionValues":{"p":"1"},"tags":{"path":"c"}')
+  )
+  for (key in names(cases)) {
+    lines <- sprintf('{"add":{"path":"b.parquet",%s,"size":1,"modificationTime":0,"dataChange":true}}', cases[[key]])
+    path <- hand_table(c(protocol_line(), meta, add_line("a.parquet", list(p = "0"))))
+    write_commit(path, 1, c(add_line("z.parquet", list(p = "0")), "", lines[1L]))
+    expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
+    err <- tryCatch(lake_open(path), error = identity)
+    # The line in the file, counting the blank one.
+    expect_identical(err[c("file", "line", "key")], list(file = "00000000000000000001.json", line = 3L, key = key), label = key)
+    expect_identical(lake_open(path, version = 0)$files$path, "a.parquet")
+    # The differential: the same commit with distinct keys opens.
+    write_commit(path, 1, c(add_line("z.parquet", list(p = "0")), "", lines[2L]))
+    expect_identical(sort(lake_open(path)$files$path), c("a.parquet", "b.parquet", "z.parquet"), label = key)
+  }
+})
+
+test_that("a repeated key is found in a line with a 64-bit integer, and at any depth (#102)", {
+  path <- hand_table()
+  write_commit(path, 1, '{"add":{"path":"b.parquet","partitionValues":{},"size":9007199254740993,"size":1,"modificationTime":0,"dataChange":true}}')
+  expect_identical(tryCatch(lake_open(path), error = identity)$key, "size")
+  write_commit(path, 1, '{"commitInfo":{"operationParameters":{"x":[{"a":{"deep":1,"deep":2}}]}}}')
+  expect_identical(tryCatch(lake_open(path), error = identity)$key, "deep")
+  write_commit(path, 1, '{"commitInfo":{"a":{"x":1},"b":{"x":1},"c":[{"x":1},{"x":2}]}}')
+  expect_identical(lake_open(path)$files$path, "part-0.parquet")
+})
+
+test_that("a _last_checkpoint with a repeated key is a corrupt log (#102)", {
+  # The protocol calls it invalid.
+  path <- hand_table()
+  write_json_checkpoint(path, 0, readLines(file.path(path, "_delta_log", "00000000000000000000.json")))
+  f <- file.path(path, "_delta_log", "_last_checkpoint")
+  writeLines('{"version":0,"size":3,"size":4}', f)
+  expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
+  err <- tryCatch(lake_open(path), error = identity)
+  expect_identical(err[c("file", "key")], list(file = "_last_checkpoint", key = "size"))
+  writeLines('{"version":0,"size":3}', f)
+  expect_identical(lake_open(path)$last_checkpoint[["size"]], 3L)
+})
+
+test_that("a compaction file with a repeated key is passed over for its commits, and refused when needed (#102)", {
+  path <- local_fixture_copy("zl-log-compaction")
+  name <- "00000000000000000001.00000000000000000003.compacted.json"
+  f <- file.path(path, "_delta_log", name)
+  lines <- readLines(f, warn = FALSE, encoding = "UTF-8")
+  j <- which(startsWith(lines, "{\"add\":{"))[1L]
+  lines[j] <- sub("{\"add\":{", "{\"add\":{\"size\":1,", lines[j], fixed = TRUE)
+  writeLines(lines, f, useBytes = TRUE)
+  for (version in oracle_versions("zl-log-compaction")) {
+    expect_oracle(replay_files_frame(lake_open(path, version = version), "path"), "zl-log-compaction", version, "add_actions")
+  }
+  unlink(file.path(path, "_delta_log", "00000000000000000002.json"))
+  for (version in 3:5) expect_no_snapshot(lake_open(path, version = version), "zulake_error_corrupt_log")
+  err <- tryCatch(lake_open(path), error = identity)
+  expect_identical(err[c("file", "line", "key")], list(file = name, line = j, key = "size"))
+})
+
+test_that("a JSON V2 checkpoint with a repeated key is passed over, and unreadable when needed (#102)", {
+  path <- hand_table()
+  write_commit(path, 1, add_line("part-1.parquet"))
+  name <- write_json_checkpoint(path, 1, c(
+    protocol_line(3L, 7L, "v2Checkpoint", "v2Checkpoint"), metadata_line(),
+    add_line("part-0.parquet"), sub("{\"add\":{", "{\"add\":{\"path\":\"part-9.parquet\",", add_line("part-1.parquet"), fixed = TRUE)
+  ))
+  expect_identical(lake_open(path)$files$path, c("part-0.parquet", "part-1.parquet"))
+  unlink(file.path(path, "_delta_log", "00000000000000000000.json"))
+  err <- tryCatch(lake_open(path), error = identity)
+  expect_s3_class(err, "zulake_error_checkpoint_unreadable")
+  cause <- err$parent
+  while (!is.null(cause) && !inherits(cause, "zulake_error_corrupt_log")) cause <- cause$parent
+  expect_identical(cause[c("file", "line", "key")], list(file = basename(name), line = 4L, key = "path"))
+})
+
+test_that("a key repeated in a random object of a random commit is refused there (#102)", {
+  withr::local_seed(20261127)
+  tables <- Filter(function(t) {
+    log <- list.files(file.path(fixture_table(t), "_delta_log"), pattern = "^[0-9]{20}[.]json$")
+    length(log) == max(oracle_versions(t)) + 1L
+  }, fixture_names("tables"))
+  for (i in seq_len(test_iterations(60L, 15L))) {
+    table <- sample(tables, 1L)
+    path <- local_commits_only(table)
+    unlink(list.files(file.path(path, "_delta_log"), pattern = "compacted", full.names = TRUE))
+    version <- sample(oracle_versions(table), 1L)
+    name <- sprintf("%020d.json", version)
+    f <- file.path(path, "_delta_log", name)
+    lines <- readLines(f, warn = FALSE, encoding = "UTF-8")
+    j <- sample.int(length(lines), 1L)
+    n <- length(gregexpr("{\"", lines[j], fixed = TRUE)[[1L]])
+    hit <- repeat_key_at(lines[j], sample.int(n, 1L))
+    if (is.null(hit)) next
+    lines[j] <- hit$line
+    writeLines(lines, f, useBytes = TRUE)
+    err <- tryCatch(lake_open(path), error = identity)
+    label <- paste(table, version, j, hit$key)
+    expect_s3_class(err, "zulake_error_corrupt_log")
+    expect_identical(err[c("file", "line", "key")], list(file = name, line = j, key = hit$key), label = label)
+  }
+})
+
+# ---- an add and a remove of one file in one commit (#103) ---------------------
+
+test_that("a commit that adds and removes one file is a corrupt log, in either order (#103)", {
+  # deltalake 1.7.0 keeps the first line's action; the protocol forbids both.
+  file <- "part-00000-e10fff6f-4360-42ee-8090-3f777493cca7-c000.snappy.parquet"
+  for (name in c("add-then-remove-same-file", "remove-then-add-same-file")) {
+    path <- fixture_table(name, "hostile")
+    for (version in list(NULL, 2, 3, 4)) {
+      expect_no_snapshot(lake_open(path, version = version), "zulake_error_corrupt_log")
+    }
+    err <- tryCatch(lake_open(path), error = identity)
+    expect_identical(err[c("file", "path")], list(file = "00000000000000000002.json", path = file), label = name)
+    expect_match(conditionMessage(err), "both adds and removes", fixed = TRUE)
+    expect_oracle(replay_files_frame(lake_open(path, version = 1), "path"), "zl-basic", 1, "add_actions")
+  }
+})
+
+test_that("a commit that removes a file and adds it with a new deletion vector opens (#103)", {
+  dv <- list(storageType = "u", pathOrInlineDv = "vBn[lx{q8@P<9BNH/isA", offset = 1L, sizeInBytes = 36L, cardinality = 2L)
+  path <- hand_table(c(protocol_line(3L, 7L, "deletionVectors", "deletionVectors"), metadata_line(), add_line("a.parquet")))
+  for (lines in list(c(remove_line("a.parquet"), add_line("a.parquet", dv = dv)), c(add_line("a.parquet", dv = dv), remove_line("a.parquet")))) {
+    write_commit(path, 1, lines)
+    files <- lake_files(lake_open(path))
+    expect_identical(files$path, "a.parquet")
+    expect_identical(files$action[[1L]]$deletionVector$pathOrInlineDv, dv$pathOrInlineDv)
+  }
+  # The same tuple twice, with a deletion vector, is refused.
+  write_commit(path, 1, c(add_line("a.parquet", dv = dv), remove_line("a.parquet", dv = dv)))
+  expect_no_snapshot(lake_open(path), "zulake_error_corrupt_log")
+})
+
+test_that("zujson keeps every member of an object under its decoded name, which the repeated-key check needs (#102)", {
+  # If zujson's default ever collapsed repeated keys, zulake's check (a walk
+  # over what zujson returns) would see none: this pins the contract.
+  text <- '{"a":1,"a\\u0062":{"ab":2},"ab":[{"c":1,"c":2}]}'
+  for (x in list(zujson::json_parse(text), zujson::json_parse_raw(charToRaw(text)), zujson::json_parse_ndjson(text)[[1L]])) {
+    expect_identical(names(x), c("a", "ab", "ab"))
+    expect_identical(names(x[[3L]][[1L]]), c("c", "c"))
+  }
+})

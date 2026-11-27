@@ -252,3 +252,18 @@
 * `filter = q`, with `q` a quoted expression, is now refused with a
   message that says how to pass one (`eval(bquote(...))`), instead of "a
   value must be a vector" (#92).
+* Fixed: a JSON object in the log with the same key twice, at any depth
+  (in a commit, a log compaction file, a JSON V2 checkpoint or
+  `_last_checkpoint`), was read with the key's first value, where
+  `deltalake` reads its last, so the two could see different live files.
+  It is now a `zulake_error_corrupt_log` whose `file`, `line` and `key`
+  fields name it (#102).
+* Fixed: a commit that both adds and removes one logical file (the same
+  `path` and deletion vector) left the file live, where `deltalake`
+  decides by line order. The protocol forbids it, and it is now a
+  `zulake_error_corrupt_log` with the `file` and the `path` (#103). A
+  file removed and added with a new deletion vector is still an update.
+* An Azure URI with a port, `:443` included, is still refused, but the
+  message now says that the port is the reason, and the
+  `zulake_error_uri` has a `port` field, instead of "cannot open
+  \"abfss\" URIs" (#92).

@@ -813,9 +813,9 @@ so that its table describes the commit that is submitted.
   correct, only slow, and `limit` bounds the cost.
 - The default port in an Azure URI (2026-11-27,
   [#92](https://github.com/pedrobtz/zulake/issues/92)). Accept `:443` on
-  the three forms, as `deltalake` 1.7.0 does on `abfss`, and when another
-  port is refused, say so in the message instead of "cannot open the
-  scheme". Refused today, which is safe ([§4.1](design.md#41-storage)).
+  the three forms, as `deltalake` 1.7.0 does on `abfss`. Refused today,
+  with a message that names the port, which is safe
+  ([§4.1](design.md#41-storage)).
 
 ## Blocking open questions
 

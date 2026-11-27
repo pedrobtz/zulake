@@ -436,6 +436,26 @@ test_that("other schemes and malformed Azure URIs are refused, and a SAS is not 
   }
 })
 
+test_that("an Azure URI with a port is refused, and the message names the port (#92)", {
+  local_azure_fake(zuhttp::zu_mock_transport(function(req) stop("no request may be sent")))
+  uris <- c(
+    "abfss://lake@acct.dfs.core.windows.net:443/t", "https://acct.blob.core.windows.net:443/lake/t",
+    "https://acct.dfs.core.windows.net:443/lake/t", "https://acct.blob.core.windows.net:8080/lake/t",
+    "abfss://user:SECRETPW@lake@acct.dfs.core.windows.net:443/t"
+  )
+  for (uri in uris) {
+    e <- catch_error(lake_open(uri), "zulake_error_uri")
+    port <- sub("^.*[.]net:([0-9]+)/.*$", "\\1", uri)
+    expect_identical(e$port, port, label = uri)
+    expect_match(conditionMessage(e), sprintf("port %s", port), fixed = TRUE, label = uri)
+    expect_false(grepl("cannot open", conditionMessage(e), fixed = TRUE), label = uri)
+    expect_no_token(e, "SECRETPW")
+  }
+  # A host that only looks like Azure's before the port is another scheme's refusal.
+  e <- catch_error(lake_open("https://acct.blob.core.windows.net:443@example.com/lake/t"), "zulake_error_uri")
+  expect_null(e$port)
+})
+
 test_that("account and container names are checked at their limits", {
   local_azure_fake(azure_fake(fake_root(), new.env()))
   ok <- function(account, container) {

@@ -293,3 +293,40 @@ local_copy_dir <- function(path, env = parent.frame()) {
   stopifnot(file.copy(path, dest, recursive = TRUE, copy.date = TRUE))
   file.path(dest, basename(path))
 }
+
+# The first key a parsed JSON value holds twice in one object, or NULL.
+# Independent of zulake's own check, for the repeated-key tests (#102).
+repeated_key <- function(x) {
+  if (!is.list(x)) {
+    return(NULL)
+  }
+  nm <- names(x)
+  if (!is.null(nm) && anyDuplicated(nm)) {
+    return(nm[anyDuplicated(nm)])
+  }
+  for (v in x) {
+    k <- repeated_key(v)
+    if (!is.null(k)) {
+      return(k)
+    }
+  }
+  NULL
+}
+
+# `line` with the key of the object starting at its `k`-th `{"` given a
+# second time, as `"<key>":null` ahead of the first; NULL when that `{"` is
+# not the start of an object (one inside a string). For the property test
+# of #102.
+repeat_key_at <- function(line, k) {
+  starts <- gregexpr("\\{\"((?:[^\"\\\\]|\\\\.)*)\":", line, perl = TRUE)[[1L]]
+  at <- starts[k]
+  len <- attr(starts, "match.length")[k]
+  key_text <- substr(line, at + 2L, at + len - 3L)
+  out <- paste0(substr(line, 1L, at), "\"", key_text, "\":null,", substring(line, at + 1L))
+  parsed <- tryCatch(zujson::json_parse(out), error = function(e) NULL)
+  key <- zujson::json_parse(paste0("\"", key_text, "\""))
+  if (is.null(parsed) || !identical(repeated_key(parsed), key)) {
+    return(NULL)
+  }
+  list(line = out, key = key)
+}

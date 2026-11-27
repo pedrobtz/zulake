@@ -130,9 +130,11 @@ test_that("the deletion vector id has the offset only when there is one", {
   expect_setequal(lake_open(path)$files$deletion_vector_id, c("uabc@9007199254740992", "uabc@9007199254740993"))
 })
 
-test_that("a commit that removes and re-adds one logical file leaves it live", {
+test_that("a file removed in one commit and added in the next is live, with no tombstone", {
+  # In one commit the two are a corrupt log (#103, test-hostile.R).
   path <- hand_table()
-  write_commit(path, 1, c(add_line("part-0.parquet", size = 200), remove_line("part-0.parquet")))
+  write_commit(path, 1, remove_line("part-0.parquet"))
+  write_commit(path, 2, add_line("part-0.parquet", size = 200))
   tbl <- lake_open(path)
   expect_identical(tbl$files$path, "part-0.parquet")
   expect_identical(tbl$files$action[[1L]][["size"]], 200L)

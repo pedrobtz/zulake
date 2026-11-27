@@ -132,4 +132,48 @@ stopifnot(sum(grepl(drop, lines, fixed = TRUE)) == 1L)
 lines <- sub(drop, "", lines, fixed = TRUE)
 write_lines(f, lines)
 
+# zl-basic's commit 2 adds part-...e10fff6f... (line 2) and removes
+# part-...8d16a499... (line 3); part-...ede65999... is live from commit 1.
+added <- "part-00000-e10fff6f-4360-42ee-8090-3f777493cca7-c000.snappy.parquet"
+removed <- "part-00000-8d16a499-c579-4a11-8219-2a6315388180-c000.snappy.parquet"
+live <- "part-00000-ede65999-d150-4938-a3e5-58b246210db5-c000.snappy.parquet"
+
+# An add whose `path` key is there twice: zujson's lookup takes the first,
+# deltalake the last (#102).
+d <- copy_table("zl-basic", "duplicate-key-in-add")
+f <- commit_path(d, 2L)
+lines <- read_lines(f)
+first <- sprintf("{\"add\":{\"path\":\"%s\",", added)
+stopifnot(startsWith(lines[2L], first))
+lines[2L] <- sub(first, sprintf("%s\"path\":\"%s\",", first, removed), lines[2L], fixed = TRUE)
+write_lines(f, lines)
+
+# A line holding two `remove` actions under one key: the second removes the
+# file commit 1 added (#102).
+d <- copy_table("zl-basic", "duplicate-action-key")
+f <- commit_path(d, 2L)
+lines <- read_lines(f)
+stopifnot(startsWith(lines[3L], "{\"remove\":{") && endsWith(lines[3L], "}}"))
+lines[3L] <- sprintf(
+  "%s,\"remove\":{\"path\":\"%s\",\"dataChange\":true,\"deletionTimestamp\":1795690965419}}",
+  substr(lines[3L], 1L, nchar(lines[3L]) - 1L),
+  live
+)
+write_lines(f, lines)
+
+# A commit that adds a file and then removes it, and one that removes it
+# and then adds it: the protocol forbids both (#103).
+remove_added <- sprintf(
+  "{\"remove\":{\"path\":\"%s\",\"dataChange\":true,\"deletionTimestamp\":1795690965419}}",
+  added
+)
+d <- copy_table("zl-basic", "add-then-remove-same-file")
+f <- commit_path(d, 2L)
+lines <- read_lines(f)
+stopifnot(length(lines) == 3L, startsWith(lines[2L], first))
+write_lines(f, c(lines, remove_added))
+d <- copy_table("zl-basic", "remove-then-add-same-file")
+f <- commit_path(d, 2L)
+write_lines(f, c(lines[1L], remove_added, lines[2:3]))
+
 cat("wrote", length(list.dirs(hostile, recursive = FALSE)), "hostile fixtures\n")
