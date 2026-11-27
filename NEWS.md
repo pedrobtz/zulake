@@ -233,3 +233,12 @@
   (as `deltalake` writes them) or in any case of `infinity` and `nan` with
   a sign are now read as infinities and NaN, instead of refusing the table
   as a corrupt log (#67).
+* Fixed: a relative path in the log with an empty, `.` or `..` segment
+  (`../other/part.parquet`) is now a `zulake_error_corrupt_log`, checked
+  for every file before any is read, instead of a file read outside the
+  table's root (#66).
+* Fixed: the session's download cache is keyed on the blob (account,
+  container and name), so the three URI forms of a table share it, and
+  serves a file only to the credentials that downloaded it; a copy is
+  written whole or not at all, and one changed on disk is downloaded
+  again (#72).

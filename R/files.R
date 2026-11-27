@@ -171,7 +171,8 @@ lake_count <- function(tbl, footers = FALSE) {
     return(counts$records)
   }
   if (footers) {
-    rows <- vapply(counts$missing, function(i) footer_rows(tbl, i), 0)
+    where <- lapply(counts$missing, function(i) resolve_file(tbl, i))
+    rows <- vapply(seq_along(where), function(k) footer_rows(tbl, counts$missing[k], where[[k]]), 0)
     known <- int64_sum(counts$per_file[-counts$missing], "double", "The number of records")
     return(int64_sum(c(known, rows), "double", "The number of records") - counts$deleted)
   }
@@ -386,7 +387,7 @@ string_map <- function(x) {
 # table's location joined with the relative path, which the log writes
 # percent-encoded (the protocol's "Path" rules).
 file_uri <- function(tbl, paths) {
-  absolute <- grepl("^[A-Za-z][A-Za-z0-9+.-]*:", paths) | startsWith(paths, "/")
+  absolute <- vapply(paths, is_absolute_path, NA, USE.NAMES = FALSE)
   out <- paths
   rel <- !absolute
   out[rel] <- paste0(sub("/+$", "", tbl$storage$root), "/", percent_decode(paths[rel]))

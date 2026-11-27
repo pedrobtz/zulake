@@ -187,12 +187,14 @@ read_scan <- function(tbl, columns, expr, env, int64) {
     why <- type_unreadable(types[[col]])
     if (!is.na(why)) reasons[[col]] <- why
   }
+  # Every file's location is checked before anything is read (#66, #76).
+  where <- lapply(keep, function(i) resolve_file(tbl, i))
   # Deletion vectors are read and checked before any data file, so a bad
   # one returns no rows, from lake_walk() too.
   has_dv <- !vapply(tbl$files$action[keep], function(a) is.null(a[["deletionVector"]]), NA)
   deleted <- vector("list", length(keep))
   deleted[has_dv] <- dv_rows_of(tbl, keep[has_dv])
-  paths <- vapply(keep, function(i) fetch_file(tbl, i), "")
+  paths <- vapply(seq_along(keep), function(k) fetch_file(tbl, keep[k], where[[k]]), "")
   data_cols <- setdiff(need, c(pcols, names(reasons)))
   plans <- lapply(paths, function(p) qio::read_plan(p, int64 = int64))
   for (k in seq_along(paths)) {
@@ -385,38 +387,97 @@ bind_pieces <- function(pieces, scan) {
 
 cache_env <- new.env(parent = emptyenv())
 
-# The local path of live file `i`: the file itself on local disk, otherwise a
-# copy downloaded through the storage backend once per session (design
-# section 4.3), keyed by the table, path, size and modification time, which
-# never change for a Delta data file.
-fetch_file <- function(tbl, i) {
-  a <- tbl$files$action[[i]]
-  path <- a[["path"]]
+# The credentials function a backend's requests use (NULL for anonymous
+# ones and for other backends). A cached file is served only to the same
+# function that downloaded it, so a snapshot opened with other credentials
+# (another principal, a path-scoped token) downloads it itself, and is
+# refused if Azure refuses it (#72). A snapshot restored in another session
+# gets zulake_error_auth here, as on its next request.
+cache_credentials <- function(storage) {
+  handle <- storage$location$handle
+  if (identical(storage$kind, "azure") && !is.null(handle)) credential_entry(handle)$fn
+}
+
+# Where live file `i` is, before anything is read: list(local) for an
+# absolute local path, or list(storage, rel, key) for a file of a backend,
+# read in place when the backend has local paths and downloaded otherwise. Refusals come here, so
+# read_scan() and lake_count() make them for every file before reading any:
+# a relative path with an empty, "." or ".." segment (#66) and an absolute
+# path off the table's storage (#44, #76).
+resolve_file <- function(tbl, i) {
+  path <- tbl$files$action[[i]][["path"]]
   storage <- tbl$storage
   if (is_absolute_path(path)) {
     remote <- storage_for_absolute(storage, path)
     if (is.null(remote)) {
-      local <- absolute_local_path(path)
-      if (!file.exists(local) || dir.exists(local)) {
-        zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path)
-      }
-      return(local)
+      return(list(local = absolute_local_path(path), path = path))
     }
     storage <- remote$storage
     rel <- remote$rel
   } else {
     rel <- percent_decode(path)
+    if (bad_relative_path(rel)) {
+      zulake_abort(
+        "corrupt_log",
+        sprintf("file %s has an empty, \".\" or \"..\" path segment, which would leave the table's root.", format_string(path)),
+        file = path
+      )
+    }
   }
-  if (is.function(storage$local_path)) {
-    return(storage$local_path(rel))
+  list(storage = storage, rel = rel, path = path, key = cache_key(storage, rel))
+}
+
+# Whether a relative path (decoded) has an empty, "." or ".." segment.
+bad_relative_path <- function(rel) {
+  !nzchar(rel) || any(strsplit(rel, "/", fixed = TRUE)[[1L]] %in% c("", ".", "..")) || endsWith(rel, "/")
+}
+
+# What identifies a downloaded file in the session cache: on Azure the blob
+# itself (account, container, full decoded name), so that the three URI
+# forms of one table, a host in upper case and an encoded root share it
+# (#72); for another backend, its root and the path. The credentials that
+# fetched it are checked apart (cache_credentials()).
+cache_key <- function(storage, rel) {
+  loc <- storage$location
+  parts <- if (identical(storage$kind, "azure")) {
+    blob <- if (nzchar(loc$path)) paste0(loc$path, "/", rel) else rel
+    c("azure", loc$account, loc$container, blob)
+  } else {
+    c(storage$kind %||% "", storage$root, rel)
   }
+  paste(parts, collapse = "\x1f")
+}
+
+cache_env <- new.env(parent = emptyenv())
+
+# The local path of live file `i`, from resolve_file(): the file itself on
+# local disk, otherwise a copy downloaded through the storage backend once
+# per session (design section 4.3) into tempdir(), keyed by cache_key(), the
+# size and the modification time, which never change for a Delta data file.
+# A copy is written under a temporary name and renamed when whole, and one
+# whose size on disk is not the log's is downloaded again.
+fetch_file <- function(tbl, i, where = resolve_file(tbl, i)) {
+  path <- where$path
+  if (!is.null(where$local)) {
+    local <- where$local
+    if (!file.exists(local) || dir.exists(local)) {
+      zulake_abort("storage", sprintf("cannot read %s: no such file.", format_string(path)), path = path)
+    }
+    return(local)
+  }
+  if (is.function(where$storage$local_path)) {
+    return(where$storage$local_path(where$rel))
+  }
+  a <- tbl$files$action[[i]]
   size <- a[["size"]]
-  key <- paste(storage$root, rel, int_text(size %||% -1), int_text(a[["modificationTime"]] %||% -1), sep = "\x1f")
+  key <- paste(where$key, int_text(size %||% -1), int_text(a[["modificationTime"]] %||% -1), sep = "\x1f")
+  fn <- cache_credentials(where$storage)
   hit <- cache_env$files[[key]]
-  if (!is.null(hit) && file.exists(hit)) {
-    return(hit)
+  if (!is.null(hit) && identical(hit$fn, fn) && file.exists(hit$file) &&
+      (!is_whole(size) || identical(file.size(hit$file), as.numeric(size)))) {
+    return(hit$file)
   }
-  bytes <- storage$get(rel)
+  bytes <- where$storage$get(where$rel)
   if (is_whole(size) && length(bytes) != size) {
     zulake_abort(
       "storage",
@@ -430,11 +491,18 @@ fetch_file <- function(tbl, i) {
   dir <- file.path(tempdir(), "zulake-cache")
   dir.create(dir, showWarnings = FALSE)
   f <- tempfile("data-", tmpdir = dir, fileext = ".parquet")
-  writeBin(bytes, f)
+  part <- paste0(f, ".part")
+  ok <- FALSE
+  on.exit(if (!ok) unlink(part), add = TRUE)
+  writeBin(bytes, part)
+  if (!file.rename(part, f)) {
+    zulake_abort("storage", sprintf("cannot write a copy of %s to %s.", format_string(path), format_string(dir)), path = path)
+  }
+  ok <- TRUE
   if (is.null(cache_env$files)) {
     cache_env$files <- list()
   }
-  cache_env$files[[key]] <- f
+  cache_env$files[[key]] <- list(file = f, fn = fn)
   f
 }
 
@@ -462,8 +530,8 @@ absolute_local_path <- function(path) {
 }
 
 # The number of rows of live file `i`, from its Parquet footer.
-footer_rows <- function(tbl, i) {
-  pf <- qio::open_parquet(fetch_file(tbl, i))
+footer_rows <- function(tbl, i, where = resolve_file(tbl, i)) {
+  pf <- qio::open_parquet(fetch_file(tbl, i, where))
   on.exit(qio::close_parquet(pf))
   as.numeric(dim(pf)[1L])
 }
