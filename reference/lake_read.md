@@ -75,7 +75,9 @@ say, and a missing statistic only means a file is read. On a column
 returned as a list (a `binary` column),
 [`is.na()`](https://rdrr.io/r/base/NA.html) is `TRUE` where the value is
 null (`NULL`), as Delta means it, where base R's
-[`is.na()`](https://rdrr.io/r/base/NA.html) on a list is `FALSE`.
+[`is.na()`](https://rdrr.io/r/base/NA.html) on a list is `FALSE`, in
+every part of a filter (`is.na(b) == TRUE` too), and `b %in% NA` keeps
+the null values.
 
 A filter may also apply these row-wise functions to columns: `+`, `-`,
 `*`, `/`, `%%`, `%/%`, `^`,
@@ -143,13 +145,15 @@ partition, is a double, which holds it exactly. An `integer` data value
 of -2^31 reads as `NA`, R's integer `NA`, with a warning from qio:
 [`is.na()`](https://rdrr.io/r/base/NA.html) is `TRUE` for it and a
 comparison such as `x < 1` is not, and a file whose minimum may be -2^31
-is never pruned on its null count. Columns zulake does not return are
-not lost silently: nested columns (`struct`, `array`, `map`), and
-decimals of precision above 15 until qio reads them exactly. With
-`columns = NULL` they are left out, each named in a warning of class
-`zulake_warning_column_skipped` (fields `column` and `reason`); named in
-`columns` or used in `filter`, such a column is an error of class
-`zulake_error_column_unreadable` with the same fields.
+is never pruned on its null count. So is a `long` data value past 2^53 -
+1 in magnitude with `int64 = "double"`, or -2^63 with `"integer64"`, and
+a file whose bounds may hold one is never pruned on its null count.
+Columns zulake does not return are not lost silently: nested columns
+(`struct`, `array`, `map`), and decimals of precision above 15 until qio
+reads them exactly. With `columns = NULL` they are left out, each named
+in a warning of class `zulake_warning_column_skipped` (fields `column`
+and `reason`); named in `columns` or used in `filter`, such a column is
+an error of class `zulake_error_column_unreadable` with the same fields.
 
 Data files are read in place on local disk. On Azure, every file left
 after pruning is downloaded to the session's temporary directory

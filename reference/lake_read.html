@@ -124,7 +124,8 @@ only decide what is read: the rows returned are the rows <code>filter</code> is
 <code>TRUE</code> for whatever the statistics say, and a missing statistic only
 means a file is read. On a column returned as a list (a <code>binary</code>
 column), <code><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na()</a></code> is <code>TRUE</code> where the value is null (<code>NULL</code>), as Delta
-means it, where base R's <code><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na()</a></code> on a list is <code>FALSE</code>.</p>
+means it, where base R's <code><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na()</a></code> on a list is <code>FALSE</code>, in every part of
+a filter (<code>is.na(b) == TRUE</code> too), and <code>b %in% NA</code> keeps the null values.</p>
 <p>A filter may also apply these row-wise functions to columns: <code>+</code>, <code>-</code>,
 <code>*</code>, <code>/</code>, <code>%%</code>, <code>%/%</code>, <code>^</code>, <code><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs()</a></code>, <code><a href="https://rdrr.io/r/base/Round.html" class="external-link">round()</a></code>, <code><a href="https://rdrr.io/r/base/Round.html" class="external-link">floor()</a></code>, <code><a href="https://rdrr.io/r/base/Round.html" class="external-link">ceiling()</a></code>,
 <code><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">sqrt()</a></code>, <code><a href="https://rdrr.io/r/base/Log.html" class="external-link">exp()</a></code>, <code><a href="https://rdrr.io/r/base/Log.html" class="external-link">log()</a></code>, <code><a href="https://rdrr.io/r/base/nchar.html" class="external-link">nchar()</a></code>, <code><a href="https://rdrr.io/r/base/chartr.html" class="external-link">toupper()</a></code>, <code><a href="https://rdrr.io/r/base/chartr.html" class="external-link">tolower()</a></code>,
@@ -165,7 +166,9 @@ of precision 15 or less, data or partition, is a double, which holds it
 exactly. An <code>integer</code> data value of -2^31 reads as <code>NA</code>, R's integer
 <code>NA</code>, with a warning from qio: <code><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na()</a></code> is <code>TRUE</code> for it and a comparison
 such as <code>x &lt; 1</code> is not, and a file whose minimum may be -2^31 is never
-pruned on its null count. Columns zulake does not return are not lost silently: nested
+pruned on its null count. So is a <code>long</code> data value past 2^53 - 1 in
+magnitude with <code>int64 = "double"</code>, or -2^63 with <code>"integer64"</code>, and a
+file whose bounds may hold one is never pruned on its null count. Columns zulake does not return are not lost silently: nested
 columns (<code>struct</code>, <code>array</code>, <code>map</code>), and decimals of precision above 15
 until qio reads them exactly. With <code>columns = NULL</code> they are left out, each named in a
 warning of class <code>zulake_warning_column_skipped</code> (fields <code>column</code> and

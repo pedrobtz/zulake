@@ -395,3 +395,37 @@
   message now says that the port is the reason, and the
   `zulake_error_uri` has a `port` field, instead of “cannot open "abfss"
   URIs” ([\#92](https://github.com/pedrobtz/zulake/issues/92)).
+- Fixed: a `long` value past 2^53 - 1 in magnitude, which qio reads as
+  `NA` with `int64 = "double"`, and -2^63, which it reads as bit64’s
+  `NA` with `"integer64"`, was missed by
+  [`is.na()`](https://rdrr.io/r/base/NA.html), `%in% NA` and `| is.na()`
+  filters whenever its file’s null count was 0. Such a file is now kept
+  unless its bounds are known and inside what the mode holds, as for
+  `integer` in [\#79](https://github.com/pedrobtz/zulake/issues/79)
+  ([\#111](https://github.com/pedrobtz/zulake/issues/111)).
+- Changed: a `decimal` partition value that is not digits with an
+  optional sign and fraction (`.5`, `5.`, `-.5`, `1e2`), or that has
+  more fraction digits than the scale or more integer digits than the
+  precision minus the scale (`12.345` in a `decimal(10,2)`), is now a
+  `zulake_error_corrupt_log` naming the value, as `deltalake` refuses
+  it. Such a value was read as a number that no filter on the column
+  matched ([\#112](https://github.com/pedrobtz/zulake/issues/112)).
+- Fixed: [`is.na()`](https://rdrr.io/r/base/NA.html) of a `binary`
+  column is `TRUE` for a null value in every part of a filter, as it was
+  alone: `is.na(b) == TRUE`, `xor(is.na(b), FALSE)` and the other
+  row-evaluated forms used base R’s
+  [`is.na()`](https://rdrr.io/r/base/NA.html), which is `FALSE` for
+  every element of a list. `b %in% NA` now keeps the null values, as
+  `s %in% NA` does for a string column
+  ([\#113](https://github.com/pedrobtz/zulake/issues/113)).
+- Fixed: filters on `decimal`, `long` and the other exact columns gave
+  no rows or failed with a base R error when the session’s `LC_NUMERIC`
+  has a comma for its decimal point
+  (`Sys.setlocale("LC_NUMERIC", "de_DE.UTF-8")`): the numbers zulake
+  writes as text to compare them now always use “.”
+  ([\#114](https://github.com/pedrobtz/zulake/issues/114)).
+- Fixed: a statistic whose JSON type is not the column’s (`true` as the
+  maximum of a `long` column, a number for a `string` column, an array)
+  was used as a bound, so a filter could prune a file holding matching
+  rows. It is now unknown and the file is kept, as with a missing
+  statistic ([\#115](https://github.com/pedrobtz/zulake/issues/115)).
