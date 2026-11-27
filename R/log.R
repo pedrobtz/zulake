@@ -134,8 +134,58 @@ read_actions <- function(storage, name) {
         file = name
       )
     }
+    key <- repeated_key(a)
+    if (!is.null(key)) {
+      line <- file_line(bytes, i)
+      zulake_abort(
+        "corrupt_log",
+        sprintf(
+          "line %d of log file %s has an object with the key %s twice.",
+          line,
+          format_string(name),
+          format_string(key)
+        ),
+        file = name,
+        line = line,
+        key = key
+      )
+    }
   }
   actions
+}
+
+# The first key that a parsed JSON value holds twice in one object, at any
+# depth, or NULL. zujson keeps every member of an object, under its name
+# once unescaped, so a repeated key is a repeated name here (#102).
+repeated_key <- function(x) {
+  nm <- names(x)
+  if (!is.null(nm)) {
+    d <- anyDuplicated(nm)
+    if (d) {
+      return(nm[d])
+    }
+  }
+  for (v in x) {
+    if (is.list(v)) {
+      key <- repeated_key(v)
+      if (!is.null(key)) {
+        return(key)
+      }
+    }
+  }
+  NULL
+}
+
+# The line of a JSON log file that holds its `i`-th record: zujson skips
+# blank lines (nothing but spaces, tabs and CRs) and a byte order mark that
+# starts the file, so the two can differ.
+file_line <- function(bytes, i) {
+  bom <- as.raw(c(0xef, 0xbb, 0xbf))
+  if (length(bytes) >= 3L && identical(bytes[1:3], bom)) {
+    bytes <- bytes[-(1:3)]
+  }
+  lines <- strsplit(rawToChar(bytes), "\n", fixed = TRUE, useBytes = TRUE)[[1L]]
+  which(!grepl("^[ \t\r]*$", lines, useBytes = TRUE))[i]
 }
 
 # A log file's bytes with every integer past 2^53 - 1 rewritten as a marked
@@ -174,6 +224,19 @@ read_last_checkpoint <- function(storage, entries) {
       )
     }
   )
+  key <- repeated_key(x)
+  if (!is.null(key)) {
+    # The protocol calls such a _last_checkpoint invalid.
+    zulake_abort(
+      "corrupt_log",
+      sprintf(
+        "_last_checkpoint has an object with the key %s twice.",
+        format_string(key)
+      ),
+      file = name,
+      key = key
+    )
+  }
   if (
     !is.list(x) ||
       !is_whole(x[["version"]]) ||

@@ -123,14 +123,18 @@ test_that("an independent Parquet reader agrees with the oracle's encoding", {
 
 test_that("each hostile log differs from the table it was made from", {
   sources <- c(
+    "add-then-remove-same-file" = "zl-basic",
     "column-mapping-no-physical-name" = "column_mapping",
     "corrupt-commit" = "zl-basic",
+    "duplicate-action-key" = "zl-basic",
+    "duplicate-key-in-add" = "zl-basic",
     "dv-bad-checksum" = "table-with-dv-small",
     "dv-bad-magic" = "table-with-dv-small",
     "dv-size-past-file" = "table-with-dv-small",
     "last-checkpoint-past-log" = "zl-checkpoint",
     "missing-checkpoint-part" = "zl-multipart-checkpoint",
     "partition-value-wrong-type" = "zl-partitioned",
+    "remove-then-add-same-file" = "zl-basic",
     "truncated-commit" = "zl-basic"
   )
   expect_identical(fixture_names("hostile"), names(sources))

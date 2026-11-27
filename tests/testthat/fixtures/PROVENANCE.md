@@ -67,14 +67,18 @@ DAT (`delta-incubator/dat`) is not used: it has no licence (design §12, Q3).
 
 | Log | From | Change |
 | --- | --- | --- |
+| `add-then-remove-same-file` | `zl-basic` | commit 2 ends with a `remove` of the file its `add` (line 2) adds, which the protocol forbids in one commit (#103) |
 | `column-mapping-no-physical-name` | `column_mapping` | the `delta.columnMapping.physicalName` of field `letter` removed from commit 0's schema; commit 2's schema has it (#77) |
 | `corrupt-commit` | `zl-basic` | line 2 of commit 2 is not JSON |
+| `duplicate-action-key` | `zl-basic` | line 3 of commit 2 holds a second `remove` key, removing the file commit 1 added (#102) |
+| `duplicate-key-in-add` | `zl-basic` | the `add` on line 2 of commit 2 has a second `path` key, naming the file line 3 removes (#102) |
 | `dv-bad-checksum` | `table-with-dv-small` | the deletion vector file's last byte (its CRC-32) flipped |
 | `dv-bad-magic` | `table-with-dv-small` | the deletion vector's magic number (file bytes 6 to 9) zeroed |
 | `dv-size-past-file` | `table-with-dv-small` | the descriptor's `sizeInBytes` 4096, past the end of its 45-byte file |
 | `last-checkpoint-past-log` | `zl-checkpoint` | `_last_checkpoint` names version 99; the log ends at 12 |
 | `missing-checkpoint-part` | `zl-multipart-checkpoint` | part 2 of the three-part checkpoint deleted |
 | `partition-value-wrong-type` | `zl-partitioned` | an integer partition value `"one"` in commit 1 |
+| `remove-then-add-same-file` | `zl-basic` | commit 2 has a `remove` of the file its `add` adds, on the line before it (#103) |
 | `truncated-commit` | `zl-basic` | commit 4 cut to its first half, mid-line |
 <!-- markdownlint-enable MD013 -->
 

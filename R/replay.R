@@ -161,7 +161,7 @@ replay <- function(plan, read, checkpoint = NULL) {
   state$txns <- list()
   state$domains <- list()
   if (!is.null(checkpoint)) {
-    apply_file(state, checkpoint$name, checkpoint$actions)
+    apply_file(state, checkpoint$name, checkpoint$actions, commit = FALSE)
   }
   for (i in seq_len(nrow(plan))) {
     commits <- plan$fallback[[i]]
@@ -191,12 +191,14 @@ replay <- function(plan, read, checkpoint = NULL) {
   state
 }
 
-# One commit (or compaction) file. File actions are applied removes first,
-# then adds, so a file the same commit removes and re-adds (a new deletion
-# vector, new statistics) is live afterwards: actions inside one commit have
-# no order, and an add and a remove of one logical file in the same commit
-# means "replaced".
-apply_file <- function(st, name, actions) {
+# One commit, compaction or checkpoint file. Actions inside one file have no
+# order, and the protocol forbids an add and a remove of one logical file
+# (`(path, deletionVector.uniqueId)`) in one commit: in a commit or a
+# compaction file that is a corrupt log (#103). The same path with another
+# deletion vector is another logical file, the legal update of its vector.
+# Removes are then applied before adds. A checkpoint (`commit = FALSE`) is
+# the reconciled state, and is not checked here.
+apply_file <- function(st, name, actions, commit = TRUE) {
   adds <- list()
   removes <- list()
   seen_protocol <- FALSE
@@ -245,6 +247,24 @@ apply_file <- function(st, name, actions) {
       } else {
         st$domains[[dm[["domain"]]]] <- dm
       }
+    }
+  }
+  if (commit && length(adds) && length(removes)) {
+    added <- vapply(adds, file_key, "")
+    both <- match(vapply(removes, file_key, ""), added)
+    both <- both[!is.na(both)]
+    if (length(both)) {
+      path <- adds[[both[1L]]][["path"]]
+      zulake_abort(
+        "corrupt_log",
+        sprintf(
+          "log file %s both adds and removes %s, which the protocol forbids in one commit.",
+          format_string(name),
+          format_string(path)
+        ),
+        file = name,
+        path = path
+      )
     }
   }
   for (r in removes) {

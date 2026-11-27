@@ -36,6 +36,20 @@ storage_for <- function(uri, credentials = NULL) {
       parts <- parse_azure_uri(uri)
       return(storage_azure(parts, credential_handle(credentials, parts$uri)))
     }
+    port <- azure_uri_port(uri)
+    if (!is.null(port)) {
+      zulake_abort(
+        "uri",
+        sprintf(
+          paste(
+            "An Azure URI must not have a port, and this one has port %s:",
+            "give it without one, as Azure prints it."
+          ),
+          port
+        ),
+        port = port
+      )
+    }
     scheme <- sub("://.*$", "", uri)
     zulake_abort(
       "uri",

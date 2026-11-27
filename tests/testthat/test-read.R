@@ -39,9 +39,10 @@ test_that("int64 = \"integer64\" reads 64-bit data and partition values exactly"
   big <- "9007199254740993"
   write_commit(path, 5, c(
     metadata_line(c(id = "long", label = "string", x = "double", p = "long"), partition = "p"),
-    vapply(files$path, function(p) remove_line(p), ""),
-    add_line(files$path[1L], partition = list(p = big), size = files$size_bytes[1L])
+    vapply(files$path, function(p) remove_line(p), "")
   ))
+  # The protocol forbids an add and a remove of one file in one commit (#103).
+  write_commit(path, 6, add_line(files$path[1L], partition = list(p = big), size = files$size_bytes[1L]))
   tbl <- lake_open(path)
   expect_error(lake_read(tbl), class = "zulake_error_int64")
   r <- lake_read(tbl, int64 = "integer64")
@@ -96,7 +97,8 @@ test_that("the columns that cannot be read are found from qio's read plan, not f
   types[["mp"]] <- "integer"
   types[["dec38"]] <- "double"
   file <- lake_files(tbl, stats = FALSE)
-  write_commit(path, 1, c(metadata_line(types), remove_line(file$path), add_line(file$path, size = file$size_bytes)))
+  write_commit(path, 1, c(metadata_line(types), remove_line(file$path)))
+  write_commit(path, 2, add_line(file$path, size = file$size_bytes))
   tbl <- lake_open(path)
   got <- suppressMessages(collect_warnings(lake_read(tbl)))
   w <- Filter(function(w) inherits(w, "zulake_warning_column_skipped"), got$warnings)
@@ -120,7 +122,9 @@ test_that("decimals of precision 15 or less are doubles, data and partition colu
   write_commit(path, 5, c(
     metadata_line(c(id = "long", label = "string", x = "double", p = "decimal(15,3)", w = "decimal(16,3)"),
                   partition = c("p", "w")),
-    vapply(files$path, function(p) remove_line(p), ""),
+    vapply(files$path, function(p) remove_line(p), "")
+  ))
+  write_commit(path, 6, c(
     add_line(files$path[1L], partition = list(p = "123456789012.345", w = "1.5"), size = files$size_bytes[1L]),
     add_line(files$path[2L], partition = list(p = "-0.001", w = "2"), size = files$size_bytes[2L])
   ))
@@ -308,10 +312,10 @@ test_that("decimal precision straddles 15 in reads and in statistics", {
   write_commit(path, 5, c(
     metadata_line(c(id = "long", label = "string", x = "double", d14 = "decimal(14,2)", d15 = "decimal(15,2)",
                     d16 = "decimal(16,2)"), partition = c("d14", "d15", "d16")),
-    vapply(files$path, function(p) remove_line(p), ""),
-    add_line(files$path[1L], partition = list(d14 = "123456789012.34", d15 = "1234567890123.45", d16 = "12345678901234.56"),
-             size = files$size_bytes[1L])
+    vapply(files$path, function(p) remove_line(p), "")
   ))
+  write_commit(path, 6, add_line(files$path[1L], partition = list(d14 = "123456789012.34", d15 = "1234567890123.45",
+                                                                d16 = "12345678901234.56"), size = files$size_bytes[1L]))
   tbl <- lake_open(path)
   got <- collect_warnings(lake_read(tbl))
   expect_identical(vapply(got$warnings, function(w) w$column, ""), "d16")

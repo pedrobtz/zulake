@@ -164,11 +164,11 @@ Settled in Stage 6 (2026-11-26):
   one of these other forms, even with the default port
   (`https://<account>.blob.core.windows.net:443/...`,
   `abfss://<container>@<account>.dfs.core.windows.net:443/...`), and is
-  refused too. The message then says that zulake cannot open the scheme,
-  not that the URI has a port. `deltalake` 1.7.0 accepts `:443` on the
-  `abfss` form. Nothing is read wrongly: dropping the port opens the
-  table (limit, 2026-11-27, #92; accepting the default port, with a
-  message that names the port, is after 0.1.0).
+  refused too, as a `zulake_error_uri` whose message names the port as
+  the reason and whose `port` field holds its digits (2026-11-27, #92).
+  `deltalake` 1.7.0 accepts `:443` on the `abfss` form. Nothing is read
+  wrongly: dropping the port opens the table (limit, 2026-11-27, #92;
+  accepting the default port is after 0.1.0).
 - **Requests.** `x-ms-version: 2023-11-03`, the version `object_store`
   (`deltalake`'s storage layer) sends. `List Blobs` with `prefix`,
   `delimiter=/` and `include=metadata`, following `NextMarker` until it is
@@ -270,10 +270,49 @@ so a file rewritten with a new deletion vector is one live row, not two.
 Settled in Stage 2 (2026-11-26), each where the protocol leaves a reader
 a choice:
 
-- *Inside one commit*, removes are applied before adds, so a logical file
-  a commit both removes and re-adds is live afterwards. Why: actions in a
-  commit have no order, and "remove and add the same file" can only mean
-  "replace it" (new statistics, a metadata update).
+- *Inside one commit*, an `add` and a `remove` of one logical file (the
+  same `(path, deletionVector.uniqueId)`), in either order, are a
+  `zulake_error_corrupt_log` naming the file and the `path`; a log
+  compaction file is held to the same rule, a checkpoint (reconciled
+  state) is not. The same path removed with one deletion vector and added
+  with another is two logical files, the legal update of its vector, and
+  stays live. Removes are then applied before adds, which no longer
+  decides anything for one logical file. Why: PROTOCOL.md ("Delta Log
+  Entries") says a log entry MUST NOT hold an add and a remove that
+  reconcile with each other, so such a commit has no meaning to recover,
+  and `deltalake` 1.7.0 keeps the first line's action, so one of the two
+  orders gave other rows than zulake. This replaces the Stage 2 rule
+  (2026-11-26) that read such a commit as "replace it" (2026-11-27,
+  #103). Two adds, or two removes, of one tuple in one commit, which the
+  same sentence of the protocol covers, are not refused: replay keeps one
+  of them either way.
+- *A JSON object with a repeated key is a corrupt log* (2026-11-27,
+  #102, on a design adviser's recommendation). In any JSON file of the
+  log (a commit, a log compaction file, a JSON V2 checkpoint,
+  `_last_checkpoint`) an object that holds the same key twice, at any
+  depth, is refused as `zulake_error_corrupt_log` before any action of
+  that file is applied. Its `file` and `key` fields name it, and `line`
+  the line of the file (blank lines counted) for every file but
+  `_last_checkpoint`, which is one JSON document. Why: RFC 8259 leaves
+  such an object's meaning to the parser, `deltalake` keeps the last
+  value where a lookup by name in R takes the first, so two readers would
+  see different live files and neither would say so; the protocol itself
+  calls a `_last_checkpoint` with duplicate keys invalid. Keys are
+  compared after JSON unescaping, byte for byte (`"a\u0062"` and `"ab"`
+  are one key; no Unicode normalisation). The check is a walk in R over
+  what `zujson` returns, which keeps every member of an object under its
+  decoded name (its default `"keep"`); it depends on that behaviour,
+  which the tests pin, and costs about three times the parse on a JSON
+  file (1.8 s against 0.6 s on a commit of 100,000 adds; Parquet
+  checkpoints are not concerned). An opt-in strict mode in `zujson` was
+  the alternative: it would be near free, but would pull `zujson`'s Stage
+  5.2 forward and put a `zujson` CRAN release before zulake 0.1.0. A
+  file with a repeated key is a read failure like a file that is not
+  JSON: a compaction file is passed over for its commits, and a
+  checkpoint for an earlier one or commit 0, as above. When `zujson`
+  offers `duplicate_keys = "error"`, the walk is replaced by that option
+  and the tests stay. The JSON held in strings (`schemaString`, `stats`)
+  is not checked.
 - *Log compaction files* replace the commits they cover whenever one
   starts where replay stands and ends at or before the target version
   (the one reaching furthest, of several). Why: the protocol makes them

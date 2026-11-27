@@ -50,6 +50,23 @@ is_azure_uri <- function(uri) {
     )
 }
 
+# The port (its digits) of a URI that would be one of the three Azure forms
+# without it, or NULL. Such a URI is refused, `:443` too, until after 0.1.0
+# (design section 4.1); only the digits are quoted, never the URI.
+azure_uri_port <- function(uri) {
+  forms <- c(
+    "^abfss://[^/]*@[^/]*[.]dfs[.]core[.]windows[.]net:([0-9]+)(/|$)",
+    "^https://[^/]*[.](?:blob|dfs)[.]core[.]windows[.]net:([0-9]+)(/|$)"
+  )
+  for (form in forms) {
+    m <- regmatches(uri, regexec(form, uri, ignore.case = TRUE, perl = TRUE))[[1L]]
+    if (length(m)) {
+      return(m[2L])
+    }
+  }
+  NULL
+}
+
 # The parts of an Azure URI: account, container, path (the table's blob
 # prefix, percent-decoded, without leading or trailing "/") and `uri`
 # (the URI without trailing "/"). Every refusal is a zulake_error_uri; a
