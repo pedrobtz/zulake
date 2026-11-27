@@ -227,10 +227,15 @@ stats_columns <- function(tbl, actions, paths, int64) {
       stats_object(parsed[[i]][[name]], fields, mode, kind, int64, what, if (kind == "value") skipped)
     })
   }
+  num_records <- int64_values(
+    lapply(seq_along(parsed), function(i) parsed[[i]][["numRecords"]]), int64, "a file's `numRecords`"
+  )
+  cardinality <- int64_values(
+    lapply(actions, function(a) a[["deletionVector"]][["cardinality"]]), int64, "a deletion vector's `cardinality`"
+  )
+  check_record_counts(num_records, cardinality, paths)
   out <- list(
-    num_records = int64_values(
-      lapply(seq_along(parsed), function(i) parsed[[i]][["numRecords"]]), int64, "a file's `numRecords`"
-    ),
+    num_records = num_records,
     null_count = obj("nullCount", "count"),
     min = obj("minValues", "value"),
     max = obj("maxValues", "value")
@@ -258,6 +263,33 @@ warn_int64 <- function(value, column, path, int64) {
     ),
     value = value, column = column, path = path
   )
+}
+
+# A file's `numRecords` is never negative, and its deletion vector deletes
+# no more rows than it has, nor fewer than none: either would make a count
+# no table can have (#59). NA (no statistic, no vector) is not checked.
+check_record_counts <- function(records, cardinality, paths) {
+  bad <- function(why, i) {
+    zulake_abort("corrupt_log", sprintf("file %s %s.", format_string(paths[i]), why), file = paths[i])
+  }
+  num <- function(x) if (inherits(x, "integer64")) as.character(x) else format_number(x)
+  neg <- which(!is.na(records) & records < 0)
+  if (length(neg)) {
+    bad(sprintf("has a negative `numRecords` (%s)", num(records[neg[1L]])), neg[1L])
+  }
+  neg <- which(!is.na(cardinality) & cardinality < 0)
+  if (length(neg)) {
+    bad(sprintf("has a deletion vector of negative `cardinality` (%s)", num(cardinality[neg[1L]])), neg[1L])
+  }
+  over <- which(!is.na(records) & !is.na(cardinality) & cardinality > records)
+  if (length(over)) {
+    i <- over[1L]
+    bad(sprintf(
+      "has a deletion vector of %s rows, more than its %s records",
+      num(cardinality[i]), num(records[i])
+    ), i)
+  }
+  invisible()
 }
 
 # numRecords and deletion vector cardinalities of the live files, summed:
@@ -295,6 +327,7 @@ file_counts <- function(tbl, int64) {
       file = paths[bad][1L]
     )
   }
+  check_record_counts(records, deleted, paths)
   deleted[!has_dv] <- 0
   total_deleted <- int64_sum(deleted, int64, "The number of deleted rows")
   total <- if (any(no_records)) {

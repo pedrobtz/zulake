@@ -178,3 +178,7 @@
   `NA` for every value. It is now refused with a
   `zulake_error_unsupported_feature` naming `columnMapping`, as `deltalake`
   refuses it (#58).
+* Fixed: a deletion vector of more rows than its file's `numRecords`, or a
+  negative `numRecords`, gave negative counts in `lake_count()` and
+  `lake_summary()`; it is now a `zulake_error_corrupt_log` there and in
+  `lake_files()` (#59).
