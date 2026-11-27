@@ -375,6 +375,13 @@ Settled in Stage 4 (2026-11-26):
   `lake_walk()` too); a pruned file's vector is never read. `name`-mode
   column mapping reads each column by its physical name and returns it by
   its logical name; a column a file lacks is `NA`, as the protocol asks.
+  In `name` mode a top-level field without a non-empty
+  `delta.columnMapping.physicalName` is a `zulake_error_corrupt_log`
+  naming the field (field `column`), checked once when the snapshot is
+  built; the logical name is never used in its place (2026-11-27, #77:
+  the protocol requires the physical name in `name` mode, and after a
+  rename the logical name can be another column's in the files; hostile
+  log `column-mapping-no-physical-name`).
 - *`int64`.* `lake_read()` and `lake_walk()` take `int64` like the
   inspection functions, since a `long` partition column holds 64-bit
   values from the log (§5), and pass it to `qio` for data columns.

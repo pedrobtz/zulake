@@ -191,3 +191,7 @@
   URI on another account or container than the table's is now a
   `zulake_error_uri`, refused before any request, so a log cannot send the
   table's token to an account of its choosing (#76).
+* Changed: in a table that maps columns in `name` mode, a field without a
+  `delta.columnMapping.physicalName` is now a `zulake_error_corrupt_log`
+  naming the field, instead of being read by its logical name, which after
+  a rename could be another column's data (#77).

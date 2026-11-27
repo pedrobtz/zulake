@@ -262,6 +262,7 @@ snapshot_build <- function(storage, uri, version = NULL, timestamp = NULL) {
 
   check_reader_features(state$protocol, state$metadata, version)
   mode <- column_mapping_mode(state$protocol, state$metadata)
+  check_physical_names(state$metadata, mode)
   files <- file_frame(state$adds)
   check_partition_values(files$action, state$metadata, mode)
 

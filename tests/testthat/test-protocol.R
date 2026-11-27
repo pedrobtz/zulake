@@ -111,7 +111,7 @@ test_that("reader versions 1 to 3 are read, and others refused", {
 })
 
 test_that("column mapping mode is honoured only where the protocol supports column mapping", {
-  meta <- function(mode) metadata_line(configuration = list(delta.columnMapping.mode = mode))
+  meta <- function(mode) metadata_line(configuration = list(delta.columnMapping.mode = mode), physical = c(id = "col-id"))
   # Reader version 2, or 3 with the feature: the mode counts.
   for (p in list(protocol_line(2L, 5L), protocol_line(3L, 7L, "columnMapping", "columnMapping"))) {
     expect_identical(lake_open(hand_table(c(p, meta("name"))))$column_mapping, "name")

@@ -122,4 +122,14 @@ stopifnot(sum(grepl("\"p_int\":\"1\"", lines, fixed = TRUE)) == 1L)
 lines <- sub("\"p_int\":\"1\"", "\"p_int\":\"one\"", lines, fixed = TRUE)
 write_lines(f, lines)
 
+# A name-mode column mapping table whose field `letter` has no physical
+# name in commit 0's schema; commit 2's schema has it again (#77).
+d <- copy_table("column_mapping", "column-mapping-no-physical-name")
+f <- commit_path(d, 0L)
+lines <- read_lines(f)
+drop <- ',\\"delta.columnMapping.physicalName\\":\\"col-4ef4d1f5-5d3c-4aad-b4db-405ac3f186e6\\"'
+stopifnot(sum(grepl(drop, lines, fixed = TRUE)) == 1L)
+lines <- sub(drop, "", lines, fixed = TRUE)
+write_lines(f, lines)
+
 cat("wrote", length(list.dirs(hostile, recursive = FALSE)), "hostile fixtures\n")

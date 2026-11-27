@@ -133,6 +133,29 @@ column_mapping_declared <- function(protocol) {
   reader == 2 || (reader == 3 && "columnMapping" %in% reader_features(protocol))
 }
 
+# In name mode every top-level field has a physical name, as the protocol
+# requires: falling back to the logical name could read another column's
+# data after a rename (#77). Nested fields are not read (D14).
+check_physical_names <- function(metadata, mode) {
+  if (mode != "name") {
+    return(invisible())
+  }
+  for (field in metadata[["schema"]][["fields"]]) {
+    if (is.na(field_physical_name(field))) {
+      name <- field_name(field)
+      zulake_abort(
+        "corrupt_log",
+        sprintf(
+          "field %s has no `delta.columnMapping.physicalName`, which column mapping in \"name\" mode requires.",
+          format_string(name)
+        ),
+        column = name
+      )
+    }
+  }
+  invisible()
+}
+
 # ---- partition values ----------------------------------------------------
 
 # Every live file's partition values are what the column's Delta type
@@ -156,12 +179,7 @@ check_partition_values <- function(adds, metadata, mode) {
       )
     }
     field <- fields[[i]]
-    key <- col
-    if (mode != "none") {
-      md <- field[["metadata"]]
-      physical <- if (is.list(md)) md[["delta.columnMapping.physicalName"]]
-      if (is_string(physical)) key <- physical
-    }
+    key <- field_physical(field, mode)
     type <- field[["type"]]
     if (!is_string(type)) {
       zulake_abort("corrupt_log", sprintf("partition column %s is not of a primitive type.", format_string(col)))

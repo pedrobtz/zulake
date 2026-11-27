@@ -65,6 +65,7 @@ DAT (`delta-incubator/dat`) is not used: it has no licence (design §12, Q3).
 
 | Log | From | Change |
 | --- | --- | --- |
+| `column-mapping-no-physical-name` | `column_mapping` | the `delta.columnMapping.physicalName` of field `letter` removed from commit 0's schema; commit 2's schema has it (#77) |
 | `corrupt-commit` | `zl-basic` | line 2 of commit 2 is not JSON |
 | `dv-bad-checksum` | `table-with-dv-small` | the deletion vector file's last byte (its CRC-32) flipped |
 | `dv-bad-magic` | `table-with-dv-small` | the deletion vector's magic number (file bytes 6 to 9) zeroed |

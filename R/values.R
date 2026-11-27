@@ -14,16 +14,21 @@ field_name <- function(field) {
 }
 
 # A field's name in the data files: its column mapping physical name when the
-# table maps columns, its name otherwise.
+# table maps columns, its name otherwise. snapshot_build() has checked that
+# every field has one in name mode (check_physical_names(), #77).
 field_physical <- function(field, mode) {
-  if (mode != "none") {
-    md <- field[["metadata"]]
-    physical <- if (is.list(md)) md[["delta.columnMapping.physicalName"]]
-    if (is_string(physical)) {
-      return(physical)
-    }
+  if (mode == "none") {
+    return(field_name(field))
   }
-  field_name(field)
+  field_physical_name(field)
+}
+
+# A field's `delta.columnMapping.physicalName`, or NA when it has none (no
+# metadata object, no such key, or not a non-empty string).
+field_physical_name <- function(field) {
+  md <- if (is.list(field)) field[["metadata"]]
+  physical <- if (is.list(md)) md[["delta.columnMapping.physicalName"]]
+  if (is_string(physical) && nzchar(physical)) physical else NA_character_
 }
 
 # "long", "decimal(10,2)", or "struct", "array", "map" for a nested type.
